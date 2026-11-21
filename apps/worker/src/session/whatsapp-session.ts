@@ -31,6 +31,7 @@ import { storeOutgoingMedia, mediaTypeFromMime } from "../media";
 import { processLiveMessage, syncMessagesFromHistory } from "./message-events";
 import { syncContactUpsert, syncContactsFromHistory, syncGroupsFromHistory, syncDirectChatsFromHistory } from "./contact-events";
 import { TtlCache } from "../ttl-cache";
+import { loadAgentConfig } from "../ai-agent/config";
 import {
   AutoReplyLimiter,
   MAX_QUEUE_WAIT_MS,
@@ -235,6 +236,18 @@ export class WhatsAppSession implements DurableObject {
   // gives call sites a non-optional string without sprinkling `!` around.
   private get sessionIdName(): string {
     return this.state.id.name ?? this.state.id.toString();
+  }
+
+  private async shouldSkipStoreHistory(workspaceId: string): Promise<boolean> {
+    try {
+      const config = await loadAgentConfig(this.env, workspaceId);
+      return !config.businessName || config.businessName === "this business" ||
+        config.businessName === "Cell Phone Store - Sagua la Grande";
+    } catch {
+      // Do not import an account's existing private history if business scope
+      // cannot be established safely.
+      return true;
+    }
   }
 
   private async resolveWorkspaceId(): Promise<string | null> {
@@ -2471,9 +2484,13 @@ export class WhatsAppSession implements DurableObject {
       // workspaceId can't be resolved yet, without blocking the others.
       if (hist.contacts?.length) {
         this.state.waitUntil(
-          this.withWorkspaceId((wsId) =>
-            syncContactsFromHistory(this.db, wsId, this.sessionIdName, hist.contacts, this.log.bind(this))
-          )
+          this.withWorkspaceId(async (wsId) => {
+            if (await this.shouldSkipStoreHistory(wsId)) {
+              this.log("info", "Skipping historical contact import for the store assistant");
+              return;
+            }
+            await syncContactsFromHistory(this.db, wsId, this.sessionIdName, hist.contacts, this.log.bind(this));
+          })
         );
       }
       // Chat list → conversation shells. WhatsApp often delivers many
@@ -2488,18 +2505,18 @@ export class WhatsAppSession implements DurableObject {
         this.log("info", `messaging-history.set: skipping ${hist.chats.length} chat shells (syncHistory=false)`);
       } else if (hist.chats?.length) {
         this.state.waitUntil(
-          this.withWorkspaceId((wsId) =>
-            syncDirectChatsFromHistory(this.db, wsId, this.sessionIdName, hist.chats, this.log.bind(this))
-          )
+          this.withWorkspaceId(async (wsId) => {
+            if (await this.shouldSkipStoreHistory(wsId)) {
+              this.log("info", "Skipping historical chat import for the store assistant");
+              return;
+            }
+            await syncDirectChatsFromHistory(this.db, wsId, this.sessionIdName, hist.chats, this.log.bind(this));
+            const groupChats = hist.chats.filter((c: any) => c.id?.endsWith?.("@g.us"));
+            if (groupChats.length) {
+              await syncGroupsFromHistory(this.db, wsId, this.sessionIdName, groupChats, this.log.bind(this), !this.skipGroupMemberSync);
+            }
+          })
         );
-        const groupChats = hist.chats.filter((c: any) => c.id?.endsWith?.("@g.us"));
-        if (groupChats.length) {
-          this.state.waitUntil(
-            this.withWorkspaceId((wsId) =>
-              syncGroupsFromHistory(this.db, wsId, this.sessionIdName, groupChats, this.log.bind(this), !this.skipGroupMemberSync)
-            )
-          );
-        }
       }
       // Backfill the actual chat history -- unless the user chose "only
       // new messages from now on" at connect time (see POST /connect's
@@ -2514,9 +2531,13 @@ export class WhatsAppSession implements DurableObject {
           this.log("info", `messaging-history.set: skipping backfill of ${hist.messages.length} messages (syncHistory=false)`);
         } else {
           this.state.waitUntil(
-            this.withWorkspaceId((wsId) =>
-              syncMessagesFromHistory(this.db, wsId, this.sessionIdName, hist.messages, this.log.bind(this))
-            )
+            this.withWorkspaceId(async (wsId) => {
+              if (await this.shouldSkipStoreHistory(wsId)) {
+                this.log("info", "Skipping historical message import for the store assistant");
+                return;
+              }
+              await syncMessagesFromHistory(this.db, wsId, this.sessionIdName, hist.messages, this.log.bind(this));
+            })
           );
         }
       }
