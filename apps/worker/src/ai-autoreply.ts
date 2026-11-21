@@ -13,6 +13,7 @@ import { isBlocked } from "./automation";
 import { loadAgentConfig } from "./ai-agent/config";
 import { handleAgentMessage } from "./ai-agent/agent";
 import { scopedLogger } from "./logger";
+import { isPrivateDirectChatJid } from "./session/message-routing";
 
 export interface AiAutoReplyParams {
   waSessionId: string;
@@ -87,10 +88,4 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
     log.warn({ err, workspaceId: params.workspaceId }, "AI unavailable; using safe fallback reply");
     return `Soy el asistente virtual de ${config.businessName}. Ahora mismo no puedo verificar ese dato automáticamente y prefiero no darte información incorrecta. El vendedor podrá confirmártelo cuando esté disponible.`;
   }
-}
-/** Only known one-to-one WhatsApp JID types are eligible for auto-replies. */
-function isPrivateDirectChatJid(remoteJid: string): boolean {
-  const jid = remoteJid.trim().toLowerCase();
-  if (jid === "status@broadcast" || jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) return false;
-  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid");
 }
