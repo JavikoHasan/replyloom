@@ -4,13 +4,13 @@ import { RateLimiter } from "../rate-limiter";
 describe("SQLite Durable Object rate limiter", () => {
   it("allows requests within the fixed-window limit", async () => {
     const exec = vi.fn().mockReturnValue({ toArray: () => [{ hits: 1 }] });
-    const state = { storage: { sql: { exec } } } as any;
+    const state = { storage: { sql: { exec }, get: vi.fn().mockResolvedValue(Date.now()), put: vi.fn() } } as any;
     const limiter = new RateLimiter(state);
 
     const response = await limiter.fetch(new Request("https://rate-limit.internal/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ limit: 5, windowMs: 60_000 }),
+      body: JSON.stringify({ keyHash: "a".repeat(64), limit: 5, windowMs: 60_000 }),
     }));
     const body = await response.json() as { success: boolean; remaining: number };
 
@@ -27,7 +27,7 @@ describe("SQLite Durable Object rate limiter", () => {
     const response = await limiter.fetch(new Request("https://rate-limit.internal/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ limit: 5, windowMs: 60_000 }),
+      body: JSON.stringify({ keyHash: "a".repeat(64), limit: 5, windowMs: 60_000 }),
     }));
     const body = await response.json() as { success: boolean; remaining: number };
 
@@ -44,7 +44,7 @@ describe("SQLite Durable Object rate limiter", () => {
     const response = await limiter.fetch(new Request("https://rate-limit.internal/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ limit: 0, windowMs: 60_000 }),
+      body: JSON.stringify({ keyHash: "a".repeat(64), limit: 0, windowMs: 60_000 }),
     }));
 
     expect(response.status).toBe(400);
