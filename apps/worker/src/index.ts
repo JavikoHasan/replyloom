@@ -65,8 +65,6 @@ export interface Env {
   MEDIA: R2Bucket;
   BROADCAST_QUEUE: Queue<BroadcastQueueMessage>;
   AI: Ai;
-  VECTORIZE: VectorizeIndex;
-  AGENT_VECTORIZE: VectorizeIndex;
   REPLY_CACHE: KVNamespace;
   API_RATE_LIMITER: RateLimit;
   AUTH_RATE_LIMITER: RateLimit;
