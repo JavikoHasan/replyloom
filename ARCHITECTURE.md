@@ -40,11 +40,11 @@ The two apps are **separate Workers on purpose**: you can deploy or roll back th
 | Store | Used for |
 |---|---|
 | **D1** (`DB`) | Everything relational: users, orgs, sessions, contacts, conversations, messages, lists, campaigns, deals, templates, webhooks, API keys, `entity_counts`. |
-| **Durable Object SQLite** | Per-number Baileys auth state (`wa_creds`, `wa_keys`) and per-session counters (pace buckets, daily caps). |
+| **Durable Object SQLite** | Per-number Baileys auth state (`wa_creds`, `wa_keys`), per-session counters, and atomic rate-limit buckets. |
 | **KV** (`MEDIA_STORE`) | Inbound/outbound media and the media library, with a 24 MiB per-file storage cap. |
 | **Queues** (`BROADCAST_QUEUE`) | Broadcast dispatch, one message per recipient batch, with delays. |
 | **D1 text retrieval** | Workspace-scoped word matching for message search and AI knowledge chunks; no embeddings or vector index. |
-| **KV** (`REPLY_CACHE`) | AI agent answer cache and config cache. |\n| **Durable Object SQLite** (`RATE_LIMITER`) | Atomic fixed-window request and authentication rate limits. |
+| **KV** (`REPLY_CACHE`) | AI agent answer cache and config cache. |
 
 ## Main flows
 
@@ -56,7 +56,7 @@ The UI creates a session and opens `/session/:id/connect` on the engine. The `Wh
 1. Upserts the contact, conversation and message in D1 (`db/sync/*`, one `db.batch` per message, resolver cache).
 2. Downloads and stores media in KV when it is within the Free value-size limit; the text message is retained if the attachment cannot be stored.
 3. Pushes the event to every connected browser over the DO's WebSocket.
-4. In the background: signed **webhooks** (`message.received`), **semantic indexing**, then a **keyword auto-reply**, or the **AI agent** if no rule matched. Message search reads D1 directly; no semantic indexing is needed. A manual outgoing message pauses automatic replies for that chat for 30 minutes. Replies pass through the loop breakers.
+4. In the background: signed **webhooks** (`message.received`), then a **keyword auto-reply**, or the **AI agent** if no rule matched. Message search reads D1 directly; no indexing job is needed. A manual outgoing message pauses automatic replies for that chat for 30 minutes. Replies pass through the loop breakers.
 
 ### Outbound message
 UI → server function (workspace-scoped) → service binding → engine router (checks the caller and that the workspace owns the session) → DO → **outbound guard** (`session/outbound-guard.ts`) → Baileys `sendMessage`. The server decides the send *kind* (`manual`, `api`, `broadcast`, `scheduled`, `auto`) and the client can't override it.
