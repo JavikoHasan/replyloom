@@ -1135,7 +1135,7 @@ export class WhatsAppSession implements DurableObject {
               timestampMs: Date.now(),
             });
           } catch (syncErr: any) {
-            this.log("error", `D1/R2 sync failed for sent media: ${syncErr?.message || syncErr}`);
+            this.log("error", `D1/KV sync failed for sent media: ${syncErr?.message || syncErr}`);
           }
         }
 
@@ -1151,10 +1151,10 @@ export class WhatsAppSession implements DurableObject {
     // button, or by a broadcast campaign) as a normal outbound message.
     // `text` here is already variable-resolved by the caller -- this
     // route only knows how to send, not how to fill in {{placeholders}}.
-    // `mediaKey` (optional) points at an R2 object already uploaded via
+    // `mediaKey` (optional) points at a KV value already uploaded via
     // POST /media/upload -- reused as-is rather than copied per send,
     // since the bytes are immutable either way (mirrors /send-media, but
-    // pulls the file from R2 instead of the request body).
+    // pulls the file from KV instead of the request body).
     if (request.method === "POST" && url.pathname === "/send-template") {
       await this.ensureInit();
       if (!this.socket) {
