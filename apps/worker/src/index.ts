@@ -62,7 +62,7 @@ export interface Env {
   WHATSAPP_SESSION: DurableObjectNamespace;
   SCHEDULER: DurableObjectNamespace;
   DB: D1Database;
-  MEDIA: R2Bucket;
+  MEDIA_STORE: KVNamespace;
   BROADCAST_QUEUE: Queue<BroadcastQueueMessage>;
   AI: Ai;
   REPLY_CACHE: KVNamespace;
@@ -322,16 +322,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!key) return new Response("Not found", { status: 404 });
     if (key.startsWith("config/") || key.startsWith("backups/") || key.includes("..")) return forbidden();
     if (!key.startsWith(`${caller.workspaceId}/`)) return forbidden();
-    const object = await env.MEDIA.get(key);
-    if (!object) return new Response("Not found", { status: 404 });
+    const stored = await env.MEDIA_STORE.getWithMetadata<{ contentType?: string }>(key, "arrayBuffer");
+    if (!stored.value) return new Response("Not found", { status: 404 });
     const headers = new Headers();
-    object.writeHttpMetadata(headers);
+    headers.set("Content-Type", stored.metadata?.contentType ?? "application/octet-stream");
     // private: this is auth-scoped content -- browsers may cache it forever
     // (keys are immutable), shared caches/CDNs must not.
     headers.set("Cache-Control", "private, max-age=31536000, immutable");
-    headers.set("ETag", object.httpEtag);
     applySafeMediaHeaders(headers);
-    return new Response(object.body, { headers });
+    return new Response(stored.value, { headers });
   }
 
   // ── DELETE /media/:key -- remove a stored asset (gallery cleanup),
@@ -341,7 +340,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!key) return Response.json({ ok: false, error: "Missing key" }, { status: 400 });
     if (key.startsWith("config/") || key.startsWith("backups/") || key.includes("..")) return forbidden();
     if (!key.startsWith(`${caller.workspaceId}/`)) return forbidden();
-    await env.MEDIA.delete(key);
+    await env.MEDIA_STORE.delete(key);
     return Response.json({ ok: true });
   }
 
