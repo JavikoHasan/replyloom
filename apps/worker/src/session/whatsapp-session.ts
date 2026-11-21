@@ -1843,6 +1843,9 @@ export class WhatsAppSession implements DurableObject {
         if (!wsId) {
           return Response.json({ ok: false, error: "Workspace not resolved yet" }, { status: 409 });
         }
+        if (await this.shouldSkipStoreHistory(wsId)) {
+          return Response.json({ ok: false, error: "Group-member import is disabled for this business assistant." }, { status: 403 });
+        }
         const metadata = await this.socket.groupMetadata(groupJid);
         const group = await upsertGroupMetadata(this.db, wsId, this.sessionIdName, {
           jid: groupJid,
