@@ -49,6 +49,11 @@ export async function handleAgentMessage(
   const message = input.message.trim().slice(0, MAX_INPUT_CHARS);
   if (!message) return { text: "", usedTools: [], usedContext: [], blocked: false, cached: false };
 
+  const catalogOnlyBusiness = config.businessName === "Cell Phone Store - Sagua la Grande";
+  const replyCacheTtlSeconds = catalogOnlyBusiness
+    ? Math.min(config.cacheTtlSeconds, 300)
+    : config.cacheTtlSeconds;
+
   const customerPhone =
     input.customerPhone ??
     customerPhoneFromJid(input.isGroup ? input.senderJid : input.remoteJid) ??
@@ -66,8 +71,8 @@ export async function handleAgentMessage(
   };
 
   // ── 1) Cheap exact-match cache — zero model spend on repeat FAQs ──
-  const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${normalize(message)}`;
-  if (config.cacheTtlSeconds > 0) {
+  const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v1:" : ""}${normalize(message)}`;
+  if (replyCacheTtlSeconds > 0) {
     const cached = await env.REPLY_CACHE.get(cacheKey);
     if (cached) {
       return { text: cached, usedTools: [], usedContext: [], blocked: false, cached: true };
@@ -79,8 +84,6 @@ export async function handleAgentMessage(
   // grounds the RAG query in what the customer was actually asking about. ──
   const thread = input.conversationId ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT) : "";
   const query = thread ? `${thread}\\n\\n${message}` : message;
-  const catalogOnlyBusiness = config.businessName === "Cell Phone Store - Sagua la Grande";
-
   // This store is a product-information-only assistant: do not expose CRM
   // customer/order tools or arbitrary workspace webhooks to its model.
   const [gate, workspaceTools, context] = await Promise.all([
@@ -91,7 +94,7 @@ export async function handleAgentMessage(
 
   if (!gate.allowed) {
     const text = gate.cannedReply!;
-    if (config.cacheTtlSeconds > 0) await cache(env, config, cacheKey, text);
+    if (replyCacheTtlSeconds > 0) await cache(env, config, cacheKey, text, replyCacheTtlSeconds);
     return { text, usedTools: [], usedContext: [], blocked: true, blockReason: gate.label, cached: false };
   }
 
@@ -124,8 +127,8 @@ export async function handleAgentMessage(
 
   // ── 6) Cache tool-free grounded answers only — per-customer tool results
   //    (order status, balance, ...) are never cached. ──
-  if (usedTools.length === 0 && config.cacheTtlSeconds > 0) {
-    await cache(env, config, cacheKey, safeText);
+  if (usedTools.length === 0 && replyCacheTtlSeconds > 0) {
+    await cache(env, config, cacheKey, safeText, replyCacheTtlSeconds);
   }
 
   return { text: safeText, usedTools, usedContext: context, blocked: false, cached: false };
@@ -241,8 +244,8 @@ function normalize(message: string): string {
   return message.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function cache(env: AgentEnv, config: AgentConfig, key: string, value: string): Promise<void> {
-  return env.REPLY_CACHE.put(key, value, { expirationTtl: config.cacheTtlSeconds }).catch(() => {});
+function cache(env: AgentEnv, config: AgentConfig, key: string, value: string, ttlSeconds = config.cacheTtlSeconds): Promise<void> {
+  return env.REPLY_CACHE.put(key, value, { expirationTtl: ttlSeconds }).catch(() => {});
 }
 
 /** Greetings may be answered without product data; substantive questions may not. */
