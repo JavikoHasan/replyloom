@@ -27,10 +27,6 @@ function queryTerms(query: string): string[] {
     .slice(0, 8);
 }
 
-// SQLite GLOB character classes match common Spanish accented variants.
-// lower() handles ordinary ASCII capitals; uppercase accented letters are
-// included explicitly because SQLite's built-in lower() is ASCII-only.
-
 /**
  * Returns only chunks with meaningful overlap. A missing match remains an
  * empty context, so the caller's existing no-information branch prevents
