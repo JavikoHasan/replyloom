@@ -37,7 +37,7 @@ const log = scopedLogger("ai-autoreply");
 /** Returns the reply text to send, or null if the agent is off / should stay quiet. */
 export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Promise<string | null> {
   const config = await loadAgentConfig(env, params.workspaceId);
-  if (!config.enabled) return null;
+  if (!config.enabled || config.businessName !== "Cell Phone Store - Sagua la Grande") return null;
   // This business assistant is private-chat-only. Never let a workspace
   // setting or an accidental caller enable replies in groups/channels.
   if (params.isGroup || !isPrivateDirectChatJid(params.remoteJid)) return null;
