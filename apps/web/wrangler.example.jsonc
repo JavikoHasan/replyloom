@@ -14,7 +14,7 @@
   },
   "services": [
     // Keep the worker service local during development. The worker's
-    // Vectorize bindings are configured as remote below in its own config.
+    // Storage and rate-limit resources are accessed through the engine service.
     { "binding": "WA_WORKER", "service": "wa-cf-poc" }
   ],
   // Same physical D1 database as apps/worker — keep both ids in sync.
