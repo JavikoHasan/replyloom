@@ -2,7 +2,7 @@
 
 This branch is adapted for a strict **$0/month** budget. Read [FREE_PLAN.md](./FREE_PLAN.md) before deployment. Do not follow older instructions that mention R2, Vectorize, AI Gateway, or Cloudflare's paid Rate Limiting API.
 
-The application uses two Cloudflare Workers (`apps/worker`, the WhatsApp engine; `apps/web`, the CRM) sharing one D1 database.
+The application uses two Cloudflare Workers (`apps/worker`, the WhatsApp engine; `apps/web`, the CRM) sharing one D1 database. To reuse the existing Cloudflare space, the engine is configured to take over the already deployed Worker `telegram-image-studio`; the CRM Worker `whatsapp-ai-web` is a separate resource.
 
 ## Prerequisites
 
@@ -13,11 +13,15 @@ The application uses two Cloudflare Workers (`apps/worker`, the WhatsApp engine;
 
 Do not add a payment method, enable Workers Paid, or subscribe to R2 for this profile.
 
+## Reusing the existing Cloudflare project
+
+The existing Worker named `telegram-image-studio` is intentionally repurposed as the WhatsApp engine. Deploying this branch to that Worker replaces its image-bot code. The old D1 database `sia-image-studio-db` is not reused because its tables belong to the image bot; it remains untouched. Workers AI is an account-level binding and is used directly by the new engine. No Telegram webhook, token, or image-generation flow is part of this app.
+
 ## Resources created by setup
 
 `pnpm setup` runs `scripts/setup.sh`. It creates or reuses:
 
-1. **D1** database `whatsapp-ai`.
+1. **D1** database `whatsapp-ai` (new and dedicated to Replyloom; do not point it at the image bot's `sia-image-studio-db`).
 2. **Queues** queue `wa-broadcast-dispatch` for the existing broadcast workflow.
 3. **KV** namespace `REPLY_CACHE` for answer/config caching.
 4. **KV** namespace `MEDIA_STORE` for bounded media storage.
