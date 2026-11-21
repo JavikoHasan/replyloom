@@ -106,7 +106,7 @@ jobs:
       # Deploy config is not in the repo (scripts/config.mjs). It's rendered from
       # the templates using these repo secrets/variables (Settings → Secrets and
       # variables → Actions):
-      #   secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, KV_NAMESPACE_ID
+      #   secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, KV_NAMESPACE_ID, MEDIA_KV_NAMESPACE_ID
       #   variables: APP_URL (CRM origin), ENGINE_URL (engine worker URL), SENTRY_DSN (optional)
       - name: Check deploy credentials
         id: creds
@@ -115,10 +115,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+          MEDIA_KV_NAMESPACE_ID: ${{ secrets.MEDIA_KV_NAMESPACE_ID }}
           APP_URL: ${{ vars.APP_URL }}
           ENGINE_URL: ${{ vars.ENGINE_URL }}
         run: |
-          for k in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_ID KV_NAMESPACE_ID APP_URL ENGINE_URL; do
+          for k in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_ID KV_NAMESPACE_ID MEDIA_KV_NAMESPACE_ID APP_URL ENGINE_URL; do
             if [ -z "${!k}" ]; then
               echo "skip=true" >> "$GITHUB_OUTPUT"
               echo "$k not set — skipping deploy." >&2
@@ -132,6 +133,7 @@ jobs:
         env:
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
+          MEDIA_KV_NAMESPACE_ID: ${{ secrets.MEDIA_KV_NAMESPACE_ID }}
           APP_URL: ${{ vars.APP_URL }}
           ENGINE_URL: ${{ vars.ENGINE_URL }}
           SENTRY_DSN: ${{ vars.SENTRY_DSN }}
