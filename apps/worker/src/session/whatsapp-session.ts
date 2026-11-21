@@ -141,6 +141,8 @@ function createSqliteAuthState(storage: SqlStorage): AuthenticationState {
 // ── Durable Object ──────────────────────────────────────────────────────
 
 const MAX_RECONNECT_ATTEMPTS = 3;
+const HUMAN_AUTO_REPLY_PAUSE_MS = 30 * 60_000;
+const BOT_REPLY_ECHO_MARKER_MS = 15_000;
 
 type ConnectionState = "idle" | "connecting" | "qr" | "authenticated" | "connected" | "disconnected";
 
@@ -438,6 +440,33 @@ export class WhatsAppSession implements DurableObject {
       return this.checkNewChatCap(jid);
     }
     return null;
+  }
+
+  /** Persist a per-chat pause after a human sends a message. */
+  private async pauseAutoReply(jid: string): Promise<void> {
+    await this.state.storage.put(`autoReplyPaused:${jid}`, Date.now() + HUMAN_AUTO_REPLY_PAUSE_MS);
+  }
+
+  /** The pause expires automatically after 30 minutes without human activity. */
+  private async isAutoReplyPaused(jid: string): Promise<boolean> {
+    const key = `autoReplyPaused:${jid}`;
+    const until = await this.state.storage.get<number>(key);
+    if (!until) return false;
+    if (until > Date.now()) return true;
+    await this.state.storage.delete(key);
+    return false;
+  }
+
+  /** Mark an outgoing bot reply so its own WhatsApp echo does not pause the bot. */
+  private async markBotReply(jid: string): Promise<void> {
+    await this.state.storage.put(`botReplyEcho:${jid}`, Date.now() + BOT_REPLY_ECHO_MARKER_MS);
+  }
+
+  private async consumeBotReplyMarker(jid: string): Promise<boolean> {
+    const key = `botReplyEcho:${jid}`;
+    const until = await this.state.storage.get<number>(key);
+    await this.state.storage.delete(key);
+    return !!until && until > Date.now();
   }
 
   /** Auto-reply loop breaker + pace (used by processLiveMessage). */
@@ -952,6 +981,7 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, { text: body.text });
+        await this.pauseAutoReply(jid);
 
         // Write the outbound message to D1 immediately — the CRM inbox
         // shouldn't wait on messages.upsert to echo our own send back.
@@ -1108,6 +1138,7 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
+        await this.pauseAutoReply(jid);
 
         const workspaceId = await this.resolveWorkspaceId();
         if (workspaceId && result?.key) {
@@ -1226,6 +1257,7 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
+        await this.pauseAutoReply(jid);
 
         const workspaceId = await this.resolveWorkspaceId();
         if (workspaceId && result?.key) {
@@ -3057,6 +3089,10 @@ export class WhatsAppSession implements DurableObject {
                 log: this.log.bind(this),
                 broadcast: this.broadcast.bind(this),
                 allowAutoReply: this.allowAutoReply.bind(this),
+                pauseAutoReply: this.pauseAutoReply.bind(this),
+                isAutoReplyPaused: this.isAutoReplyPaused.bind(this),
+                markBotReply: this.markBotReply.bind(this),
+                consumeBotReplyMarker: this.consumeBotReplyMarker.bind(this),
                 waitUntil: (p) => this.state.waitUntil(p),
               },
               msg,
