@@ -4,11 +4,10 @@
 export interface AgentEnv {
   AI: Ai;
   DB: D1Database;
-  AGENT_VECTORIZE: VectorizeIndex; // wa-docs: grounding vectors for the agent
-  REPLY_CACHE: KVNamespace; // cheap answer + short-lived config cache
+  REPLY_CACHE: KVNamespace; // exact-answer + short-lived config cache
   /**
-   * AI Gateway id to route model calls through (defaults to the account's
-   * auto-provisioned "default" gateway when unset).
+   * Optional AI Gateway id. The agent can also call Workers AI directly when
+   * no gateway is configured.
    */
   AIG_GATEWAY_ID?: string;
   /**
@@ -20,11 +19,11 @@ export interface AgentEnv {
 }
 
 export interface AgentModels {
-  /** Small/cheap model used for intent gating — called on EVERY message. */
+  /** Small model used for intent gating. */
   classifier: string;
   /** Main reply model — supports Workers AI function calling. */
   generator: string;
-  /** Embedding model for RAG — must match the AGENT_VECTORIZE index dims. */
+  /** Kept for compatibility with existing saved settings; D1 text retrieval does not use embeddings. */
   embedding: string;
 }
 
@@ -37,7 +36,7 @@ export interface AgentConfig {
   replyInGroups: boolean;
   models: AgentModels;
   maxContextChunks: number;
-  /** 0-1 cosine floor — a chunk below this is never trusted as grounding. */
+  /** Legacy setting retained for compatibility; D1 text retrieval uses lexical matching. */
   similarityThreshold: number;
   cacheTtlSeconds: number;
   /** Optional custom system prompt instructions appended to the agent system prompt. */
