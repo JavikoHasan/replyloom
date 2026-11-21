@@ -1,73 +1,90 @@
 import { createDb, inArray, eq, and, docChunks } from "@workspace/db";
 import type { AgentConfig, AgentEnv, RetrievedChunk } from "./types";
-import { gatewayRunOptions } from "./gateway";
 
-async function embed(env: AgentEnv, model: string, texts: string[], workspaceId: string): Promise<number[][]> {
-  const result: any = await env.AI.run(
-    model,
-    { text: texts },
-    gatewayRunOptions(env, workspaceId, "embedding"),
-  );
-  const data = result?.data;
-  if (!Array.isArray(data)) throw new Error("Embedding model returned no data");
-  return data as number[][];
+/**
+ * Text-only retrieval keeps the agent's knowledge base on D1. It is not
+ * semantic search: it matches meaningful words and ranks chunks by coverage.
+ * Accents are normalized so Spanish questions match documents consistently.
+ */
+const STOP_WORDS = new Set([
+  "a", "al", "algo", "como", "con", "cual", "cuando", "cuanto", "de", "del",
+  "desde", "donde", "el", "ella", "en", "es", "esta", "este", "esto", "la",
+  "las", "lo", "los", "mas", "me", "mi", "mis", "no", "o", "para", "pero",
+  "por", "que", "se", "si", "sin", "su", "sus", "te", "tiene", "tienen",
+  "un", "una", "uno", "unos", "unas", "y", "ya", "the", "a", "an", "and",
+  "are", "do", "does", "for", "from", "how", "i", "in", "is", "it", "of",
+  "on", "or", "please", "the", "to", "what", "when", "where", "which",
+  "with", "you", "your",
+]);
+
+function normalizeText(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function queryTerms(query: string): string[] {
+  return [...new Set(normalizeText(query).match(/[\p{L}\p{N}]{2,}/gu) ?? [])]
+    .filter((term) => !STOP_WORDS.has(term))
+    .slice(0, 8);
+}
+
+// SQLite GLOB character classes match common Spanish accented variants.
+// lower() handles ordinary ASCII capitals; uppercase accented letters are
+// included explicitly because SQLite's built-in lower() is ASCII-only.
+function globFor(term: string): string {
+  const variants: Record<string, string> = {
+    a: "[aáÁ]", e: "[eéÉ]", i: "[iíÍ]", o: "[oóÓ]",
+    u: "[uúÚüÜ]", n: "[nñÑ]",
+  };
+  return `*${[...term].map((char) => variants[char] ?? char).join("")}*`;
 }
 
 /**
- * Retrieves the top matching chunks for a workspace, filtered by the
- * similarity threshold so low-confidence matches never reach the model as
- * "context" — the main anti-hallucination lever alongside the system prompt.
- * Returns [] when nothing clears the bar; callers must treat that as "I
- * don't have this information", never as a cue to free-wheeling.
+ * Returns only chunks with meaningful overlap. A missing match remains an
+ * empty context, so the caller's existing no-information branch prevents
+ * the model from inventing prices, stock, delivery or other business facts.
  */
 export async function retrieveContext(
   env: AgentEnv,
   config: AgentConfig,
   query: string,
 ): Promise<RetrievedChunk[]> {
-  const [embedding] = await embed(env, config.models.embedding, [query], config.workspaceId);
+  const terms = queryTerms(query);
+  if (terms.length === 0) return [];
 
-  const matches = await env.AGENT_VECTORIZE.query(embedding, {
-    topK: config.maxContextChunks,
-    filter: { workspaceId: config.workspaceId },
-    returnMetadata: true,
-  });
+  const predicates = terms.map(() => "lower(text) GLOB ?").join(" OR ");
+  const statement = env.DB.prepare(
+    `SELECT id, text, source FROM doc_chunks
+     WHERE workspace_id = ? AND (${predicates})
+     LIMIT 100`,
+  ).bind(config.workspaceId, ...terms.map(globFor));
 
-  const above = matches.matches.filter((m) => m.score >= config.similarityThreshold);
-  if (above.length === 0) return [];
-
-  const ids = above.map((m) => m.id);
-  const db = createDb(env.DB);
-  const rows = await db
-    .select({ id: docChunks.id, text: docChunks.text, source: docChunks.source })
-    .from(docChunks)
-    .where(and(eq(docChunks.workspaceId, config.workspaceId), inArray(docChunks.id, ids)))
-    .all();
-
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  return above
-    .map((m) => {
-      const row = byId.get(m.id);
-      if (!row) return null; // vector in index but row gone (deleted) — skip
-      return { id: row.id, text: row.text, source: row.source, score: m.score };
+  const result = await statement.all<{ id: string; text: string; source: string }>();
+  const normalizedQuery = normalizeText(query).trim();
+  const ranked = (result.results ?? [])
+    .map((row) => {
+      const normalizedChunk = normalizeText(row.text);
+      const matchedTerms = terms.filter((term) => normalizedChunk.includes(term)).length;
+      const phraseMatch = normalizedQuery.length >= 4 && normalizedChunk.includes(normalizedQuery);
+      const score = phraseMatch ? 1 : matchedTerms / terms.length;
+      return { id: row.id, text: row.text, source: row.source, score };
     })
-    .filter((c): c is RetrievedChunk => c !== null);
+    // This is a lexical coverage score, not the old cosine similarity.
+    .filter((chunk) => chunk.score >= 0.2)
+    .sort((a, b) => b.score - a.score);
+
+  return ranked.slice(0, Math.max(1, Math.min(config.maxContextChunks, 8)));
 }
 
 /**
- * Ingests a document into the agent's grounding store: chunk -> embed ->
- * upsert into Vectorize + D1. Called from an admin/ingestion endpoint when
- * docs change, not per message. Passing `docId` replaces any previous
- * chunks with the same docId first, so re-ingesting a source never leaves
- * stale grounding around.
+ * Stores document chunks directly in D1. Re-ingesting a docId replaces its
+ * previous chunks. No embedding model or Vectorize index is required.
  */
 export async function ingestDocument(
   env: AgentEnv,
   config: AgentConfig,
   params: { source: string; text: string; docId?: string; chunkSize?: number },
 ): Promise<{ chunks: number; deleted?: number }> {
-  const chunkSize = params.chunkSize ?? 800;
-  const chunks = chunkText(params.text, chunkSize);
+  const chunks = chunkText(params.text, params.chunkSize ?? 800);
   if (chunks.length === 0) return { chunks: 0 };
 
   const db = createDb(env.DB);
@@ -79,75 +96,53 @@ export async function ingestDocument(
       .where(and(eq(docChunks.workspaceId, config.workspaceId), eq(docChunks.docId, params.docId)))
       .all();
     if (olds.length > 0) {
-      const oldIds = olds.map((o) => o.id);
-      // Best-effort vector cleanup first (index may lag a delete, D1 is source of truth).
-      await env.AGENT_VECTORIZE.deleteByIds(oldIds).catch(() => {});
+      const oldIds = olds.map((row) => row.id);
       await db.delete(docChunks).where(inArray(docChunks.id, oldIds));
       deleted = oldIds.length;
     }
   }
 
-  const vectors = await embed(env, config.models.embedding, chunks, config.workspaceId);
-  const inserts = chunks.map((text, i) => {
-    const id = crypto.randomUUID();
-    return { id, text, vector: vectors[i] };
-  });
-
-  // D1 batch needs a non-empty tuple; chunks is guaranteed non-empty here.
-  const statements = inserts.map((c) =>
-    db.insert(docChunks).values({
-      id: c.id,
-      workspaceId: config.workspaceId,
-      docId: params.docId ?? null,
-      source: params.source,
-      text: c.text,
-    }),
-  );
+  const inserts = chunks.map((text) => ({
+    id: crypto.randomUUID(),
+    workspaceId: config.workspaceId,
+    docId: params.docId ?? null,
+    source: params.source,
+    text,
+  }));
+  const statements = inserts.map((chunk) => db.insert(docChunks).values(chunk));
   await db.batch(statements as unknown as [(typeof statements)[number], ...(typeof statements)[number][]]);
-
-  await env.AGENT_VECTORIZE.upsert(
-    inserts.map((c) => ({
-      id: c.id,
-      values: c.vector,
-      metadata: { workspaceId: config.workspaceId, docId: params.docId ?? "" },
-    })),
-  );
 
   return { chunks: inserts.length, deleted };
 }
 
 /**
- * Paragraph-aware chunking: packs paragraphs into chunks up to `size`
- * characters instead of blindly slicing at an exact offset, so a chunk
- * rarely cuts a thought in half (better match quality, and the vectorizer
- * gets coherent units to embed). Falls back to hard-slicing a single
- * over-long paragraph.
+ * Paragraph-aware chunking: packs paragraphs into chunks up to size instead
+ * of cutting ordinary paragraphs mid-thought. Long paragraphs are hard-sliced.
  */
 export function chunkText(text: string, size = 800): string[] {
   const cleaned = text.replace(/\r\n/g, "\n").trim();
   if (!cleaned) return [];
 
-  const paragraphs = cleaned.split(/\n\s*\n/).filter((p) => p.trim());
+  const paragraphs = cleaned.split(/\n\s*\n/).filter((paragraph) => paragraph.trim());
   const chunks: string[] = [];
   let current = "";
 
   const flush = () => {
-    const c = current.trim();
-    if (c) chunks.push(c);
+    const chunk = current.trim();
+    if (chunk) chunks.push(chunk);
     current = "";
   };
 
-  for (const p of paragraphs) {
-    if (p.length > size) {
-      // Flush the accumulator before hard-slicing a monster paragraph.
+  for (const paragraph of paragraphs) {
+    if (paragraph.length > size) {
       if (current) flush();
-      for (let i = 0; i < p.length; i += size) {
-        chunks.push(p.slice(i, i + size).trim());
+      for (let i = 0; i < paragraph.length; i += size) {
+        chunks.push(paragraph.slice(i, i + size).trim());
       }
       continue;
     }
-    if (current.length > 0 && current.length + p.length + 1 > size) flush();
-    current = current ? `${current}\n${p}` : p;
+    if (current.length > 0 && current.length + paragraph.length + 1 > size) flush();
+    current = current ? `${current}\n${paragraph}` : paragraph;
   }
   flush();
   return chunks;
