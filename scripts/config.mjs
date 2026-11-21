@@ -19,7 +19,7 @@
 // `node scripts/config.mjs --encrypt-file <in> <out>`
 // `node scripts/config.mjs --decrypt-file <in> <out>`
 //                                      encrypt/decrypt arbitrary backup files
-//                                      (used by .github/workflows/d1-backup.yml)
+//                                      for local encrypted exports only
 // `node scripts/config.mjs --from-env` (re)write all three from the templates
 //                                      using env vars — for CI deploys:
 //     D1_DATABASE_ID, KV_NAMESPACE_ID, MEDIA_KV_NAMESPACE_ID, APP_URL, ENGINE_URL   (required)
