@@ -45,16 +45,11 @@ export function QrConnectDialog({
   const connectedRef = useRef(false)
   const queryClient = useQueryClient()
 
-  // Asked once, before the first connection attempt each time the dialog
-  // opens -- history/group-member sync are the two heaviest things a fresh
-  // connect does (see the D1 rows_read investigation this week). History
-  // defaults ON so a new number actually shows its chats after linking
-  // (users consistently expect "connect → see my conversations"); group
-  // member resolution stays OFF (heavier write loop, opt-in). History is
-  // only offered on first connect — to re-import later, delete the
-  // integration and start a new session.
+  // This business-specific connection must start clean: never import the
+  // phone's existing chats, contacts, or group participants. Only new
+  // private customer messages received after linking may enter the CRM.
   const [step, setStep] = useState<"options" | "connecting">("options")
-  const [syncHistory, setSyncHistory] = useState(true)
+  const [syncHistory, setSyncHistory] = useState(false)
   const [syncGroupMembers, setSyncGroupMembers] = useState(false)
   const [pairingMode, setPairingMode] = useState(false)
   const [pairingCode, setPairingCode] = useState<string | null>(null)
@@ -93,7 +88,7 @@ export function QrConnectDialog({
     preparingSinceRef.current = null
     setQrDataUrl(null)
     setStep("options")
-    setSyncHistory(true)
+    setSyncHistory(false)
     setSyncGroupMembers(false)
     setPairingMode(false)
     setPairingCode(null)
@@ -300,17 +295,16 @@ export function QrConnectDialog({
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <Label htmlFor="sync-history" className="text-sm font-medium">
-                    Import chat history
+                    Importar conversaciones anteriores
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Bring in this number's existing conversations. On by default
-                    -- turn off to only record messages from now on.
+                    Desactivado por privacidad. Solo se registrarán los mensajes nuevos de clientes que escriban a la tienda.
                   </p>
                 </div>
                 <Switch
                   id="sync-history"
-                  checked={syncHistory}
-                  onCheckedChange={setSyncHistory}
+                  checked={false}
+                  disabled
                 />
               </div>
               <div className="flex flex-col gap-2">
@@ -335,18 +329,16 @@ export function QrConnectDialog({
                     htmlFor="sync-group-members"
                     className="text-sm font-medium"
                   >
-                    Sync group members
+                    Importar participantes de grupos
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Add every group's participants as contacts automatically.
-                    Off by default -- you can always sync a specific group's
-                    members later.
+                    Desactivado por privacidad. El asistente no importa contactos ni participantes de grupos.
                   </p>
                 </div>
                 <Switch
                   id="sync-group-members"
-                  checked={syncGroupMembers}
-                  onCheckedChange={setSyncGroupMembers}
+                  checked={false}
+                  disabled
                 />
               </div>
               <Button onClick={startConnecting} className="mt-2">
