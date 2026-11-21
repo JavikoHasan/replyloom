@@ -93,7 +93,8 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
       "Estos datos proceden de las fichas públicas vigentes que enlazan exactamente al WhatsApp comercial 5354590237.",
       "La etiqueta Disponible es la indicada en el anuncio y NO garantiza existencia física: el vendedor debe confirmarla.",
       "Por encargo no significa entrega inmediata. Próximamente significa que el producto está en camino a Cuba y aún no ha llegado.",
-      "No programar ni confirmar entregas. No inventar datos ausentes.",
+      "Cuando la ficha indique entrega a domicilio sin costo adicional, la política de esta tienda es realizarla mediante motorina eléctrica, sin recargo. La hora depende de la carga disponible y se coordina directamente con el vendedor. El asistente nunca programa ni confirma una hora.",
+      "No inventar datos ausentes.",
       ...records,
     ].join("\n\n");
 
