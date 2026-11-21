@@ -6,7 +6,7 @@ import {
 } from "./broadcast";
 import type {BroadcastQueueMessage} from "./broadcast";
 import { storeLibraryMedia } from "./media";
-import { indexMessagesForSearch, semanticSearch } from "./search";
+import { semanticSearch } from "./search";
 import { pruneWebhookDeliveries } from "./automation";
 import { handleAgentMessage } from "./ai-agent/agent";
 import { loadAgentConfig, invalidateConfigCache } from "./ai-agent/config";
@@ -473,64 +473,15 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (request.method === "POST" && url.pathname === "/search/reindex") {
-    try {
-      const parsed = ReindexBodySchema.safeParse(await request.json());
-      if (!parsed.success) {
-        return Response.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
-      }
-      const { workspaceId, limit, offset, cursor } = parsed.data;
-      const scopeError = assertCallerWorkspace(caller, workspaceId);
-      if (scopeError) return scopeError;
-      const db = createDb(env.DB);
-      // Keyset on messages_workspace_wa_message_idx (workspace_id,
-      // wa_message_id) when a cursor is given; offset kept for old callers.
-      const base = db
-        .select({
-          waMessageId: messages.waMessageId,
-          waSessionId: waSessions.id,
-          conversationId: messages.conversationId,
-          body: messages.body,
-        })
-        .from(messages)
-        .innerJoin(conversations, eq(messages.conversationId, conversations.id))
-        .innerJoin(waSessions, eq(conversations.waSessionId, waSessions.id))
-        .where(
-          and(
-            eq(messages.workspaceId, workspaceId),
-            sql`${messages.body} is not null`,
-            cursor ? sql`${messages.waMessageId} > ${cursor}` : undefined,
-          ),
-        )
-        .orderBy(messages.waMessageId)
-        .limit(limit);
-      const rows = await (cursor ? base : base.offset(offset)).all();
-
-      // Legacy endpoint retained for compatibility; D1 search needs no reindex.
-      let indexed = 0;
-      const items = rows
-        .filter((r) => r.body && r.waMessageId)
-        .map((r) => ({ messageId: r.waMessageId!, waSessionId: r.waSessionId, conversationId: r.conversationId, text: r.body! }));
-      for (let i = 0; i < items.length; i += 50) {
-        const res = await indexMessagesForSearch(env, workspaceId, items.slice(i, i + 50));
-        indexed += res.indexed;
-      }
-      const last = rows.at(-1)?.waMessageId ?? null;
-      return Response.json({
-        ok: true,
-        scanned: rows.length,
-        indexed,
-        limit,
-        offset,
-        nextOffset: offset + rows.length,
-        nextCursor: rows.length === limit ? last : null,
-      });
-    } catch (err: any) {
-      captureError(err, { module: "search-reindex" });
-      return Response.json(
-        { ok: false, error: publicMessage(err, 'Reindexing failed. Please try again.') },
-        { status: publicStatus(err, 500) }
-      );
-    }
+    // Kept for older clients. D1 text search is immediate and needs no
+    // embedding/reindex job after messages are saved.
+    return Response.json({
+      ok: true,
+      scanned: 0,
+      indexed: 0,
+      message: "D1 text search is available immediately; no reindex is required.",
+      nextCursor: null,
+    });
   }
 
   // ── AI agent integration surface ──
