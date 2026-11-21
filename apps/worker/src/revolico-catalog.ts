@@ -37,8 +37,16 @@ export interface PublicListing {
  * matches the store's exact number. No Supabase API or private DB is used.
  */
 export async function syncRevolicoCatalog(env: Env): Promise<void> {
+  // The business name may be stored directly on agent_configs or inherited
+  // from the workspace name by loadAgentConfig(). Match both representations
+  // so a valid store workspace is not silently skipped when business_name is NULL.
   const workspaces = await env.DB.prepare(
-    "SELECT workspace_id FROM agent_configs WHERE enabled = 1 AND business_name = ? LIMIT 2",
+    `SELECT agent_configs.workspace_id
+     FROM agent_configs
+     LEFT JOIN workspaces ON workspaces.id = agent_configs.workspace_id
+     WHERE agent_configs.enabled = 1
+       AND COALESCE(NULLIF(TRIM(agent_configs.business_name), ''), workspaces.name) = ?
+     LIMIT 2`,
   ).bind(BUSINESS_NAME).all<{ workspace_id: string }>();
 
   for (const row of workspaces.results ?? []) {
