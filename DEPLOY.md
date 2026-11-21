@@ -2,7 +2,7 @@
 
 This branch is adapted for a strict **$0/month** budget. Read [FREE_PLAN.md](./FREE_PLAN.md) before deployment. Do not follow older instructions that mention R2, Vectorize, AI Gateway, or Cloudflare's paid Rate Limiting API.
 
-The application uses two Cloudflare Workers (`apps/worker`, the WhatsApp engine; `apps/web`, the CRM) sharing one D1 database. To reuse the existing Cloudflare space, the engine is configured to take over the already deployed Worker `telegram-image-studio`; the CRM Worker `whatsapp-ai-web` is a separate resource.
+The application uses two Cloudflare Workers (`apps/worker`, the WhatsApp engine; `apps/web`, the CRM) sharing one D1 database. The WhatsApp engine uses its own new Worker `cell-phone-store-whatsapp-ai`; the CRM Worker `whatsapp-ai-web` is a separate resource. The Telegram image bot remains untouched until the new WhatsApp integration is fully tested.
 
 ## Prerequisites
 
