@@ -31,7 +31,6 @@ import { storeOutgoingMedia, mediaTypeFromMime } from "../media";
 import { processLiveMessage, syncMessagesFromHistory } from "./message-events";
 import { syncContactUpsert, syncContactsFromHistory, syncGroupsFromHistory, syncDirectChatsFromHistory } from "./contact-events";
 import { TtlCache } from "../ttl-cache";
-import { loadAgentConfig } from "../ai-agent/config";
 import {
   AutoReplyLimiter,
   MAX_QUEUE_WAIT_MS,
@@ -219,15 +218,11 @@ export class WhatsAppSession implements DurableObject {
     return this.state.id.name ?? this.state.id.toString();
   }
 
-  private async shouldSkipStoreHistory(workspaceId: string): Promise<boolean> {
-    try {
-      const config = await loadAgentConfig(this.env, workspaceId);
-      return config.businessName === "Cell Phone Store - Sagua la Grande";
-    } catch {
-      // Do not import an account's existing private history if business scope
-      // cannot be established safely.
-      return true;
-    }
+  private async shouldSkipStoreHistory(_workspaceId: string): Promise<boolean> {
+    // This branch is dedicated to Cell Phone Store. Never import any
+    // pre-existing chats, contacts, groups, or message history, even if
+    // workspace configuration is missing, stale, or unexpectedly changed.
+    return true;
   }
 
   private async resolveWorkspaceId(): Promise<string | null> {
