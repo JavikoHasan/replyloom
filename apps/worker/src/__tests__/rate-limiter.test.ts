@@ -21,7 +21,7 @@ describe("SQLite Durable Object rate limiter", () => {
 
   it("blocks requests after the limit is exceeded", async () => {
     const exec = vi.fn().mockReturnValue({ toArray: () => [{ hits: 6 }] });
-    const state = { storage: { sql: { exec } } } as any;
+    const state = { storage: { sql: { exec }, get: vi.fn().mockResolvedValue(Date.now()), put: vi.fn() } } as any;
     const limiter = new RateLimiter(state);
 
     const response = await limiter.fetch(new Request("https://rate-limit.internal/check", {
