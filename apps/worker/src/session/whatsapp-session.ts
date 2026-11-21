@@ -981,7 +981,11 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, { text: body.text });
-        await this.pauseAutoReply(jid);
+        try {
+          await this.pauseAutoReply(jid);
+        } catch (pauseErr: any) {
+          this.log("warn", `Could not persist human takeover pause: ${pauseErr?.message || pauseErr}`);
+        }
 
         // Write the outbound message to D1 immediately — the CRM inbox
         // shouldn't wait on messages.upsert to echo our own send back.
@@ -1138,7 +1142,11 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
-        await this.pauseAutoReply(jid);
+        try {
+          await this.pauseAutoReply(jid);
+        } catch (pauseErr: any) {
+          this.log("warn", `Could not persist human takeover pause: ${pauseErr?.message || pauseErr}`);
+        }
 
         const workspaceId = await this.resolveWorkspaceId();
         if (workspaceId && result?.key) {
@@ -1257,7 +1265,11 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
-        await this.pauseAutoReply(jid);
+        try {
+          await this.pauseAutoReply(jid);
+        } catch (pauseErr: any) {
+          this.log("warn", `Could not persist human takeover pause: ${pauseErr?.message || pauseErr}`);
+        }
 
         const workspaceId = await this.resolveWorkspaceId();
         if (workspaceId && result?.key) {
