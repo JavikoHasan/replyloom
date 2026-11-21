@@ -18,7 +18,7 @@ import {
   RefreshCwIcon,
 } from "lucide-react"
 import { toast } from "sonner"
-import { getSessionStatus, connectSession } from "../hooks/use-sessions"
+import { getSessionStatus, connectSession, pairSession } from "../hooks/use-sessions"
 import { useRealtimeEvent } from "@/features/realtime/hooks/use-realtime-event"
 
 export function QrConnectDialog({
@@ -56,6 +56,10 @@ export function QrConnectDialog({
   const [step, setStep] = useState<"options" | "connecting">("options")
   const [syncHistory, setSyncHistory] = useState(true)
   const [syncGroupMembers, setSyncGroupMembers] = useState(false)
+  const [pairingMode, setPairingMode] = useState(false)
+  const [pairingCode, setPairingCode] = useState<string | null>(null)
+  const [pairingError, setPairingError] = useState<string | null>(null)
+  const pairingRequestedRef = useRef(false)
 
   const { data, error } = useQuery({
     queryKey: ["session-status", sessionId],
@@ -91,6 +95,10 @@ export function QrConnectDialog({
     setStep("options")
     setSyncHistory(true)
     setSyncGroupMembers(false)
+    setPairingMode(false)
+    setPairingCode(null)
+    setPairingError(null)
+    pairingRequestedRef.current = false
     // Drop the cached status too: useQuery hands back cached data even
     // while disabled, so a stale "connected" from a previous run would
     // trip the auto-close effect below the moment the dialog reopens.
@@ -108,6 +116,9 @@ export function QrConnectDialog({
   function startConnecting() {
     if (startedRef.current) return
     startedRef.current = true
+    pairingRequestedRef.current = false
+    setPairingCode(null)
+    setPairingError(null)
     preparingSinceRef.current = Date.now()
     setStep("connecting")
     connectSession({
@@ -117,8 +128,26 @@ export function QrConnectDialog({
     )
   }
 
+  // In pairing-code mode, wait for Baileys' QR/ready event before asking
+  // for the code. Never request it immediately after makeWASocket().
   useEffect(() => {
-    if (!data?.qr) {
+    if (!open || step !== "connecting" || !pairingMode) return
+    if (data?.connection !== "qr" || pairingRequestedRef.current) return
+    pairingRequestedRef.current = true
+    pairSession({
+      data: { sessionId, phone: "5358503073" },
+    })
+      .then((result: any) => {
+        if (typeof result?.code === "string") setPairingCode(result.code)
+        else setPairingError("No se recibió un código de vinculación.")
+      })
+      .catch((err: unknown) => {
+        setPairingError(err instanceof Error ? err.message : "No se pudo generar el código.")
+      })
+  }, [open, step, pairingMode, data?.connection, sessionId])
+
+  useEffect(() => {
+    if (pairingMode || !data?.qr) {
       setQrDataUrl(null)
       return
     }
@@ -126,7 +155,7 @@ export function QrConnectDialog({
     QRCode.toDataURL(data.qr, { width: 240, margin: 1 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null))
-  }, [data?.qr])
+  }, [data?.qr, pairingMode])
 
   useEffect(() => {
     // Only auto-close when a connection attempt started in THIS dialog
@@ -151,6 +180,9 @@ export function QrConnectDialog({
     disconnectedSinceRef.current = null
     preparingSinceRef.current = null
     setQrDataUrl(null)
+    setPairingCode(null)
+    setPairingError(null)
+    pairingRequestedRef.current = false
     queryClient.removeQueries({ queryKey: ["session-status", sessionId] })
     startedRef.current = true
     setStep("connecting")
@@ -190,7 +222,7 @@ export function QrConnectDialog({
     preparingSinceRef.current = null
   }
   const preparingTooLong =
-    preparingSinceRef.current !== null &&
+    !pairingCode && !pairingError && preparingSinceRef.current !== null &&
     now - preparingSinceRef.current > 15_000
 
   function isDisconnectedLong() {
@@ -201,7 +233,7 @@ export function QrConnectDialog({
     )
   }
 
-  const isFailed = Boolean(error) || isDisconnectedLong() || preparingTooLong
+  const isFailed = Boolean(error) || Boolean(pairingError) || isDisconnectedLong() || preparingTooLong
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -279,6 +311,22 @@ export function QrConnectDialog({
                   onCheckedChange={setSyncHistory}
                 />
               </div>
+              <div className="flex flex-col gap-2">
+                <Label className="text-sm font-medium">Método de vinculación</Label>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant={pairingMode ? "default" : "outline"} onClick={() => setPairingMode(true)}>
+                    Código de 8 dígitos
+                  </Button>
+                  <Button type="button" size="sm" variant={!pairingMode ? "default" : "outline"} onClick={() => setPairingMode(false)}>
+                    Código QR
+                  </Button>
+                </div>
+                {pairingMode && (
+                  <p className="text-xs text-muted-foreground">
+                    Se utilizará exclusivamente el número de prueba autorizado, no el WhatsApp comercial.
+                  </p>
+                )}
+              </div>
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <Label
@@ -325,15 +373,35 @@ export function QrConnectDialog({
               <div>
                 <p className="text-sm font-medium">Connection failed</p>
                 <p className="text-xs text-muted-foreground">
-                  {error
+                  {pairingError || (error
                     ? "Could not reach the WhatsApp service. Check your network and try again."
-                    : "WhatsApp closed the connection before a QR code was ready. This can happen from network issues, WhatsApp rotating the QR, or a rejected pairing request."}
+                    : "WhatsApp closed the connection before a pairing method was ready. This can happen from network issues or a rejected pairing request.")}
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={handleRetry}>
                 <RefreshCwIcon />
                 Retry connection
               </Button>
+            </div>
+          ) : pairingMode && pairingCode ? (
+            <div className="flex w-full flex-col items-center gap-4 py-8 text-center">
+              <CheckCircle2Icon className="size-8 text-primary" />
+              <p className="text-sm font-medium">Código de vinculación</p>
+              <p className="rounded-lg border bg-muted px-5 py-4 font-mono text-2xl font-bold tracking-[0.25em]">
+                {pairingCode}
+              </p>
+              <ol className="w-full list-decimal space-y-2 ps-5 text-left text-sm text-muted-foreground">
+                <li>Abre WhatsApp en el número de prueba.</li>
+                <li>Entra en Dispositivos vinculados.</li>
+                <li>Pulsa Vincular un dispositivo y elige Vincular con número de teléfono.</li>
+                <li>Introduce el código mostrado arriba.</li>
+              </ol>
+              <p className="text-xs text-muted-foreground">No compartas este código con nadie. Es válido solo para completar esta vinculación.</p>
+            </div>
+          ) : pairingMode && data?.connection === "qr" && !pairingError ? (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Solicitando el código de vinculación…</p>
             </div>
           ) : qrDataUrl ? (
             <>
