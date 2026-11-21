@@ -1,5 +1,5 @@
 // Downloads WhatsApp media (images, videos, voice notes, documents,
-// stickers) via Baileys and stores it in R2 -- D1 only ever holds the
+// stickers) via Baileys and stores it in Workers KV -- D1 only ever holds the
 // object key + mime + lightweight metadata (see MediaMeta in
 // @workspace/db), never the bytes themselves.
 import { downloadMediaMessage  } from "@whiskeysockets/baileys";
@@ -10,6 +10,9 @@ import type { IncomingType } from "./db/sync";
 import { scopedLogger } from "./logger";
 
 const log = scopedLogger("media");
+
+// Workers KV values are limited to 25 MiB. Keep a little headroom for metadata.
+const MAX_KV_MEDIA_BYTES = 24 * 1024 * 1024;
 
 const MIME_EXT: Record<string, string | undefined> = {
   "image/jpeg": "jpg",
@@ -97,9 +100,13 @@ export async function downloadAndStoreMedia(
     const typedMessage = content[CONTENT_KEY[type]];
     const mime: string = typedMessage?.mimetype ?? "application/octet-stream";
     const ext = extFor(mime, type);
+    if (buffer.byteLength > MAX_KV_MEDIA_BYTES) {
+      log.warn({ waMessageId, bytes: buffer.byteLength }, "Incoming media exceeds the free KV storage limit; saving message without its attachment");
+      return null;
+    }
     const mediaKey = `${workspaceId}/${waSessionId}/${waMessageId}.${ext}`;
 
-    await env.MEDIA.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
+    await env.MEDIA_STORE.put(mediaKey, buffer, { metadata: { contentType: mime } });
 
     return { mediaKey, mediaMime: mime, mediaMeta: extractMediaMeta(content, type) };
   } catch (err: any) {
@@ -110,7 +117,7 @@ export async function downloadAndStoreMedia(
 
 /**
  * Stores media WE are sending (an attachment picked in the composer) into
- * R2 under the same key scheme as incoming media, using the bytes we
+ * Workers KV under the same key scheme as incoming media, using the bytes we
  * already have in hand rather than re-downloading from WhatsApp's CDN
  * (there's nothing to re-download -- we're the sender). Used right after
  * a successful sendMessage() so the outbound bubble renders the same way
@@ -127,8 +134,11 @@ export async function storeOutgoingMedia(
   fileName?: string,
 ): Promise<{ mediaKey: string; mediaMime: string; mediaMeta: MediaMeta }> {
   const ext = extFor(mime, type);
+  if (buffer.byteLength > MAX_KV_MEDIA_BYTES) {
+    throw new Error("Media exceeds the free Workers KV storage limit (24 MiB).");
+  }
   const mediaKey = `${workspaceId}/${waSessionId}/${waMessageId}.${ext}`;
-  await env.MEDIA.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
+  await env.MEDIA_STORE.put(mediaKey, buffer, { metadata: { contentType: mime } });
 
   const mediaMeta: MediaMeta =
     type === "document"
@@ -165,6 +175,6 @@ export async function storeLibraryMedia(
   const type = mediaTypeFromMime(mime);
   const ext = extFor(mime, type);
   const mediaKey = `${workspaceId}/templates/${crypto.randomUUID()}.${ext}`;
-  await env.MEDIA.put(mediaKey, buffer, { httpMetadata: { contentType: mime } });
+  await env.MEDIA_STORE.put(mediaKey, buffer, { metadata: { contentType: mime } });
   return { mediaKey, mediaMime: mime, mediaType: type };
 }
