@@ -224,6 +224,11 @@ export class WhatsAppSession implements DurableObject {
   // POST /group-members-sync for a specific group instead of eagerly for
   // every group the number happens to be in.
   private skipGroupMemberSync = false;
+  // Pairing-code requests are single-flight: Baileys pairing state must not be overwritten
+  // while the user is entering the code on their phone.
+  private pairingCodeValue: string | null = null;
+  private pairingCodePending = false;
+  private pairingCodePhone: string | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -1375,29 +1380,41 @@ export class WhatsAppSession implements DurableObject {
     // "check your connection", the bug is in the general pairing exchange, not QR-specific.
     if (request.method === "POST" && url.pathname === "/pair") {
       await this.ensureInit();
-      if (!this.socket) {
-        return Response.json({ ok: false, error: "Socket not running. POST /connect first." }, { status: 400 });
-      }
-      const body = (await request.json().catch(() => ({}))) as {
-        phone?: string;
-      };
-      const phone = (body.phone || "").replace(/[^0-9]/g, "");
-      if (!phone) {
+      if (!this.socket || this.connectionState !== "qr") {
         return Response.json(
-          {
-            ok: false,
-            error: "Missing 'phone' field (digits only, with country code, no +)",
-          },
-          { status: 400 }
+          { ok: false, error: "WhatsApp is not ready for a pairing code yet. Wait until the connection is prepared." },
+          { status: 409 }
         );
       }
+      const body = (await request.json().catch(() => ({}))) as { phone?: string };
+      const phone = (body.phone || "").replace(/[^0-9]/g, "");
+      // This branch is reserved for the owner's isolated test account. The
+      // commercial WhatsApp number must never be paired through this flow.
+      if (phone !== "5358503073") {
+        return Response.json({ ok: false, error: "Pairing codes are enabled only for the authorized test number." }, { status: 403 });
+      }
+      if (this.socket.authState.creds.registered) {
+        return Response.json({ ok: false, error: "This WhatsApp session is already registered." }, { status: 409 });
+      }
+      if (this.pairingCodeValue && this.pairingCodePhone === phone) {
+        return Response.json({ ok: true, code: this.pairingCodeValue });
+      }
+      if (this.pairingCodePending) {
+        return Response.json({ ok: false, error: "A pairing-code request is already in progress." }, { status: 409 });
+      }
+      this.pairingCodePending = true;
+      this.pairingCodePhone = phone;
       try {
         const code = await this.socket.requestPairingCode(phone);
-        this.log("info", `Pairing code requested for ${phone}: ${code}`);
+        this.pairingCodeValue = code;
+        this.log("info", "Pairing code generated for the authorized test session (code withheld from logs).");
         return Response.json({ ok: true, code });
       } catch (err: any) {
-        this.log("error", `requestPairingCode failed: ${err?.stack || err}`);
+        this.pairingCodePhone = null;
+        this.log("error", `requestPairingCode failed: ${err?.message || "unknown error"}`);
         return Response.json({ ok: false, error: publicMessage(err, "requestPairingCode failed. Please try again.") }, { status: publicStatus(err) });
+      } finally {
+        this.pairingCodePending = false;
       }
     }
 
@@ -2680,6 +2697,9 @@ export class WhatsAppSession implements DurableObject {
       }
 
       if (connection === "open") {
+        this.pairingCodeValue = null;
+        this.pairingCodePending = false;
+        this.pairingCodePhone = null;
         this.connectionState = "connected";
         this.qr = null;
         this.reconnectCount = 0;
@@ -2757,6 +2777,9 @@ export class WhatsAppSession implements DurableObject {
       }
 
       if (connection === "close") {
+        this.pairingCodeValue = null;
+        this.pairingCodePending = false;
+        this.pairingCodePhone = null;
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
         const errMsg = (lastDisconnect?.error as any)?.message || String(lastDisconnect?.error);
         this.log(
