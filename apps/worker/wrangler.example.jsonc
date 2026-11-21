@@ -79,5 +79,6 @@
     // reply/config cache namespace's daily free KV write allowance.
     { "binding": "MEDIA_STORE", "id": "REPLACE_WITH_MEDIA_KV_NAMESPACE_ID" }
   ],
-
+  // Direct Workers AI binding; uses the account Free quota and no paid AI Gateway.
+  "ai": { "binding": "AI" }
 }
