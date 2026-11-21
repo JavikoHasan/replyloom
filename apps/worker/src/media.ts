@@ -162,7 +162,7 @@ export function mediaTypeFromMime(mime: string): "image" | "video" | "audio" | "
  * Stores a standalone media asset (a template's attachment, uploaded from
  * the templates settings UI before any message references it) under its
  * own key, not tied to any one WhatsApp message. Every message later sent
- * from that template points at this same R2 object -- see
+ * from that template points at this same KV value -- see
  * `/send-template` in whatsapp-session.ts -- rather than each send
  * re-uploading or copying the bytes.
  */
