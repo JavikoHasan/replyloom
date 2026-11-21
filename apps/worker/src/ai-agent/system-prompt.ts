@@ -23,7 +23,9 @@ export function buildSystemPrompt(
     ? `Answer using the CONTEXT below and tool results when available. If the answer is not in the context or a tool result, say you don't have that information and offer to connect the customer to a human — never guess or invent details. Never state a fact about ${config.businessName} that isn't directly supported by the context or a tool result.`
     : `There is no knowledge base context for this message — that is normal for greetings, thanks, confirmations, and casual conversation. Just respond naturally and warmly as a helpful support agent. Examples: "Hi! How can I help you today?" "Thanks! Anything else I can do?" "Sure thing!" For actual support questions, use a tool if one can answer it. If no tool applies, ask one clarifying question. If the customer is frustrated or asks for a human, offer to connect them.`;
 
-  const customPromptSection = config.systemPrompt && config.systemPrompt.trim()
+  // Store safeguards are fixed in code; workspace custom prompts cannot override them.
+  const isStoreAssistant = config.businessName === "Cell Phone Store - Sagua la Grande";
+  const customPromptSection = !isStoreAssistant && config.systemPrompt && config.systemPrompt.trim()
     ? `\n\nCUSTOM INSTRUCTIONS\n${config.systemPrompt.trim()}`
     : "";
 
