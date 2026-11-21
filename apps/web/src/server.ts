@@ -1,10 +1,9 @@
 import * as Sentry from "@sentry/cloudflare";
 import handler from "@tanstack/react-start/server-entry";
 import { scrubSentryEvent } from "@workspace/db/sentry-scrub";
+import { callEngine } from "./lib/wa-engine";
 
 type AppEnv = Env & {
-  WEB_RATE_LIMITER?: RateLimit;
-  AUTH_RATE_LIMITER?: RateLimit;
   SENTRY_DSN?: string;
 };
 
@@ -53,13 +52,18 @@ function tooMany(retryAfter = 60) {
   });
 }
 
-async function limited(limiter: RateLimit | undefined, key: string): Promise<boolean> {
-  if (!limiter) return false; // binding missing (tests / misconfig) -> fail open
+async function limited(key: string, limit: number): Promise<boolean> {
   try {
-    const { success } = await limiter.limit({ key });
-    return !success;
+    const response = await callEngine("/internal/rate-limit", "rate-limit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, limit, windowMs: 60_000 }),
+    });
+    if (!response.ok) return false;
+    const result = await response.json() as { success?: boolean };
+    return result.success === false;
   } catch {
-    return false; // never let the limiter itself cause an outage
+    return false; // preserve availability if the engine's limiter is unreachable
   }
 }
 
@@ -69,10 +73,10 @@ const app = {
     const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
 
     if (request.method === "POST" && AUTH_SENSITIVE.test(url.pathname)) {
-      if (await limited(env.AUTH_RATE_LIMITER, `auth:${ip}`)) return tooMany();
+      if (await limited(`web:auth:${ip}`, 10)) return tooMany();
     }
     if (url.pathname.startsWith("/_serverFn") || url.pathname.startsWith("/api/")) {
-      if (await limited(env.WEB_RATE_LIMITER, `web:${ip}`)) return tooMany();
+      if (await limited(`web:api:${ip}`, 600)) return tooMany();
     }
 
     // @ts-expect-error - handler is not typed as a Cloudflare handler
