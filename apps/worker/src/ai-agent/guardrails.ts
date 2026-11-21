@@ -15,12 +15,12 @@ const CANNED: Record<Exclude<IntentLabel, "SUPPORT">, (biz: string) => string> =
 
 function toResult(label: IntentLabel, businessName: string): GuardrailResult {
   if (!isHardBlockedIntent(label)) return { allowed: true, label };
-  return { allowed: false, label, cannedReply: CANNED[label as "CODING" | "SENSITIVE"](businessName) };
+  return { allowed: false, label, cannedReply: CANNED[label as "CODING" | "SENSITIVE" | "OFF_TOPIC"](businessName) };
 }
 
 /** Keep safety boundaries, but do not hard-block ordinary conversational traffic. */
 export function isHardBlockedIntent(label: IntentLabel | string): boolean {
-  return label === "CODING" || label === "SENSITIVE";
+  return label === "CODING" || label === "SENSITIVE" || label === "OFF_TOPIC";
 }
 
 /**
@@ -54,8 +54,9 @@ export async function classifyIntent(
     );
     return toResult(label ?? "SUPPORT", config.businessName);
   } catch {
-    // Classifier down — be conservative but don't hard-block support traffic.
-    return { allowed: true, label: "SUPPORT" };
+    // Classifier down — fail closed rather than risk answering an unrelated
+    // question or leaving the business-only scope. The customer can retry.
+    return { allowed: false, label: "OFF_TOPIC", cannedReply: CANNED.OFF_TOPIC(config.businessName) };
   }
 }
 
