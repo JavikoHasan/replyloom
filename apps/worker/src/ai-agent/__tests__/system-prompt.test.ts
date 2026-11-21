@@ -28,6 +28,8 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("CONTEXT");
     expect(prompt).toContain("We ship worldwide");
     expect(prompt).toContain("never guess");
+    expect(prompt).toContain("Never appraise a customer's phone");
+    expect(prompt).toContain("Never set, schedule, promise, or confirm delivery dates or hours");
   });
 
   it("includes custom system prompt when provided", () => {
