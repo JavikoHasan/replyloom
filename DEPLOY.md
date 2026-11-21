@@ -13,9 +13,9 @@ The application uses two Cloudflare Workers (`apps/worker`, the WhatsApp engine;
 
 Do not add a payment method, enable Workers Paid, or subscribe to R2 for this profile.
 
-## Reusing the existing Cloudflare project
+## Dedicated WhatsApp Cloudflare project
 
-The existing Worker named `telegram-image-studio` is intentionally repurposed as the WhatsApp engine. Deploying this branch to that Worker replaces its image-bot code. The old D1 database `sia-image-studio-db` is not reused because its tables belong to the image bot; it remains untouched. Workers AI is an account-level binding and is used directly by the new engine. No Telegram webhook, token, or image-generation flow is part of this app.
+The WhatsApp engine is deployed as a separate Worker named `cell-phone-store-whatsapp-ai`. The existing Telegram image Worker `telegram-image-studio` and its D1 database `sia-image-studio-db` are not reused or modified. Replyloom creates a dedicated D1 database named `whatsapp-ai`, plus its own KV namespaces and queue. Workers AI is an account-level binding used directly by the new engine. No Telegram webhook, token, or image-generation flow is part of this app.
 
 ## Resources created by setup
 
