@@ -52,9 +52,9 @@ describe("D1 knowledge retrieval", () => {
     expect(bind).toHaveBeenCalledWith(
       "workspace-1",
       "*cuesta*",
-      "*s[aáÁ]ms[uúÚüÜ]n[nñÑ]g*",
+      "*s[aáÁ]ms[uúÚüÜ][nñÑ]g*",
       "*[aáÁ]17*",
-      "*garant[iíÍ][aáÁ]*",
+      "*g[aáÁ]r[aáÁ][nñÑ]t[iíÍ][aáÁ]*",
     );
     expect(matches[0].id).toBe("chunk-1");
     expect(matches[0].score).toBeGreaterThan(0);
