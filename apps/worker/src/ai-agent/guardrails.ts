@@ -7,10 +7,10 @@ import { gatewayRunOptions } from "./gateway";
 // soften into actually helping with code.
 const CANNED: Record<Exclude<IntentLabel, "SUPPORT">, (biz: string) => string> = {
   CODING: () =>
-    "I'm a support assistant, so I can't help with coding — happy to help with your account, order, or product questions instead.",
+    "Soy el asistente virtual de la tienda y solo puedo atender consultas sobre los productos de nuestro catálogo.",
   SENSITIVE: () =>
-    "I'm not able to share that kind of internal detail. I'm happy to help with your account or order instead.",
-  OFF_TOPIC: (biz) => `I can only help with questions about ${biz}. What can I help you with there?`,
+    "No estoy autorizado para compartir información interna o privada. Puedo ayudarte con consultas sobre nuestros productos en venta.",
+  OFF_TOPIC: (biz) => `Soy el asistente virtual de ${biz} y solo estoy autorizado para responder consultas sobre los productos que comercializamos. ¿Qué producto de nuestro catálogo te interesa?`,
 };
 
 function toResult(label: IntentLabel, businessName: string): GuardrailResult {
