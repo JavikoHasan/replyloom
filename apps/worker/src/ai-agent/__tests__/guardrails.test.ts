@@ -56,4 +56,14 @@ describe("redactSensitive", () => {
   it("leaves normal text alone", () => {
     expect(redactSensitive("my order number is 12345")).toBe("my order number is 12345");
   });
+
+  it("allows only HTTPS links on the official Revolico Sagua origin", () => {
+    const out = redactSensitive(
+      "Página https://revolico-sagua.pages.dev/anuncio/abc y Telegram https://t.me/example y suplantado https://revolico-sagua.pages.dev.evil.example",
+    );
+    expect(out).toContain("https://revolico-sagua.pages.dev/anuncio/abc");
+    expect(out).not.toContain("https://t.me/example");
+    expect(out).not.toContain("revolico-sagua.pages.dev.evil.example");
+    expect(out.match(/\\[enlace externo omitido\\]/g)).toHaveLength(2);
+  });
 });
