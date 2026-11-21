@@ -920,6 +920,9 @@ export class WhatsAppSession implements DurableObject {
         this.socket = null;
       }
       this.intentionalDisconnect = false;
+      this.pairingCodeValue = null;
+      this.pairingCodePending = false;
+      this.pairingCodePhone = null;
       this.connectionState = "idle";
       this.qr = null;
       this.skipHistorySync = body.syncHistory === false;
@@ -1421,6 +1424,9 @@ export class WhatsAppSession implements DurableObject {
     // ── POST /disconnect ──
     if (request.method === "POST" && url.pathname === "/disconnect") {
       this.intentionalDisconnect = true;
+      this.pairingCodeValue = null;
+      this.pairingCodePending = false;
+      this.pairingCodePhone = null;
       if (this.socket) {
         await this.socket.end(undefined).catch(() => {});
         this.socket = null;
