@@ -37,7 +37,9 @@ const log = scopedLogger("ai-autoreply");
 export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Promise<string | null> {
   const config = await loadAgentConfig(env, params.workspaceId);
   if (!config.enabled) return null;
-  if (params.isGroup && !config.replyInGroups) return null;
+  // This business assistant is private-chat-only. Never let a workspace
+  // setting or an accidental caller enable replies in groups/channels.
+  if (params.isGroup || !isPrivateDirectChatJid(params.remoteJid)) return null;
 
   const db = createDb(env.DB);
   if (await isBlocked(db, params.workspaceId, params.waSessionId, "auto_reply", params.senderJid)) return null;
@@ -85,4 +87,10 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
     log.warn({ err, workspaceId: params.workspaceId }, "AI unavailable; using safe fallback reply");
     return `Soy el asistente virtual de ${config.businessName}. Ahora mismo no puedo verificar ese dato automáticamente y prefiero no darte información incorrecta. El vendedor podrá confirmártelo cuando esté disponible.`;
   }
+}
+/** Only known one-to-one WhatsApp JID types are eligible for auto-replies. */
+function isPrivateDirectChatJid(remoteJid: string): boolean {
+  const jid = remoteJid.trim().toLowerCase();
+  if (jid === "status@broadcast" || jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) return false;
+  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid");
 }
