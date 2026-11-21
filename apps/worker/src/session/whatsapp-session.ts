@@ -1191,12 +1191,12 @@ export class WhatsAppSession implements DurableObject {
         let content: any;
 
         if (body.mediaKey) {
-          const object = await this.env.MEDIA.get(body.mediaKey);
-          if (!object) {
+          const stored = await this.env.MEDIA_STORE.getWithMetadata<{ contentType?: string }>(body.mediaKey, "arrayBuffer");
+          if (!stored.value) {
             return Response.json({ ok: false, error: "Template media not found in storage" }, { status: 404 });
           }
-          const buffer = Buffer.from(await object.arrayBuffer());
-          mediaMime = object.httpMetadata?.contentType || "application/octet-stream";
+          const buffer = Buffer.from(stored.value);
+          mediaMime = stored.metadata?.contentType || "application/octet-stream";
           mediaType = mediaTypeFromMime(mediaMime);
           const captionText = body.text?.trim() || undefined;
           if (mediaType === "image")
