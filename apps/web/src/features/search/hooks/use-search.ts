@@ -11,15 +11,13 @@ export interface SearchMatch {
   text: string
 }
 
-// Embedding + Vectorize both live in the engine worker (apps/worker) --
-// this just forwards the query over the existing service binding, the
-// same way waApi calls it from the browser for sends.
+// Text search runs against workspace-scoped D1 rows in the engine worker.
 export const semanticSearch = createServerFn({ method: "POST" })
   .validator((data: { workspaceId: string; query: string }) => data)
   .handler(
     withSafeErrors(async ({ data }) => {
       if (typeof data.query !== "string" || !data.query.trim()) return []
-      // Each query costs an embedding + Vectorize call on the engine.
+      // Keep query size bounded so text matching stays inexpensive.
       if (data.query.length > 500) throw new Error("Search query is too long.")
 
       await requireWorkspaceAccess(data.workspaceId)
