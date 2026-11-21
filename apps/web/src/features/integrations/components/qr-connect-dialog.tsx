@@ -245,6 +245,8 @@ export function QrConnectDialog({
           <SheetDescription>
             {isConnected
               ? "This number is linked and syncing."
+              : pairingMode
+              ? "Vincula el número de prueba introduciendo el código de ocho dígitos en WhatsApp."
               : "Scan this code with WhatsApp to link the number."}
           </SheetDescription>
         </SheetHeader>
