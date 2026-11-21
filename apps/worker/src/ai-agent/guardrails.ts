@@ -86,17 +86,17 @@ export function keywordPrecheck(message: string): IntentLabel | null {
  * residence and pickup details are intentionally absent from the public catalog.
  */
 export function privateLocationReply(message: string): string | null {
-  const m = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-  if (/\\b(tienda fisica|local fisico|establecimiento fisico|sucursal|showroom)\\b/.test(m) ||
-      (/\\b(tienda|local|establecimiento)\\b/.test(m) &&
-       /\\b(hay|tienen|tiene|donde|ubicacion|direccion|visitar|ir|abierta|abierto)\\b/.test(m))) {
+  if (/\b(tienda fisica|local fisico|establecimiento fisico|sucursal|showroom)\b/.test(m) ||
+      (/\b(tienda|local|establecimiento)\b/.test(m) &&
+       /\b(hay|tienen|tiene|donde|ubicacion|direccion|visitar|ir|abierta|abierto)\b/.test(m))) {
     return "No disponemos de una tienda física. Las consultas y ventas se realizan a través de los anuncios publicados en Revolico Sagua.";
   }
-  if (/\\b(recoger|recogida|retirar|retiro|pasar a buscar|punto de encuentro|entrega personal|donde recojo|donde busco)\\b/.test(m)) {
+  if (/\b(recoger|recogida|retirar|retiro|pasar a buscar|punto de encuentro|entrega personal|donde recojo|donde busco)\b/.test(m)) {
     return "El asistente no dispone de un punto público de recogida. Cualquier coordinación debe acordarse directamente con el vendedor mediante el contacto publicado en el anuncio.";
   }
-  if (/\\b(donde vives|donde vive|donde viven|donde puedo encontrarte|donde puedo ubicarte|donde te encuentro|donde te ubico|direccion personal|domicilio|residencia|casa del dueno|casa del vendedor|donde esta tu casa|ubicacion personal|localizar al dueno)\\b/.test(m)) {
+  if (/\b(donde vives|donde vive|donde viven|donde puedo encontrarte|donde puedo ubicarte|donde te encuentro|donde te ubico|direccion personal|domicilio|residencia|casa del dueno|casa del vendedor|donde esta tu casa|ubicacion personal|localizar al dueno)\b/.test(m)) {
     return "No puedo proporcionar ni confirmar domicilios, residencia o ubicación privada del vendedor. Esa información no está disponible públicamente.";
   }
   return null;
