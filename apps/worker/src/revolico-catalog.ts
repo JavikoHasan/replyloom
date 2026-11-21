@@ -158,7 +158,11 @@ async function fetchOwnedListing(url: string): Promise<PublicListing | null> {
   if (!response.ok || new URL(response.url).origin !== SITE_ORIGIN) {
     throw new Error(`Revolico listing fetch failed (${response.status})`);
   }
-  const html = await response.text();
+  return parseOwnedListingHtml(url, await response.text());
+}
+
+/** Pure parser kept separate so seller matching and expiry rules are testable. */
+export function parseOwnedListingHtml(url: string, html: string, now = Date.now()): PublicListing | null {
   const contactLinks = [...html.matchAll(/href=["']https?:\/\/wa\.me\/(\d+)[^"']*["']/gi)];
   if (!contactLinks.some((match) => match[1] === OWNER_WHATSAPP_DIGITS)) return null;
 
@@ -175,7 +179,7 @@ async function fetchOwnedListing(url: string): Promise<PublicListing | null> {
 
   if (!title || !price || !description || !availability || !expiresAt) return null;
   if (!normalize(publishedState).includes("publicado y vigente")) return null;
-  if (Date.parse(expiresAt) < Date.now()) return null;
+  if (Date.parse(expiresAt) < now) return null;
 
   const statusText = normalize(availability);
   let status: PublicListing["status"];
