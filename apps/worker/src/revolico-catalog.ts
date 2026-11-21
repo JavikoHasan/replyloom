@@ -8,7 +8,7 @@ const OWNER_WHATSAPP_DIGITS = "5354590237";
 const STATE_PREFIX = "revolico:catalog-sync:";
 const CATALOG_DOC_ID = "revolico-sagua-public-catalog";
 const BATCH_SIZE = 4;
-const STATE_TTL_SECONDS = 3600;
+const STATE_TTL_SECONDS = 6 * 3600;
 const MAX_LISTINGS = 60;
 
 interface SyncState {
@@ -231,10 +231,6 @@ function parseSpanishDate(value: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function startOfTodayUtc(): number {
-  const now = new Date();
-  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-}
 
 function normalize(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
