@@ -83,10 +83,6 @@ export interface Env {
    */
   WS_TOKEN_SECRET: string;
   /**
-   * Opt-in flag ("true") to persist raw request/response payloads in
-   * Cloudflare AI Gateway logs. Defaults to false for privacy.
-   */
-  /**
    * Allowed CORS origin. Defaults to "*" for local dev; set to your
    * production domain (e.g. "https://app.example.com") in wrangler vars
    * or via `wrangler secret put CORS_ORIGIN` for tighter security.
