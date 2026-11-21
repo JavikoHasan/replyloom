@@ -2,6 +2,12 @@
 
 This document describes the changes in the `adaptacion-cell-phone-store` branch. It supersedes the original paid-resource setup notes for this branch.
 
+## Reuse of the existing Cloudflare space
+
+- The already deployed Worker `telegram-image-studio` is repurposed as the WhatsApp engine. Deploying the new engine replaces the old image-bot code on that Worker.
+- The old D1 database `sia-image-studio-db` is deliberately left untouched and is not bound to Replyloom: its schema belongs to the image bot and is incompatible with the CRM database. Replyloom uses a separate D1 database named `whatsapp-ai`.
+- The existing account-level Workers AI binding is reused directly. No Telegram bot token, webhook, or image-generation workflow is included.
+
 ## Resources used
 
 - **Workers Free** for the web app and WhatsApp engine.
