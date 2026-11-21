@@ -93,32 +93,28 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     return;
   }
 
-  if (records.length > 0) {
-    const text = [
-      `CATÁLOGO PÚBLICO DE ${BUSINESS_NAME}`,
-      `Fuente: ${SITE_ORIGIN}`,
-      `Sincronizado: ${new Date().toISOString()}`,
-      "Estos datos proceden de las fichas públicas vigentes que enlazan exactamente al WhatsApp comercial 5354590237.",
-      "La etiqueta Disponible es la indicada en el anuncio y NO garantiza existencia física: el vendedor debe confirmarla.",
-      "Por encargo no significa entrega inmediata. Próximamente significa que el producto está en camino a Cuba y aún no ha llegado.",
-      "Cuando la ficha indique entrega a domicilio sin costo adicional, la política de esta tienda es realizarla mediante motorina eléctrica, sin recargo. La hora depende de la carga disponible y se coordina directamente con el vendedor. El asistente nunca programa ni confirma una hora.",
-      "No inventar datos ausentes.",
-      ...records,
-    ].join("\n\n");
+  const text = [
+    `INFORMACIÓN DEL PROYECTO: REVOLICO SAGUA LA GRANDE es un proyecto local joven y en crecimiento para facilitar que las personas encuentren y publiquen anuncios. La página oficial es ${SITE_ORIGIN}. La aplicación oficial para Android se encuentra en ${SITE_ORIGIN}/download-apk. Los clientes pueden conocer el proyecto, visitar la página y compartirla voluntariamente con otras personas para ayudar a que llegue a más gente.`,
+    `CATÁLOGO PÚBLICO DE ${BUSINESS_NAME}`,
+    `Fuente: ${SITE_ORIGIN}`,
+    `Sincronizado: ${new Date().toISOString()}`,
+    "Estos datos proceden de las fichas públicas vigentes que enlazan exactamente al WhatsApp comercial 5354590237.",
+    "La etiqueta Disponible es la indicada en el anuncio y NO garantiza existencia física: el vendedor debe confirmarla.",
+    "Por encargo no significa entrega inmediata. Próximamente significa que el producto está en camino a Cuba y aún no ha llegado.",
+    "Cuando la ficha indique entrega a domicilio sin costo adicional, la política de esta tienda es realizarla mediante motorina eléctrica, sin recargo. La hora depende de la carga disponible y se coordina directamente con el vendedor. El asistente nunca programa ni confirma una hora.",
+    "No inventar datos ausentes.",
+    ...records,
+  ].join("\\n\\n");
 
-    await ingestDocument(env, config, {
-      source: "revolico-sagua.pages.dev (anuncios públicos del vendedor 5354590237)",
-      docId: CATALOG_DOC_ID,
-      text,
-      chunkSize: 1100,
-    });
-  } else {
-    // A complete, successful scan with zero matching seller listings means
-    // there is no current public catalog for this business.
-    await env.DB.prepare(
-      "DELETE FROM doc_chunks WHERE workspace_id = ? AND doc_id = ?",
-    ).bind(workspaceId, CATALOG_DOC_ID).run();
-  }
+  // Keep the project/page/app information indexed even when the seller has
+  // no active listings. Re-ingestion replaces old listing chunks, so expired
+  // or removed ads are not retained while the static project information stays.
+  await ingestDocument(env, config, {
+    source: "revolico-sagua.pages.dev (información oficial y anuncios públicos del vendedor 5354590237)",
+    docId: CATALOG_DOC_ID,
+    text,
+    chunkSize: 1100,
+  });
 
   await env.REPLY_CACHE.delete(key);
 }
