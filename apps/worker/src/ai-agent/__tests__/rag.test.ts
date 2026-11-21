@@ -60,6 +60,21 @@ describe("D1 knowledge retrieval", () => {
     expect(matches[0].score).toBeGreaterThan(0);
   });
 
+  it("restricts the store catalog to the approved Revolico source", async () => {
+    const all = vi.fn().mockResolvedValue({ results: [
+      { id: "catalog-1", text: "Samsung A17 4/128 precio 200 USD", source: "revolico-sagua.pages.dev (anuncios públicos)" },
+    ] });
+    const bind = vi.fn().mockReturnValue({ all });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const env = { DB: { prepare } } as any;
+    const config = { workspaceId: "workspace-1", maxContextChunks: 4 } as any;
+
+    await retrieveContext(env, config, "Samsung A17", "revolico-sagua.pages.dev");
+
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("AND source LIKE ?"));
+    expect(bind).toHaveBeenCalledWith("workspace-1", "revolico-sagua.pages.dev%", "samsung", "a17");
+  });
+
   it("returns no context when there are no meaningful search terms", async () => {
     const prepare = vi.fn();
     const env = { DB: { prepare } } as any;
