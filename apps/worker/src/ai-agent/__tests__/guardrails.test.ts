@@ -13,8 +13,8 @@ describe("shouldEscalateToHuman", () => {
 });
 
 describe("isHardBlockedIntent", () => {
-  it("keeps only genuinely sensitive and coding requests blocked", () => {
-    expect(isHardBlockedIntent("OFF_TOPIC")).toBe(false);
+  it("blocks unrelated, sensitive, and coding requests", () => {
+    expect(isHardBlockedIntent("OFF_TOPIC")).toBe(true);
     expect(isHardBlockedIntent("CODING")).toBe(true);
     expect(isHardBlockedIntent("SENSITIVE")).toBe(true);
   });
