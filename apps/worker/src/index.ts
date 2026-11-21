@@ -733,19 +733,20 @@ const worker = {
     }
 
     // ── Rate limiting ──
-    // The internal bridge endpoint is itself protected by resolveCaller()
-    // and must not recursively consume another bucket.
+    // The internal bridge endpoint is authenticated in route() and also
+    // receives a normal IP throttle so it cannot become a public bypass.
     const url = new URL(request.url);
-    if (url.pathname !== "/internal/rate-limit") {
+    {
       const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
       const isAuthEndpoint = url.pathname.startsWith("/auth") ||
         url.pathname.includes("/login") ||
         url.pathname.includes("/signup");
+      const isInternalRateLimit = url.pathname === "/internal/rate-limit";
       try {
         const result = await consumeRateLimit(
           env,
-          `engine:${isAuthEndpoint ? "auth" : "api"}:${clientIp}`,
-          isAuthEndpoint ? 10 : 100,
+          `engine:${isInternalRateLimit ? "internal" : isAuthEndpoint ? "auth" : "api"}:${clientIp}`,
+          isInternalRateLimit ? 600 : isAuthEndpoint ? 10 : 100,
           60_000,
         );
         if (!result.success) {
