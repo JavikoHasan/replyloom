@@ -78,12 +78,14 @@ export async function handleAgentMessage(
   // like "and shipping?" without a full message-history tool call, and
   // grounds the RAG query in what the customer was actually asking about. ──
   const thread = input.conversationId ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT) : "";
-  const query = thread ? `${thread}\n\n${message}` : message;
+  const query = thread ? `${thread}\\n\\n${message}` : message;
+  const catalogOnlyBusiness = config.businessName === "Cell Phone Store - Sagua la Grande";
 
-  // ── 2) Parallel Guardrail Gate, Tool Lookup, and RAG Context Retrieval for minimum latency ──
+  // This store is a product-information-only assistant: do not expose CRM
+  // customer/order tools or arbitrary workspace webhooks to its model.
   const [gate, workspaceTools, context] = await Promise.all([
     classifyIntent(env, config, message),
-    listWorkspaceWebhookTools(env, config.workspaceId),
+    catalogOnlyBusiness ? Promise.resolve([]) : listWorkspaceWebhookTools(env, config.workspaceId),
     retrieveContext(env, config, query),
   ]);
 
@@ -94,10 +96,9 @@ export async function handleAgentMessage(
   }
 
   // ── Tool list (built-ins + workspace webhooks) built once per message ──
-  const toolSchemas: ToolSchema[] = [
-    ...registry.toToolSchemas(),
-    ...workspaceTools.map(workspaceToolToSchema),
-  ];
+  const toolSchemas: ToolSchema[] = catalogOnlyBusiness
+    ? []
+    : [...registry.toToolSchemas(), ...workspaceTools.map(workspaceToolToSchema)];
 
   // ── No grounding: the tool-only branch. A reply survives only if the
   //    model actually used a tool (order lookup, profile, ...) — otherwise
