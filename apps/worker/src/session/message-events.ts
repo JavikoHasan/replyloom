@@ -14,6 +14,7 @@ import { findAutoReply, dispatchWebhookEvent } from "../automation";
 import { maybeAiAutoReply } from "../ai-autoreply";
 import { indexMessageForSearch } from "../search";
 import { TtlCache } from "../ttl-cache";
+import { isPrivateDirectChatJid } from "./message-routing";
 
 // Group subject for the search index metadata -- was one D1 read per group message.
 const groupNameCache = new TtlCache<string | null>(5 * 60_000);
@@ -67,21 +68,6 @@ export interface MessageEventContext {
  * a `notify` message; the only place `upsertType` changes behavior here
  * is the auto-reply recency guard below.
  */
-/**
- * Only direct one-to-one WhatsApp chats are eligible for processing by this
- * business assistant. Group JIDs, status/broadcast JIDs, channel/newsletter
- * JIDs, and unknown address types are discarded before parsing, persistence,
- * indexing, webhooks, or AI. Baileys uses @s.whatsapp.net for phone JIDs and
- * @lid for newer direct-user LID addresses.
- */
-export function isPrivateDirectChatJid(remoteJid: unknown): boolean {
-  if (typeof remoteJid !== "string" || !remoteJid.trim()) return false;
-  const jid = remoteJid.trim().toLowerCase();
-  if (jid === "status@broadcast") return false;
-  if (jid.endsWith("@g.us") || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) return false;
-  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid");
-}
-
 export async function processLiveMessage(
   ctx: MessageEventContext,
   msg: any,
