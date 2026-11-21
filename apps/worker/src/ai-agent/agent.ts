@@ -77,7 +77,7 @@ export async function handleAgentMessage(
   };
 
   // ── 1) Cheap exact-match cache — zero model spend on repeat FAQs ──
-  const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v1:" : ""}${normalize(message)}`;
+  const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v2:" : ""}${normalize(message)}`;
   if (replyCacheTtlSeconds > 0) {
     const cached = await env.REPLY_CACHE.get(cacheKey);
     if (cached) {
