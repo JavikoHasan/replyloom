@@ -35,9 +35,9 @@ describe("D1 message search", () => {
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("m.workspace_id = ?"));
     expect(bind).toHaveBeenCalledWith(
       "workspace-1",
-      "*s[aáÁ]ms[uúÚüÜ][nñÑ]g*",
-      "*[aáÁ]17*",
-      "*g[aáÁ]r[aáÁ][nñÑ]t[iíÍ][aáÁ]*",
+      "samsung",
+      "a17",
+      "garantia",
       80,
     );
     expect(matches[0].messageId).toBe("message-1");
