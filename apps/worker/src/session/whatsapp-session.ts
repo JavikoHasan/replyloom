@@ -996,7 +996,7 @@ export class WhatsAppSession implements DurableObject {
         // Resolve LID JIDs to phone JIDs (Baileys can't send to @lid)
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
         if (isLidJid(jid)) {
-          this.log("warn", `Cannot resolve LID JID ${body.to} to phone JID — send may fail`);
+          this.log("warn", "Cannot resolve recipient address; send may fail");
         }
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
@@ -1134,7 +1134,7 @@ export class WhatsAppSession implements DurableObject {
         let jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
         if (isLidJid(jid)) {
-          this.log("warn", `Cannot resolve LID JID ${to} to phone JID — send may fail`);
+          this.log("warn", "Cannot resolve recipient address; send may fail");
         }
 
         const buffer = Buffer.from(await file.arrayBuffer());
@@ -1365,13 +1365,13 @@ export class WhatsAppSession implements DurableObject {
       try {
         avatarUrl = (await this.socket.profilePictureUrl(jid, "image")) ?? null;
       } catch (err: any) {
-        this.log("info", `profilePictureUrl(${jid}) unavailable: ${err?.message || err}`);
+        this.log("info", "Profile picture lookup unavailable");
       }
       try {
         const status = await this.socket.fetchStatus(jid);
         about = (status as any)?.status ?? null;
       } catch (err: any) {
-        this.log("info", `fetchStatus(${jid}) unavailable: ${err?.message || err}`);
+        this.log("info", "Contact status lookup unavailable");
       }
 
       return Response.json({ ok: true, jid, avatarUrl, about });
@@ -1857,7 +1857,7 @@ export class WhatsAppSession implements DurableObject {
         }
         return Response.json({ ok: true, memberCount: metadata.participants.length });
       } catch (err: any) {
-        this.log("error", `group-members-sync failed for ${groupJid}: ${err?.message || err}`);
+        this.log("error", "Group-members sync failed");
         return Response.json({ ok: false, error: publicMessage(err, "Group sync failed. Please try again.") }, { status: publicStatus(err) });
       }
     }
@@ -2615,7 +2615,7 @@ export class WhatsAppSession implements DurableObject {
             try {
               const jid = await resolveToPhoneJid(this.db, this.sessionIdName, rawJid);
               await updateConversationChatState(this.db, workspaceId, this.sessionIdName, jid, update);
-              this.log("info", `chats.update: ${jid} -> ${JSON.stringify(update)}`);
+              this.log("info", "Chat update event received");
               this.broadcast({
                 type: "chat-state",
                 sessionId: this.sessionIdName,
@@ -2624,7 +2624,7 @@ export class WhatsAppSession implements DurableObject {
                 update,
               });
             } catch (err: any) {
-              this.log("error", `chats.update sync failed for ${rawJid}: ${err?.message || err}`);
+              this.log("error", "Chat update sync failed");
             }
           }
         })()
@@ -2699,7 +2699,7 @@ export class WhatsAppSession implements DurableObject {
           return;
         }
         await syncLidMapping(this.db, wsId, this.sessionIdName, mapping).catch((err: any) => {
-          this.log("error", `syncLidMapping failed for ${mapping.lid}<->${mapping.pn}: ${err?.message || err}`);
+          this.log("error", "LID mapping sync failed");
         });
       });
     });
@@ -2785,7 +2785,7 @@ export class WhatsAppSession implements DurableObject {
                           );
                         }
                       } catch (err: any) {
-                        this.log("error", `groupFetchAllParticipating sync failed for ${jid}: ${err?.message || err}`);
+                        this.log("error", "Group metadata sync failed");
                       }
                     }
                   }
