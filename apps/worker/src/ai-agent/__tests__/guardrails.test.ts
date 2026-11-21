@@ -64,6 +64,6 @@ describe("redactSensitive", () => {
     expect(out).toContain("https://revolico-sagua.pages.dev/anuncio/abc");
     expect(out).not.toContain("https://t.me/example");
     expect(out).not.toContain("revolico-sagua.pages.dev.evil.example");
-    expect(out.match(/\\[enlace externo omitido\\]/g)).toHaveLength(2);
+    expect(out.match(/\[enlace externo omitido\]/g)).toHaveLength(2);
   });
 });
