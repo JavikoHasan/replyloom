@@ -65,7 +65,7 @@ And these repository variables:
 - `ENGINE_URL` (engine Worker URL)
 - `SENTRY_DSN` (optional)
 
-The scheduled R2 backup workflow is intentionally removed. D1 Free provides a limited Time Travel recovery window, not a separate encrypted export. Keep any important export outside Cloudflare and protect it appropriately.
+The scheduled R2 backup workflow is intentionally removed. D1 Free provides a 7-day Time Travel recovery window, not a separate encrypted export. Keep any important export outside Cloudflare and protect it appropriately.
 
 ## Manual setup reference
 
