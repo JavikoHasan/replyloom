@@ -168,11 +168,12 @@ async function consumeRateLimit(
   const objectName = Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
-  const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(objectName));
+  const shard = `rate-limiter:${objectName.slice(0, 2)}`;
+  const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(shard));
   const response = await stub.fetch("https://rate-limit.internal/check", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ limit, windowMs }),
+    body: JSON.stringify({ keyHash: objectName, limit, windowMs }),
   });
   if (!response.ok) throw new Error(`Rate limiter failed (${response.status})`);
   return await response.json() as { success: boolean; remaining: number; retryAfter: number };
