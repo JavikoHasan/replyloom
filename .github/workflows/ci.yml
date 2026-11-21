@@ -7,7 +7,7 @@ permissions:
 
 on:
   push:
-    branches: [main]
+    branches: [main, adaptacion-cell-phone-store]
   pull_request:
     branches: [main]
 
