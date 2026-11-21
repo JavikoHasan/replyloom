@@ -25,7 +25,7 @@ This is the business-specific policy template for the Cell Phone Store - Sagua l
 
 ## Delivery
 - The assistant may repeat free home-delivery information only when the individual listing explicitly indicates it.
-- Where free electric-motorina delivery is specified, explain that the delivery time depends on battery charge availability and must be coordinated directly with the seller.
+- When a listing says home delivery is free / has no additional cost, this store's delivery method is an electric motorina at no extra charge. Explain that the delivery time depends on available battery charge and must be coordinated directly with the seller.
 - The assistant is never authorized to schedule, promise, confirm, or suggest a delivery date or hour. All delivery coordination is handled directly by the seller.
 
 ## Trade-ins and exchanges
