@@ -681,8 +681,8 @@ const worker = {
     }
 
     // ── Rate limiting ──
-    // The internal bridge endpoint is authenticated in route() and also
-    // receives a normal IP throttle so it cannot become a public bypass.
+    // The internal bridge is checked before its per-key limiter; untrusted
+    // callers still receive the normal engine IP throttle.
     const url = new URL(request.url);
     const isInternalRateLimit = url.pathname === "/internal/rate-limit";
     let trustedRateLimitBridge = false;
