@@ -51,10 +51,10 @@ describe("D1 knowledge retrieval", () => {
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("FROM doc_chunks"));
     expect(bind).toHaveBeenCalledWith(
       "workspace-1",
-      "*cuesta*",
-      "*s[aáÁ]ms[uúÚüÜ][nñÑ]g*",
-      "*[aáÁ]17*",
-      "*g[aáÁ]r[aáÁ][nñÑ]t[iíÍ][aáÁ]*",
+      "cuesta",
+      "samsung",
+      "a17",
+      "garantia",
     );
     expect(matches[0].id).toBe("chunk-1");
     expect(matches[0].score).toBeGreaterThan(0);
