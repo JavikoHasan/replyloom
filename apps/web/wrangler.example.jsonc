@@ -29,10 +29,7 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
-  "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "whatsapp-ai-media" }
-  ],
-  "vars": {
+"vars": {
     // Public base URL Better Auth uses for cookies/redirects. BETTER_AUTH_SECRET
     // is intentionally NOT here — set it locally via .dev.vars and in prod via
     // `wrangler secret put BETTER_AUTH_SECRET`.
