@@ -213,16 +213,16 @@ export class WhatsAppSession implements DurableObject {
   // When true, `messaging-history.set`'s message backfill is skipped
   // entirely -- the CRM only starts recording messages that arrive live
   // from this point on, instead of importing the number's past chat
-  // history. Contacts/group metadata still sync either way (cheap), but
-  // conversation shells from hist.chats are NOT created -- the inbox
-  // stays empty until a live message arrives.
+  // history. Generic workspaces may still sync contact/group metadata,
+  // but the Cell Phone Store assistant blocks historical contacts, groups,
+  // mappings, chat shells, and message backfill regardless of this toggle.
+  // Its CRM begins with new private customer messages only.
   private skipHistorySync = false;
   // When true, group membership sync (resolving every participant of
   // every group into a CRM contact row) is skipped at connect/history
-  // time -- group name + participant count still sync so groups show up
-  // in the inbox, but members can be pulled in later on demand via
-  // POST /group-members-sync for a specific group instead of eagerly for
-  // every group the number happens to be in.
+  // time for generic workspaces. The Cell Phone Store assistant blocks
+  // group metadata and participant imports entirely, including on-demand
+  // requests to POST /group-members-sync.
   private skipGroupMemberSync = false;
   // Pairing-code requests are single-flight: Baileys pairing state must not be overwritten
   // while the user is entering the code on their phone.
