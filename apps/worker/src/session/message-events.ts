@@ -92,7 +92,7 @@ export async function processLiveMessage(
   let catalogOnlyBusiness = true;
   try {
     const agentConfig = await loadAgentConfig(ctx.env, ctx.workspaceId);
-    catalogOnlyBusiness = agentConfig.businessName === "Cell Phone Store - Sagua la Grande";
+    catalogOnlyBusiness = !agentConfig.businessName || agentConfig.businessName === "this business" || agentConfig.businessName === "Cell Phone Store - Sagua la Grande";
   } catch {
     catalogOnlyBusiness = true;
   }
