@@ -42,8 +42,9 @@ export async function classifyIntent(
       config.models.classifier,
       {
         messages: [{ role: "user", content: buildClassifierPrompt(config, message) }],
-        max_tokens: 5,
-      },
+        max_completion_tokens: 8,
+        chat_template_kwargs: { enable_thinking: false },
+      } as any,
       gatewayRunOptions(env, config.workspaceId, "classifier"),
     );
     const raw = String(result?.response ?? "").trim().toUpperCase();
