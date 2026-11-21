@@ -1061,7 +1061,7 @@ export class WhatsAppSession implements DurableObject {
     // Attachments (image/video/audio/document) picked in the composer.
     // multipart/form-data because these can be several MB -- base64-in-JSON
     // would blow up ~33% larger for no reason. Mirrors /send: sends via
-    // Baileys first, then best-effort stores our own copy in R2 + D1 so the
+    // Baileys first, then best-effort stores our own copy in KV + D1 so the
     // outbound bubble shows up immediately without waiting on a
     // messages.upsert echo (which WhatsApp doesn't even reliably send back
     // for our own outgoing messages).
