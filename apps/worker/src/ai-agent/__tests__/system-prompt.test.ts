@@ -53,4 +53,12 @@ describe("buildClassifierPrompt", () => {
     expect(prompt).toContain("SENSITIVE");
     expect(prompt).toContain("OFF_TOPIC");
   });
+
+  it("keeps Revolico Sagua page and app questions in the support scope", () => {
+    const config = { ...baseConfig, businessName: "Cell Phone Store - Sagua la Grande" };
+    const prompt = buildClassifierPrompt(config, "¿Dónde descargo la aplicación de Revolico Sagua?");
+    expect(prompt).toContain("official Revolico Sagua website");
+    expect(prompt).toContain("Android app");
+    expect(prompt).toContain("as SUPPORT");
+  });
 });
