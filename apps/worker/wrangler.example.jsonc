@@ -16,10 +16,6 @@
     "ws": "./src/compat/ws-shim.ts"
   },
   "vars": {
-    // AI Gateway id for model calls (classifier and generator).
-    // Leave as "default" to use the account's auto-provisioned gateway; set a
-    // named gateway once you create one in the dashboard.
-    "AIG_GATEWAY_ID": "default",
     // CORS origin(s): comma-separated browser origins allowed to call this worker
     // cross-origin (apps/web, incl. its WebSocket upgrade). Defaults to "*"
     // (dev only) when unset -- for production set it here or with
