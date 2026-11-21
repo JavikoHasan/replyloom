@@ -29,7 +29,7 @@ Replyloom is two Cloudflare Workers that share one D1 database. The zero-cost pr
 | Package | Role |
 |---|---|
 | `apps/web` | The CRM. TanStack Start (SSR + server functions), React 19, TanStack Query, Better Auth, shadcn/ui. Code is split by feature in `src/features/*` (inbox, contacts, contact-lists, broadcasts, pipeline, templates, agent, integrations, …). |
-| `apps/worker` | The WhatsApp engine. HTTP router, `WhatsAppSession` and `Scheduler` Durable Objects, the broadcast queue consumer, the cron trigger, the AI agent, search and media. |
+| `apps/worker` | The WhatsApp engine. HTTP router, `WhatsAppSession`, `Scheduler` and `RateLimiter` Durable Objects, the broadcast queue consumer, the cron trigger, the AI agent, search and media. |
 | `packages/db` | The single source of truth for the schema (Drizzle) and SQL migrations (`packages/db/migrations`), used by both apps. |
 | `packages/ui` | Shared shadcn/ui components (`@workspace/ui/components/*`). |
 
