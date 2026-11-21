@@ -2588,6 +2588,7 @@ export class WhatsAppSession implements DurableObject {
         (async () => {
           const workspaceId = await this.resolveWorkspaceId();
           if (!workspaceId) return;
+          if (await this.shouldSkipStoreHistory(workspaceId)) return;
           for (const upd of updates) {
             const rawJid = upd?.id;
             // Same @broadcast guard as everywhere else -- Stories/broadcast
@@ -2645,6 +2646,10 @@ export class WhatsAppSession implements DurableObject {
             this.log("warn", "groups.upsert: no workspaceId — skipped");
             return;
           }
+          if (await this.shouldSkipStoreHistory(wsId)) {
+            this.log("info", "Skipping group metadata import for the store assistant");
+            return;
+          }
           for (const g of groupsList) {
             if (!g.id) continue;
             try {
@@ -2667,9 +2672,13 @@ export class WhatsAppSession implements DurableObject {
     // ── Contact sync (WA-AKG pattern) ──────────────────────────────────
     this.socket.ev.on("contacts.upsert", async (contactsList: any[]) => {
       this.log("info", `contacts.upsert: ${contactsList.length} contacts`);
-      await this.withWorkspaceId((wsId) =>
-        syncContactUpsert(this.db, wsId, this.sessionIdName, contactsList, this.log.bind(this))
-      );
+      await this.withWorkspaceId(async (wsId) => {
+        if (await this.shouldSkipStoreHistory(wsId)) {
+          this.log("info", "Skipping contact import for the store assistant");
+          return;
+        }
+        await syncContactUpsert(this.db, wsId, this.sessionIdName, contactsList, this.log.bind(this));
+      });
     });
 
     // The moment WhatsApp actually reveals a @lid <-> phone-JID pairing.
@@ -2681,11 +2690,15 @@ export class WhatsAppSession implements DurableObject {
     // syncLidMapping's own comment for the merge behavior.
     this.socket.ev.on("lid-mapping.update", async (mapping: { lid: string; pn: string }) => {
       this.log("info", `lid-mapping.update: ${mapping.lid} <-> ${mapping.pn}`);
-      await this.withWorkspaceId((wsId) =>
-        syncLidMapping(this.db, wsId, this.sessionIdName, mapping).catch((err: any) => {
+      await this.withWorkspaceId(async (wsId) => {
+        if (await this.shouldSkipStoreHistory(wsId)) {
+          this.log("info", "Skipping historical LID mapping import for the store assistant");
+          return;
+        }
+        await syncLidMapping(this.db, wsId, this.sessionIdName, mapping).catch((err: any) => {
           this.log("error", `syncLidMapping failed for ${mapping.lid}<->${mapping.pn}: ${err?.message || err}`);
-        })
-      );
+        });
+      });
     });
 
     // ── Connection lifecycle ────────────────────────────────────────────
@@ -2741,8 +2754,10 @@ export class WhatsAppSession implements DurableObject {
               // metadata -- throttled (see FULL_GROUP_SYNC_MIN_INTERVAL_MS).
               const lastGroupSync = (await this.state.storage.get<number>("groupsSyncedAt")) ?? 0;
               const groupSyncDue = Date.now() - lastGroupSync > FULL_GROUP_SYNC_MIN_INTERVAL_MS;
+              const skipStoreGroupImport = !wsId || await this.shouldSkipStoreHistory(wsId);
               if (!groupSyncDue) this.log("info", "Skipping full group refetch (synced recently)");
-              if (this.socket && groupSyncDue) {
+              if (skipStoreGroupImport) this.log("info", "Skipping full group import for the store assistant");
+              if (this.socket && groupSyncDue && !skipStoreGroupImport) {
                 try {
                   const allGroups = await this.socket.groupFetchAllParticipating();
                   const groupCount = Object.keys(allGroups).length;
