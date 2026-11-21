@@ -11,6 +11,7 @@ import { pruneWebhookDeliveries } from "./automation";
 import { handleAgentMessage } from "./ai-agent/agent";
 import { loadAgentConfig, invalidateConfigCache } from "./ai-agent/config";
 import { ingestDocument } from "./ai-agent/rag";
+import { syncRevolicoCatalog } from "./revolico-catalog";
 import { listWorkspaceWebhookTools } from "./ai-agent/tools";
 import { resolveCaller, assertCallerWorkspace, unauthorized, forbidden, assertSafeOutboundUrlWithDns, MAX_MEDIA_UPLOAD_BYTES, MAX_SEND_MEDIA_BYTES  } from "./security";
 import {
@@ -787,6 +788,12 @@ const worker = {
     // an index seek on (status, created_at) when there's nothing to do.
     ctx.waitUntil(
       pruneWebhookDeliveries(createDb(env.DB)).catch((err) => captureError(err, { module: "webhook-prune" }))
+    );
+    // Read-only public catalog sync for the explicitly named Cell Phone Store
+    // workspace. Each tick processes a small batch to stay within Free CPU and
+    // subrequest budgets; only a complete scan replaces the previous D1 data.
+    ctx.waitUntil(
+      syncRevolicoCatalog(env).catch((err) => captureError(err, { module: "revolico-catalog-sync" }))
     );
   },
 };
