@@ -16,6 +16,7 @@ import { auth } from "./auth-server"
 import { UserFacingError, toSafeError } from "./errors"
 import { memoPerRequest } from "./request-cache"
 import { getMembershipCached, getSessionCached } from "./session-cache"
+import { callEngine } from "./wa-engine"
 
 // Every new user gets a personal workspace ("organization" in Better
 // Auth's own terms — see packages/db/src/schema/auth.ts) on first
@@ -162,21 +163,33 @@ function toAuthUser(u: {
  * accounts gets through. Fails open if the binding is missing/erroring.
  */
 async function enforceAuthRateLimit(email: string) {
-  const limiter = (env as { AUTH_RATE_LIMITER?: RateLimit }).AUTH_RATE_LIMITER
-  if (!limiter) return
   let ip = "unknown"
   try {
     ip = getRequestHeaders().get("cf-connecting-ip") ?? "unknown"
   } catch {
     /* no request context */
   }
-  const keys = [`ip:${ip}`, `email:${email.trim().toLowerCase()}`]
+
+  const keys = [`auth:ip:${ip}`, `auth:email:${email.trim().toLowerCase()}`]
   for (const key of keys) {
     try {
-      const { success } = await limiter.limit({ key })
-      if (!success) throw new UserFacingError("Too many attempts. Please wait a minute and try again.")
+      const response = await callEngine("/internal/rate-limit", "rate-limit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, limit: 10, windowMs: 60_000 }),
+      })
+      if (!response.ok) {
+        throw new UserFacingError("Sign-in protection is temporarily unavailable. Please try again shortly.")
+      }
+      const result = await response.json() as { success?: boolean }
+      if (result.success === false) {
+        throw new UserFacingError("Too many attempts. Please wait a minute and try again.")
+      }
     } catch (err) {
       if (err instanceof UserFacingError) throw err
+      // Authentication is fail-closed: do not silently remove brute-force
+      // protection if the shared rate limiter cannot be reached.
+      throw new UserFacingError("Sign-in protection is temporarily unavailable. Please try again shortly.")
     }
   }
 }
