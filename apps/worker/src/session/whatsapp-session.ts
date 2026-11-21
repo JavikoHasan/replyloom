@@ -1174,7 +1174,22 @@ export class WhatsAppSession implements DurableObject {
               timestampMs: Date.now(),
             });
           } catch (syncErr: any) {
-            this.log("error", `D1/KV sync failed for sent media: ${syncErr?.message || syncErr}`);
+            this.log("error", `D1/KV media storage failed for sent media: ${syncErr?.message || syncErr}`);
+            // The WhatsApp send already succeeded. Preserve the outgoing
+            // text/caption in the CRM even when KV storage is full or the
+            // attachment exceeds the free-plan value limit.
+            try {
+              await syncIncomingMessage(this.db, workspaceId, this.sessionIdName, {
+                waMessageId,
+                remoteJid: jid,
+                fromMe: true,
+                type: mediaType,
+                body: captionText,
+                timestampMs: Date.now(),
+              });
+            } catch (fallbackErr: any) {
+              this.log("error", `D1 fallback sync failed for sent media: ${fallbackErr?.message || fallbackErr}`);
+            }
           }
         }
 
