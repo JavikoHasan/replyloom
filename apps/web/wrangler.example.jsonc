@@ -15,7 +15,7 @@
   "services": [
     // Keep the worker service local during development. The worker's
     // Storage and rate-limit resources are accessed through the engine service.
-    { "binding": "WA_WORKER", "service": "wa-cf-poc" }
+    { "binding": "WA_WORKER", "service": "telegram-image-studio" }
   ],
   // Same physical D1 database as apps/worker — keep both ids in sync.
   // D1 is "remote" (not the default local sqlite emulation) so apps/web and
