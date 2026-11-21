@@ -175,7 +175,7 @@ async function fetchOwnedListing(url: string): Promise<PublicListing | null> {
 
   if (!title || !price || !description || !availability || !expiresAt) return null;
   if (!normalize(publishedState).includes("publicado y vigente")) return null;
-  if (expiresAt < startOfTodayUtc()) return null;
+  if (Date.parse(expiresAt) < Date.now()) return null;
 
   const statusText = normalize(availability);
   let status: PublicListing["status"];
@@ -201,7 +201,7 @@ function extractFact(html: string, label: string): string {
 }
 
 function stripHtml(value: string): string {
-  return decodeEntities(value.replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ")).trim();
+  return decodeEntities(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ")).trim();
 }
 
 function decodeEntities(value: string): string {
@@ -222,7 +222,7 @@ function parseSpanishDate(value: string): string | null {
   const match = normalize(value).match(/^(\d{1,2}) de (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre) de (\d{4})$/);
   if (!match) return null;
   const months = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-  const date = new Date(Date.UTC(Number(match[3]), months.indexOf(match[2]), Number(match[1]), 23, 59, 59));
+  const date = new Date(Date.UTC(Number(match[3]), months.indexOf(match[2]), Number(match[1]) + 1, 5, 0, 0));
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
@@ -232,7 +232,7 @@ function startOfTodayUtc(): number {
 }
 
 function normalize(value: string): string {
-  return value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().trim();
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
 function formatListing(item: PublicListing): string {
