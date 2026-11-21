@@ -357,7 +357,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   // ── GET /media/:key (key may contain slashes) ──
-  // Streams a stored WhatsApp media object straight out of R2. Access is
+  // Streams a stored WhatsApp media value from KV. Access is
   // scoped to objects owned by the caller's workspace (keys embed the
   // workspace id as their first segment, see src/media.ts).
   if (request.method === "GET" && url.pathname.startsWith("/media/")) {
@@ -516,7 +516,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         .limit(limit);
       const rows = await (cursor ? base : base.offset(offset)).all();
 
-      // Embed in batches of 50: one AI call + one Vectorize upsert each.
+      // Legacy endpoint retained for compatibility; D1 search needs no reindex.
       let indexed = 0;
       const items = rows
         .filter((r) => r.body && r.waMessageId)
