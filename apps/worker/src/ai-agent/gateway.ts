@@ -1,4 +1,7 @@
 import type { AgentEnv } from "./types";
+import { ACTIVE_GENERATOR_MODEL } from "./config";
+
+export const FALLBACK_GENERATOR: string = ACTIVE_GENERATOR_MODEL;
 
 /**
  * Keep the existing call-site contract while using Workers AI directly.
