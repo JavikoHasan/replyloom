@@ -241,8 +241,7 @@ export class WhatsAppSession implements DurableObject {
   private async shouldSkipStoreHistory(workspaceId: string): Promise<boolean> {
     try {
       const config = await loadAgentConfig(this.env, workspaceId);
-      return !config.businessName || config.businessName === "this business" ||
-        config.businessName === "Cell Phone Store - Sagua la Grande";
+      return config.businessName === "Cell Phone Store - Sagua la Grande";
     } catch {
       // Do not import an account's existing private history if business scope
       // cannot be established safely.
