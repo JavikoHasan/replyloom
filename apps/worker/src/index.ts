@@ -83,16 +83,9 @@ export interface Env {
    */
   WS_TOKEN_SECRET: string;
   /**
-   * AI Gateway id for model calls (see ai-agent/gateway.ts). Set in the
-   * dashboard or via `wrangler secret put AIG_GATEWAY_ID`; defaults to the
-   * auto-provisioned "default" gateway when unset.
-   */
-  AIG_GATEWAY_ID?: string;
-  /**
    * Opt-in flag ("true") to persist raw request/response payloads in
    * Cloudflare AI Gateway logs. Defaults to false for privacy.
    */
-  AIG_COLLECT_LOG?: string;
   /**
    * Allowed CORS origin. Defaults to "*" for local dev; set to your
    * production domain (e.g. "https://app.example.com") in wrangler vars
