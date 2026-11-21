@@ -684,17 +684,29 @@ const worker = {
     // The internal bridge endpoint is authenticated in route() and also
     // receives a normal IP throttle so it cannot become a public bypass.
     const url = new URL(request.url);
-    {
+    const isInternalRateLimit = url.pathname === "/internal/rate-limit";
+    let trustedRateLimitBridge = false;
+    if (isInternalRateLimit) {
+      // The web Worker calls this endpoint with the internal secret. Check
+      // that before skipping the outer IP bucket; untrusted callers still
+      // receive the normal engine throttle.
+      try {
+        const bridgeCaller = await resolveCaller(env, request);
+        trustedRateLimitBridge = bridgeCaller?.kind === "internal";
+      } catch {
+        trustedRateLimitBridge = false;
+      }
+    }
+    if (!trustedRateLimitBridge) {
       const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
       const isAuthEndpoint = url.pathname.startsWith("/auth") ||
         url.pathname.includes("/login") ||
         url.pathname.includes("/signup");
-      const isInternalRateLimit = url.pathname === "/internal/rate-limit";
       try {
         const result = await consumeRateLimit(
           env,
-          `engine:${isInternalRateLimit ? "internal" : isAuthEndpoint ? "auth" : "api"}:${clientIp}`,
-          isInternalRateLimit ? 600 : isAuthEndpoint ? 10 : 100,
+          `engine:${isAuthEndpoint ? "auth" : isInternalRateLimit ? "internal" : "api"}:${clientIp}`,
+          isAuthEndpoint ? 10 : isInternalRateLimit ? 600 : 100,
           60_000,
         );
         if (!result.success) {
