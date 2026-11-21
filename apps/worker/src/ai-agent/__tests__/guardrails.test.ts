@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isHardBlockedIntent, keywordPrecheck, redactSensitive, shouldEscalateToHuman } from "../guardrails";
+import { isHardBlockedIntent, keywordPrecheck, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "../guardrails";
 
 describe("shouldEscalateToHuman", () => {
   it("escalates explicit human requests and clear frustration", () => {
@@ -39,6 +39,25 @@ describe("keywordPrecheck", () => {
     expect(keywordPrecheck("do you ship worldwide?")).toBeNull();
     // Don't over-match: "create" here is product language, not coding.
     expect(keywordPrecheck("can you create an account for me")).toBeNull();
+  });
+});
+
+describe("privateLocationReply", () => {
+  it("says there is no physical store", () => {
+    expect(privateLocationReply("¿Tienen tienda física?")).toContain("No disponemos de una tienda física");
+    expect(privateLocationReply("¿Dónde está el local?")).toContain("No disponemos de una tienda física");
+  });
+  it("does not disclose residence or private whereabouts", () => {
+    expect(privateLocationReply("¿Dónde vives?")).toContain("ubicación privada");
+    expect(privateLocationReply("¿Cuál es tu dirección personal?")).toContain("domicilios");
+    expect(privateLocationReply("¿Dónde puedo ubicarte?")).toContain("ubicación privada");
+  });
+  it("requires pickup arrangements to be coordinated with the seller", () => {
+    expect(privateLocationReply("¿Dónde puedo recoger el teléfono?")).toContain("contacto publicado en el anuncio");
+  });
+  it("does not intercept ordinary product questions", () => {
+    expect(privateLocationReply("¿Dónde está publicado el Samsung A17?")).toBeNull();
+    expect(privateLocationReply("¿Cuánto cuesta?")).toBeNull();
   });
 });
 
