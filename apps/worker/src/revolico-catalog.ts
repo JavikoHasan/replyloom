@@ -9,7 +9,7 @@ const STATE_PREFIX = "revolico:catalog-sync:";
 const CATALOG_DOC_ID = "revolico-sagua-public-catalog";
 const BATCH_SIZE = 4;
 const STATE_TTL_SECONDS = 3600;
-const MAX_LISTINGS = 30;
+const MAX_LISTINGS = 60;
 
 interface SyncState {
   urls: string[];
@@ -163,6 +163,7 @@ async function fetchOwnedListing(url: string): Promise<PublicListing | null> {
 
 /** Pure parser kept separate so seller matching and expiry rules are testable. */
 export function parseOwnedListingHtml(url: string, html: string, now = Date.now()): PublicListing | null {
+  if (!isAllowedListingUrl(url)) return null;
   const contactLinks = [...html.matchAll(/href=["']https?:\/\/wa\.me\/(\d+)[^"']*["']/gi)];
   if (!contactLinks.some((match) => match[1] === OWNER_WHATSAPP_DIGITS)) return null;
 
