@@ -45,30 +45,6 @@ import {
 } from "./outbound-guard";
 import type {SendKind} from "./outbound-guard";
 
-// Pretty-prints a Baileys pino-logger argument for our own log stream.
-// Was `String(x)` for every arg, which turns any object Baileys logs
-// (which is most of them -- pino loggers take a data object as the FIRST
-// arg, then a message string) into the literal text "[object Object]",
-// throwing away the actual error/detail every single time. That's exactly
-// what made a real failure (e.g. "Failed to encrypt for recipient") show
-// up in our logs with zero information about *why* -- the useful part was
-// always in the object we were discarding.
-function fmtLogArg(a: unknown): string {
-  if (a instanceof Error) return a.stack || a.message;
-  if (a && typeof a === "object") {
-    try {
-      return JSON.stringify(a, (_k, v) => {
-        if (v instanceof Uint8Array) return `<${v.length} bytes>`;
-        if (v instanceof Error) return { message: v.message, stack: v.stack };
-        return v;
-      });
-    } catch {
-      return String(a);
-    }
-  }
-  return String(a);
-}
-
 // ── SQLite-backed auth state adapter (Phase 4) ──────────────────────────
 
 function createSqliteAuthState(storage: SqlStorage): AuthenticationState {
@@ -1257,7 +1233,7 @@ export class WhatsAppSession implements DurableObject {
         let jid = body.to.includes("@") ? body.to : `${body.to}@s.whatsapp.net`;
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
         if (isLidJid(jid)) {
-          this.log("warn", `Cannot resolve LID JID ${body.to} to phone JID — send may fail`);
+          this.log("warn", "Cannot resolve recipient address; send may fail");
         }
 
         let mediaType: "image" | "video" | "audio" | "document" | null = null;
@@ -2458,21 +2434,23 @@ export class WhatsAppSession implements DurableObject {
         // and would wipe the default filter with undefined.
         ...(wantHistory ? { shouldSyncHistoryMessage: () => true } : {}),
         markOnlineOnConnect: false,
+        // Baileys diagnostic payloads can contain phone JIDs, names and
+        // message metadata. Do not forward raw library arguments to logs.
         logger: {
-          level: "warn",
+          level: "silent",
           child: () => ({
-            level: "warn",
-            trace: (...a: any[]) => this.log("info", `[trace] ${a.map(fmtLogArg).join(" ")}`),
-            debug: (...a: any[]) => this.log("info", `[debug] ${a.map(fmtLogArg).join(" ")}`),
-            info: (...a: any[]) => this.log("info", `[info] ${a.map(fmtLogArg).join(" ")}`),
-            warn: (...a: any[]) => this.log("warn", `[warn] ${a.map(fmtLogArg).join(" ")}`),
-            error: (...a: any[]) => this.log("error", `[err] ${a.map(fmtLogArg).join(" ")}`),
+            level: "silent",
+            trace: () => {},
+            debug: () => {},
+            info: () => {},
+            warn: () => this.log("warn", "Baileys warning event"),
+            error: () => this.log("error", "Baileys error event"),
           }),
-          trace: (...a: any[]) => this.log("info", `[trace] ${a.map(fmtLogArg).join(" ")}`),
-          debug: (...a: any[]) => this.log("info", `[debug] ${a.map(fmtLogArg).join(" ")}`),
-          info: (...a: any[]) => this.log("info", `[info] ${a.map(fmtLogArg).join(" ")}`),
-          warn: (...a: any[]) => this.log("warn", `[warn] ${a.map(fmtLogArg).join(" ")}`),
-          error: (...a: any[]) => this.log("error", `[error] ${a.map(fmtLogArg).join(" ")}`),
+          trace: () => {},
+          debug: () => {},
+          info: () => {},
+          warn: () => this.log("warn", "Baileys warning event"),
+          error: () => this.log("error", "Baileys error event"),
         } as any,
         keepAliveIntervalMs: 30_000,
         qrTimeout: 60_000,
@@ -2496,7 +2474,7 @@ export class WhatsAppSession implements DurableObject {
 
     // Also listen for creds and settings updates
     this.socket.ev.on("creds.update", (creds: any) => {
-      this.log("info", `creds.update: me=${JSON.stringify(creds.me)}`);
+      this.log("info", "WhatsApp credentials updated");
     });
 
     this.socket.ev.on("messaging-history.set", (hist: any) => {
@@ -2569,7 +2547,7 @@ export class WhatsAppSession implements DurableObject {
     });
 
     this.socket.ev.on("chats.upsert", (chats: any) => {
-      this.log("info", `chats.upsert: ${JSON.stringify(chats?.map?.((c: any) => c.id) ?? chats)}`);
+      this.log("info", `Chat metadata event received (${chats?.length ?? 0} entries)`);
     });
 
     // ── Chat-state sync (archive/mute) FROM WhatsApp ─────────────────────
@@ -2665,7 +2643,7 @@ export class WhatsAppSession implements DurableObject {
                 await upsertGroupMembers(this.db, wsId, this.sessionIdName, group.id, g.participants);
               }
             } catch (err: any) {
-              this.log("error", `groups.upsert failed for ${g.id}: ${err?.message || err}`);
+              this.log("error", "Group metadata sync failed");
             }
           }
         })()
@@ -2726,7 +2704,7 @@ export class WhatsAppSession implements DurableObject {
         this.qr = null;
         this.reconnectCount = 0;
         this.sessionUser = this.socket?.user?.id ?? null;
-        this.log("info", `CONNECTED as ${this.sessionUser}`);
+        this.log("info", "WhatsApp session connected");
         this.persist();
         this.state.storage.delete("pairingIncomplete");
         // Keep this number online from now on, browser or not.
@@ -2978,7 +2956,7 @@ export class WhatsAppSession implements DurableObject {
               evt.key?.remoteJid ||
               "unknown";
             const ts = reaction.senderTimestampMs ? Number(reaction.senderTimestampMs) : Date.now();
-            this.log("info", `messages.reaction on ${keyId}: emoji="${emoji}" sender=${sender}`);
+            this.log("info", "Message reaction event received");
             let conversationId: string | null = null;
             try {
               conversationId = await upsertMessageReaction(this.db, workspaceId, keyId, {
@@ -2986,9 +2964,9 @@ export class WhatsAppSession implements DurableObject {
                 sender,
                 timestampMs: ts,
               });
-              this.log("info", `Reaction synced to D1 for ${keyId}`);
+              this.log("info", "Message reaction synced to D1");
             } catch (err: any) {
-              this.log("error", `Reaction sync failed for ${keyId}: ${err?.message || err}`);
+              this.log("error", "Message reaction sync failed");
             }
             this.broadcast({
               type: "message-reaction",
@@ -3054,14 +3032,14 @@ export class WhatsAppSession implements DurableObject {
             // no `reactionTimestamp` field (that was a made-up name that
             // always silently fell back to Date.now()).
             const reactions = update.update?.reactions;
-            if (reactions) this.log("info", `messages.update for ${keyId}: reactions=${reactions.length}`);
+            if (reactions) this.log("info", `Message reaction update received (${reactions.length})`);
             if (keyId && workspaceId && reactions) {
               for (const r of reactions) {
                 const emoji = r.text || "";
                 const sender = r.key?.participant || r.key?.remoteJid || "unknown";
                 const tsRaw = r.senderTimestampMs;
                 const ts = tsRaw ? Number(tsRaw) : Date.now();
-                this.log("info", `Reaction on ${keyId}: emoji="${emoji}" sender=${sender}`);
+                this.log("info", "Message reaction event received");
                 let conversationId: string | null = null;
                 try {
                   conversationId = await upsertMessageReaction(this.db, workspaceId, keyId, {
@@ -3120,12 +3098,12 @@ export class WhatsAppSession implements DurableObject {
           for (const key of keys) {
             const keyId = key?.id;
             if (!keyId) continue;
-            this.log("info", `Message deleted: ${keyId}`);
+            this.log("info", "Message deletion event received");
             let conversationId: string | null = null;
             try {
               conversationId = await markMessageDeleted(this.db, workspaceId, keyId);
             } catch (err: any) {
-              this.log("error", `Delete sync failed for ${keyId}: ${err?.message || err}`);
+              this.log("error", "Message deletion sync failed");
             }
             this.broadcast({
               type: "message-deleted",
@@ -3142,7 +3120,7 @@ export class WhatsAppSession implements DurableObject {
     // ── Call events (voice/video calls) ──────────────────────────────────
     this.socket.ev.on("call", (calls: any[]) => {
       for (const call of calls) {
-        this.log("info", `Call ${call.status} from ${call.from} (${call.id})`);
+        this.log("info", "WhatsApp call event received");
         this.broadcast({
           type: "call",
           sessionId: this.sessionIdName,
