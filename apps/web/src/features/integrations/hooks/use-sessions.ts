@@ -209,6 +209,18 @@ export const syncGroupMembersNow = createServerFn({ method: "POST" })
     })
   )
 
+export const pairSession = createServerFn({ method: "POST" })
+  .validator((data: { sessionId: string; phone: string }) => data)
+  .handler(
+    withSafeErrors(async ({ data }) => {
+      await requireCurrentPermission("manage_integrations")
+      return await callSessionWorker(data.sessionId, "/pair", {
+        method: "POST",
+        body: JSON.stringify({ phone: data.phone }),
+      })
+    }, "Couldn't request the WhatsApp pairing code. Please try again.")
+  )
+
 export const disconnectSession = createServerFn({ method: "POST" })
   .validator((data: { sessionId: string }) => data)
   .handler(
