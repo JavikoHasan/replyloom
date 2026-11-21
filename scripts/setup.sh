@@ -14,12 +14,9 @@ WEB_DIR="apps/web"
 WORKER_CONFIG="$WORKER_DIR/wrangler.jsonc"
 WEB_CONFIG="$WEB_DIR/wrangler.jsonc"
 DB_NAME="whatsapp-ai"
-MEDIA_BUCKET="whatsapp-ai-media"
-BACKUP_BUCKET="whatsapp-ai-backups"
 QUEUE_NAME="wa-broadcast-dispatch"
-VECTORIZE_INDEX="wa-messages"
-AGENT_VECTORIZE_INDEX="wa-docs"
 KV_BINDING="REPLY_CACHE"
+MEDIA_KV_BINDING="MEDIA_STORE"
 
 # Create wrangler.jsonc / .env.production from the templates if missing.
 node scripts/config.mjs
@@ -77,23 +74,6 @@ else
   echo "    already configured, id=$DB_ID"
 fi
 
-# ── R2 bucket (media) ────────────────────────────────────────────────────
-echo "==> R2 bucket ($MEDIA_BUCKET)..."
-if wrangler r2 bucket list 2>/dev/null | grep -q "$MEDIA_BUCKET"; then
-  echo "    already exists"
-else
-  CI=true wrangler r2 bucket create "$MEDIA_BUCKET"
-fi
-
-# ── R2 bucket (restricted encrypted backups — not bound to any Worker) ───
-echo "==> R2 backup bucket ($BACKUP_BUCKET)..."
-if wrangler r2 bucket list 2>/dev/null | grep -q "$BACKUP_BUCKET"; then
-  echo "    already exists"
-else
-  CI=true wrangler r2 bucket create "$BACKUP_BUCKET"
-fi
-wrangler r2 bucket lifecycle add "$BACKUP_BUCKET" "expire-d1-backups" "backups/" --expire-days 30 --force >/dev/null 2>&1 || true
-
 # ── Queue (safe-broadcast dispatch) ──────────────────────────────────────
 echo "==> Queue ($QUEUE_NAME)..."
 if wrangler queues list 2>/dev/null | grep -q "$QUEUE_NAME"; then
@@ -101,16 +81,6 @@ if wrangler queues list 2>/dev/null | grep -q "$QUEUE_NAME"; then
 else
   wrangler queues create "$QUEUE_NAME"
 fi
-
-# ── Vectorize indexes (semantic search + agent RAG) ──────────────────────
-for INDEX in "$VECTORIZE_INDEX" "$AGENT_VECTORIZE_INDEX"; do
-  echo "==> Vectorize index ($INDEX)..."
-  if wrangler vectorize list 2>/dev/null | grep -q "$INDEX"; then
-    echo "    already exists"
-  else
-    wrangler vectorize create "$INDEX" --dimensions=1024 --metric=cosine
-  fi
-done
 
 # ── KV namespace (AI agent reply cache) ──────────────────────────────────
 echo "==> KV namespace ($KV_BINDING)..."
@@ -146,6 +116,37 @@ if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID
   fi
 else
   echo "    already configured, id=$CURRENT_KV_ID"
+fi
+
+# ── KV namespace (media storage) ────────────────────────────────────────
+echo "==> KV namespace ($MEDIA_KV_BINDING)..."
+if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$MEDIA_KV_BINDING\""; then
+  wrangler kv namespace create "$MEDIA_KV_BINDING" >/dev/null
+  echo "    created namespace"
+else
+  echo "    found existing namespace"
+fi
+MEDIA_KV_ID=$(wrangler kv namespace list --json 2>/dev/null | node -e "
+  let s = '';
+  process.stdin.on('data', (d) => { s += d; });
+  process.stdin.on('end', () => {
+    try {
+      const list = JSON.parse(s);
+      const ns = list.find((n) => n.title === '$MEDIA_KV_BINDING');
+      if (ns) console.log(ns.id);
+    } catch {}
+  });
+")
+if [ -n "${MEDIA_KV_ID:-}" ]; then
+  node -e "
+    const fs = require('fs');
+    let src = fs.readFileSync('$WORKER_CONFIG', 'utf8');
+    src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\$1\"$MEDIA_KV_ID\"');
+    fs.writeFileSync('$WORKER_CONFIG', src);
+  "
+  echo "    wrote id into $WORKER_CONFIG"
+else
+  echo "    WARNING: could not resolve media KV namespace id — set it manually in $WORKER_CONFIG" >&2
 fi
 
 # ── Run D1 migrations (remote) ───────────────────────────────────────────
