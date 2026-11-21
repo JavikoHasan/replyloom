@@ -36,17 +36,19 @@ export async function retrieveContext(
   env: AgentEnv,
   config: AgentConfig,
   query: string,
+  sourcePrefix?: string,
 ): Promise<RetrievedChunk[]> {
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
 
   const normalizedTextSql = `replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(lower(text), 'á','a'), 'Á','a'), 'é','e'), 'É','e'), 'í','i'), 'Í','i'), 'ó','o'), 'Ó','o'), 'ú','u'), 'Ú','u'), 'ü','u'), 'Ü','u'), 'ñ','n'), 'Ñ','n')`;
   const predicates = terms.map(() => `instr(${normalizedTextSql}, ?) > 0`).join(" OR ");
+  const sourceFilter = sourcePrefix ? " AND source LIKE ?" : "";
   const statement = env.DB.prepare(
     `SELECT id, text, source FROM doc_chunks
-     WHERE workspace_id = ? AND (${predicates})
+     WHERE workspace_id = ?${sourceFilter} AND (${predicates})
      LIMIT 100`,
-  ).bind(config.workspaceId, ...terms);
+  ).bind(config.workspaceId, ...(sourcePrefix ? [`${sourcePrefix}%`] : []), ...terms);
 
   const result = await statement.all<{ id: string; text: string; source: string }>();
   const normalizedQuery = normalizeText(query).trim();
