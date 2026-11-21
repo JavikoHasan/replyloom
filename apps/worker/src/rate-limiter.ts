@@ -1,7 +1,7 @@
 /**
  * Atomic fixed-window rate limiting on SQLite-backed Durable Objects.
- * A separate object is addressed per hashed rate-limit key, avoiding a
- * single global hot object while staying within the Workers Free plan.
+ * Rate-limit keys are hashed and spread over 256 shards so an attacker
+ * cannot create one new Durable Object for every unique IP or email.
  */
 export class RateLimiter implements DurableObject {
   private state: DurableObjectState;
@@ -10,7 +10,7 @@ export class RateLimiter implements DurableObject {
     this.state = state;
     this.state.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS rate_limit_state (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
+        bucket_key TEXT PRIMARY KEY,
         window_start INTEGER NOT NULL,
         hits INTEGER NOT NULL
       );
@@ -22,16 +22,18 @@ export class RateLimiter implements DurableObject {
       return new Response("Method not allowed", { status: 405 });
     }
 
-    let body: { limit?: number; windowMs?: number };
+    let body: { keyHash?: unknown; limit?: number; windowMs?: number };
     try {
-      body = await request.json() as { limit?: number; windowMs?: number };
+      body = await request.json() as typeof body;
     } catch {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
+    const keyHash = body.keyHash;
     const limit = Number(body.limit);
     const windowMs = Number(body.windowMs);
     if (
+      typeof keyHash !== "string" || !/^[a-f0-9]{64}$/.test(keyHash) ||
       !Number.isInteger(limit) || limit < 1 || limit > 10_000 ||
       !Number.isInteger(windowMs) || windowMs < 1_000 || windowMs > 3_600_000
     ) {
@@ -39,11 +41,21 @@ export class RateLimiter implements DurableObject {
     }
 
     const now = Date.now();
+    const lastCleanupAt = await this.state.storage.get<number>("lastCleanupAt");
+    if (!lastCleanupAt || now - lastCleanupAt > 24 * 60 * 60_000) {
+      // Remove inactive keys once per day so the shard tables stay bounded.
+      this.state.storage.sql.exec(
+        "DELETE FROM rate_limit_state WHERE window_start < ?",
+        now - 24 * 60 * 60_000,
+      );
+      await this.state.storage.put("lastCleanupAt", now);
+    }
+
     const windowStart = Math.floor(now / windowMs) * windowMs;
     const rows = this.state.storage.sql.exec(
-      `INSERT INTO rate_limit_state (id, window_start, hits)
-       VALUES (1, ?, 1)
-       ON CONFLICT(id) DO UPDATE SET
+      `INSERT INTO rate_limit_state (bucket_key, window_start, hits)
+       VALUES (?, ?, 1)
+       ON CONFLICT(bucket_key) DO UPDATE SET
          hits = CASE
            WHEN rate_limit_state.window_start = excluded.window_start
            THEN rate_limit_state.hits + 1
@@ -51,6 +63,7 @@ export class RateLimiter implements DurableObject {
          END,
          window_start = excluded.window_start
        RETURNING hits`,
+      keyHash,
       windowStart,
     ).toArray();
 
