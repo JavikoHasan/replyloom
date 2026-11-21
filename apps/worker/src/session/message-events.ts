@@ -39,6 +39,12 @@ export interface MessageEventContext {
   broadcast: (data: Record<string, unknown>) => void;
   /** Anti-ban: per-contact auto-reply loop breaker + session pace. */
   allowAutoReply?: (jid: string) => boolean;
+  /** Human messages pause this chat's automatic replies for a short cooldown. */
+  pauseAutoReply?: (jid: string) => Promise<void>;
+  isAutoReplyPaused?: (jid: string) => Promise<boolean>;
+  /** Prevent the bot's own outgoing echo from being mistaken for a human reply. */
+  markBotReply?: (jid: string) => Promise<void>;
+  consumeBotReplyMarker?: (jid: string) => Promise<boolean>;
   /**
    * Hands a fire-and-forget promise (webhook delivery, search indexing) to
    * the runtime so it keeps the isolate alive after this handler returns.
@@ -72,6 +78,17 @@ export async function processLiveMessage(
   // No message text in logs: it's customer PII, and at scale one log line
   // per message is already the dominant log volume.
   ctx.log("info", `${parsed.fromMe ? "OUT" : "IN"} [${parsed.type}] ${parsed.waMessageId}`);
+
+  // A real outgoing message from the seller means a human has taken over
+  // this chat. The bot's own send echo is marked just before sendMessage()
+  // and must not trigger the pause.
+  if (parsed.fromMe) {
+    const botEcho = await ctx.consumeBotReplyMarker?.(parsed.remoteJid) ?? false;
+    if (!botEcho) {
+      await ctx.pauseAutoReply?.(parsed.remoteJid);
+      ctx.log("info", `Human activity detected; automatic replies paused for ${parsed.remoteJid}`);
+    }
+  }
 
   // Skip all processing for incoming messages from blocked contacts —
   // no conversation, no sync, no auto-reply, nothing.
@@ -190,7 +207,10 @@ export async function processLiveMessage(
   // agent as a fallback when no rule matched. Only for genuinely fresh
   // messages -- see AUTO_REPLY_MAX_AGE_MS above.
   const isFresh = upsertType === "notify" || Date.now() - parsed.timestampMs < AUTO_REPLY_MAX_AGE_MS;
-  if (!parsed.fromMe && ctx.socket && parsed.body && isFresh) {
+  const autoReplyPaused = !parsed.fromMe && ctx.isAutoReplyPaused
+    ? await ctx.isAutoReplyPaused(parsed.remoteJid)
+    : false;
+  if (!parsed.fromMe && ctx.socket && parsed.body && isFresh && !autoReplyPaused) {
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
       const senderJid = parsed.participant ?? parsed.remoteJid;
@@ -217,6 +237,8 @@ export async function processLiveMessage(
       }
       if (replyText) {
         ctx.log("info", `${source} firing for ${parsed.remoteJid}`);
+        // Mark this outgoing echo so it is not mistaken for a human takeover.
+        await ctx.markBotReply?.(parsed.remoteJid);
         const result = await ctx.socket.sendMessage(parsed.remoteJid, {
           text: replyText,
         });
