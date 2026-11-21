@@ -160,7 +160,7 @@ function toAuthUser(u: {
  * auth.api.* directly (not over HTTP), so Better Auth's own in-memory
  * limiter never runs for them -- this is the real gate. Keyed per IP and
  * per email so neither a botnet on one account nor one IP across many
- * accounts gets through. Fails open if the binding is missing/erroring.
+ * accounts gets through. Fails closed if the shared engine limiter is unavailable.
  */
 async function enforceAuthRateLimit(email: string) {
   let ip = "unknown"
