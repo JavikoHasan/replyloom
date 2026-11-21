@@ -104,7 +104,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     "Cuando la ficha indique entrega a domicilio sin costo adicional, la política de esta tienda es realizarla mediante motorina eléctrica, sin recargo. La hora depende de la carga disponible y se coordina directamente con el vendedor. El asistente nunca programa ni confirma una hora.",
     "No inventar datos ausentes.",
     ...records,
-  ].join("\\n\\n");
+  ].join("\n\n");
 
   // Keep the project/page/app information indexed even when the seller has
   // no active listings. Re-ingestion replaces old listing chunks, so expired
