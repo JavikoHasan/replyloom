@@ -41,7 +41,7 @@ Official references:
 2. **Media:** R2 is replaced by a separate KV namespace. Files larger than 24 MiB are not retained in the CRM. WhatsApp messages and captions still remain available as text when attachment storage is unavailable. KV's 1,000 daily writes are a hard limit, so media retention is best-effort.
 3. **AI quota:** The assistant calls Workers AI directly. If the daily Free neuron allowance is exhausted or the provider is unavailable, it sends a fixed, cautious message instead of guessing prices, stock, delivery, or payment details.
 4. **Human takeover:** A manual outgoing message pauses automatic replies for that chat for 30 minutes. The timer extends when the seller sends another message. Replies resume automatically after the quiet period. This is only a best-effort signal; WhatsApp does not expose a reliable "seller is available/offline" signal to this integration.
-5. **Backups:** The scheduled R2 backup workflow is removed. D1 Free includes a limited Time Travel recovery window, but that is not a substitute for a separate encrypted export. Do not run the optional `--cloud` config-backup commands in this zero-cost profile; they use R2.
+5. **Backups:** The scheduled R2 backup workflow is removed. D1 Free includes a 7-day Time Travel recovery window, but that is not a substitute for a separate encrypted export. Do not run the optional `--cloud` config-backup commands in this zero-cost profile; they use R2.
 
 ## Safety and deployment state
 
