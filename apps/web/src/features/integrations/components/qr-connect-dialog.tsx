@@ -51,7 +51,7 @@ export function QrConnectDialog({
   const [step, setStep] = useState<"options" | "connecting">("options")
   const [syncHistory, setSyncHistory] = useState(false)
   const [syncGroupMembers, setSyncGroupMembers] = useState(false)
-  const [pairingMode, setPairingMode] = useState(false)
+  const [pairingMode, setPairingMode] = useState(true)
   const [pairingCode, setPairingCode] = useState<string | null>(null)
   const [pairingError, setPairingError] = useState<string | null>(null)
   const pairingRequestedRef = useRef(false)
@@ -90,7 +90,7 @@ export function QrConnectDialog({
     setStep("options")
     setSyncHistory(false)
     setSyncGroupMembers(false)
-    setPairingMode(false)
+    setPairingMode(true)
     setPairingCode(null)
     setPairingError(null)
     pairingRequestedRef.current = false
