@@ -30,6 +30,7 @@ import { scrubSentryEvent } from "@workspace/db/sentry-scrub";
 
 export { WhatsAppSession } from "./session/whatsapp-session";
 export { Scheduler } from "./scheduler";
+export { RateLimiter } from "./rate-limiter";
 
 /**
  * Reads just the `to` field off a /session/:id/send* request without
@@ -66,8 +67,7 @@ export interface Env {
   BROADCAST_QUEUE: Queue<BroadcastQueueMessage>;
   AI: Ai;
   REPLY_CACHE: KVNamespace;
-  API_RATE_LIMITER: RateLimit;
-  AUTH_RATE_LIMITER: RateLimit;
+  RATE_LIMITER: DurableObjectNamespace;
   /**
    * Shared secret that proves a request came from apps/web (which holds the
    * same value as its ENGINE_INTERNAL_SECRET var and presents it on every
@@ -167,6 +167,28 @@ function configValuesFromBody(body: any): Partial<typeof agentConfigs.$inferInse
   return v;
 }
 
+
+/** Atomically consume one fixed-window bucket in its SQLite Durable Object. */
+async function consumeRateLimit(
+  env: Env,
+  key: string,
+  limit: number,
+  windowMs = 60_000,
+): Promise<{ success: boolean; remaining: number; retryAfter: number }> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const objectName = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(objectName));
+  const response = await stub.fetch("https://rate-limit.internal/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ limit, windowMs }),
+  });
+  if (!response.ok) throw new Error(`Rate limiter failed (${response.status})`);
+  return await response.json() as { success: boolean; remaining: number; retryAfter: number };
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
@@ -198,6 +220,27 @@ async function route(request: Request, env: Env): Promise<Response> {
   // apps/web via the service binding) or a per-workspace API key.
   const caller = await resolveCaller(env, request);
   if (!caller) return unauthorized();
+
+  // Internal-only endpoint used by the web Worker for its own request and
+  // authentication throttles. It shares the engine's SQLite DO limiter.
+  if (request.method === "POST" && url.pathname === "/internal/rate-limit") {
+    if (caller.kind !== "internal") return forbidden();
+    let body: { key?: unknown; limit?: unknown; windowMs?: unknown };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+    }
+    if (
+      typeof body.key !== "string" || !body.key || body.key.length > 512 ||
+      !Number.isInteger(body.limit) || Number(body.limit) < 1 || Number(body.limit) > 10_000 ||
+      !Number.isInteger(body.windowMs) || Number(body.windowMs) < 1_000 || Number(body.windowMs) > 3_600_000
+    ) {
+      return Response.json({ ok: false, error: "Invalid rate-limit request" }, { status: 400 });
+    }
+    const result = await consumeRateLimit(env, body.key, Number(body.limit), Number(body.windowMs));
+    return Response.json({ ok: true, ...result });
+  }
 
   // ── GET /session/:id/ws-token ──
   // Returns a short-lived HMAC-signed token the browser can present when
@@ -697,30 +740,42 @@ const worker = {
     }
 
     // ── Rate limiting ──
-    // Use client IP as rate limit key
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    // The internal bridge endpoint is itself protected by resolveCaller()
+    // and must not recursively consume another bucket.
     const url = new URL(request.url);
-
-    // Apply stricter rate limit to auth endpoints
-    const isAuthEndpoint = url.pathname.startsWith("/auth") ||
-      url.pathname.includes("/login") ||
-      url.pathname.includes("/signup");
-
-    const rateLimiter = isAuthEndpoint ? env.AUTH_RATE_LIMITER : env.API_RATE_LIMITER;
-    const { success } = await rateLimiter.limit({ key: clientIp });
-
-    if (!success) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Rate limit exceeded. Please try again later." }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": "60",
-            ...buildCorsHeaders(env, requestOrigin),
-          },
+    if (url.pathname !== "/internal/rate-limit") {
+      const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+      const isAuthEndpoint = url.pathname.startsWith("/auth") ||
+        url.pathname.includes("/login") ||
+        url.pathname.includes("/signup");
+      try {
+        const result = await consumeRateLimit(
+          env,
+          `engine:${isAuthEndpoint ? "auth" : "api"}:${clientIp}`,
+          isAuthEndpoint ? 10 : 100,
+          60_000,
+        );
+        if (!result.success) {
+          return new Response(
+            JSON.stringify({ ok: false, error: "Rate limit exceeded. Please try again later." }),
+            {
+              status: 429,
+              headers: {
+                "Content-Type": "application/json",
+                "Retry-After": String(result.retryAfter),
+                ...buildCorsHeaders(env, requestOrigin),
+              },
+            },
+          );
         }
-      );
+      } catch (err) {
+        // Authentication requests fail closed if their abuse protection is
+        // unavailable. Ordinary API traffic remains available and is logged.
+        if (isAuthEndpoint) {
+          return Response.json({ ok: false, error: "Security protection is temporarily unavailable. Please try again shortly." }, { status: 503 });
+        }
+        log.error({ err }, "API rate limiter unavailable; allowing non-auth request");
+      }
     }
 
     try {
