@@ -83,10 +83,19 @@ export async function processLiveMessage(
   // this chat. The bot's own send echo is marked just before sendMessage()
   // and must not trigger the pause.
   if (parsed.fromMe) {
-    const botEcho = await ctx.consumeBotReplyMarker?.(parsed.remoteJid) ?? false;
+    let botEcho = false;
+    try {
+      botEcho = await ctx.consumeBotReplyMarker?.(parsed.remoteJid) ?? false;
+    } catch (err: any) {
+      ctx.log("warn", `Could not inspect bot-reply marker: ${err?.message || err}`);
+    }
     if (!botEcho) {
-      await ctx.pauseAutoReply?.(parsed.remoteJid);
-      ctx.log("info", `Human activity detected; automatic replies paused for ${parsed.remoteJid}`);
+      try {
+        await ctx.pauseAutoReply?.(parsed.remoteJid);
+        ctx.log("info", `Human activity detected; automatic replies paused for ${parsed.remoteJid}`);
+      } catch (err: any) {
+        ctx.log("warn", `Could not persist human takeover pause: ${err?.message || err}`);
+      }
     }
   }
 
@@ -207,9 +216,17 @@ export async function processLiveMessage(
   // agent as a fallback when no rule matched. Only for genuinely fresh
   // messages -- see AUTO_REPLY_MAX_AGE_MS above.
   const isFresh = upsertType === "notify" || Date.now() - parsed.timestampMs < AUTO_REPLY_MAX_AGE_MS;
-  const autoReplyPaused = !parsed.fromMe && ctx.isAutoReplyPaused
-    ? await ctx.isAutoReplyPaused(parsed.remoteJid)
-    : false;
+  let autoReplyPaused = false;
+  if (!parsed.fromMe && ctx.isAutoReplyPaused) {
+    try {
+      autoReplyPaused = await ctx.isAutoReplyPaused(parsed.remoteJid);
+    } catch (err: any) {
+      // Fail closed if the pause state cannot be checked: never interrupt a
+      // possible human takeover because a storage read failed.
+      autoReplyPaused = true;
+      ctx.log("warn", `Could not read auto-reply pause state: ${err?.message || err}`);
+    }
+  }
   if (!parsed.fromMe && ctx.socket && parsed.body && isFresh && !autoReplyPaused) {
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
@@ -238,7 +255,11 @@ export async function processLiveMessage(
       if (replyText) {
         ctx.log("info", `${source} firing for ${parsed.remoteJid}`);
         // Mark this outgoing echo so it is not mistaken for a human takeover.
-        await ctx.markBotReply?.(parsed.remoteJid);
+        try {
+          await ctx.markBotReply?.(parsed.remoteJid);
+        } catch (err: any) {
+          ctx.log("warn", `Could not mark bot reply echo: ${err?.message || err}`);
+        }
         const result = await ctx.socket.sendMessage(parsed.remoteJid, {
           text: replyText,
         });
