@@ -22,13 +22,6 @@ function queryTerms(query: string): string[] {
     .slice(0, 8);
 }
 
-function globFor(term: string): string {
-  const variants: Record<string, string> = {
-    a: "[aáÁ]", e: "[eéÉ]", i: "[iíÍ]", o: "[oóÓ]",
-    u: "[uúÚüÜ]", n: "[nñÑ]",
-  };
-  return `*${[...term].map((char) => variants[char] ?? char).join("")}*`;
-}
 
 export function isWorthIndexing(text: string): boolean {
   return text.trim().length >= 12 && /[\p{L}\p{N}]/u.test(text);
@@ -87,7 +80,8 @@ export async function semanticSearch(
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
 
-  const predicates = terms.map(() => "lower(m.body) GLOB ?").join(" OR ");
+  const normalizedBodySql = `replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(lower(m.body), 'á','a'), 'Á','a'), 'é','e'), 'É','e'), 'í','i'), 'Í','i'), 'ó','o'), 'Ó','o'), 'ú','u'), 'Ú','u'), 'ü','u'), 'Ü','u'), 'ñ','n'), 'Ñ','n')`;
+  const predicates = terms.map(() => `instr(${normalizedBodySql}, ?) > 0`).join(" OR ");
   const limit = Math.max(1, Math.min(Math.floor(topK), 20));
   const statement = env.DB.prepare(
     `SELECT m.wa_message_id AS messageId,
@@ -104,7 +98,7 @@ export async function semanticSearch(
         AND (${predicates})
       ORDER BY m.created_at DESC
       LIMIT ?`,
-  ).bind(workspaceId, ...terms.map(globFor), Math.min(limit * 8, 160));
+  ).bind(workspaceId, ...terms, Math.min(limit * 8, 160));
 
   const result = await statement.all<{
     messageId: string;
