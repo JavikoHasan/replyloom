@@ -12,6 +12,7 @@ import { createDb } from "@workspace/db";
 import { isBlocked } from "./automation";
 import { loadAgentConfig } from "./ai-agent/config";
 import { handleAgentMessage } from "./ai-agent/agent";
+import { scopedLogger } from "./logger";
 
 export interface AiAutoReplyParams {
   waSessionId: string;
@@ -30,6 +31,7 @@ export interface AiAutoReplyParams {
 // quiet gap resets it. 0 = fully off to be safe.
 const RATE_WINDOW_SECONDS = 300; // 5 minutes
 const MAX_AGENT_INVOCATIONS_PER_WINDOW = 5;
+const log = scopedLogger("ai-autoreply");
 
 /** Returns the reply text to send, or null if the agent is off / should stay quiet. */
 export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Promise<string | null> {
@@ -66,13 +68,21 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
     .put(rlKey, String(count), { expirationTtl: RATE_WINDOW_SECONDS })
     .catch(() => {});
 
-  const reply = await handleAgentMessage(env, config, {
-    message: params.body,
-    conversationId: params.conversationId,
-    waSessionId: params.waSessionId,
-    remoteJid: params.remoteJid,
-    senderJid: params.senderJid,
-    isGroup: params.isGroup,
-  });
-  return reply.text || null;
+  try {
+    const reply = await handleAgentMessage(env, config, {
+      message: params.body,
+      conversationId: params.conversationId,
+      waSessionId: params.waSessionId,
+      remoteJid: params.remoteJid,
+      senderJid: params.senderJid,
+      isGroup: params.isGroup,
+    });
+    return reply.text || null;
+  } catch (err) {
+    // Workers AI Free has a daily neuron ceiling. If it is reached (or the
+    // provider is temporarily unavailable), send a safe static response
+    // instead of inventing stock, prices or delivery details.
+    log.warn({ err, workspaceId: params.workspaceId }, "AI unavailable; using safe fallback reply");
+    return `Soy el asistente virtual de ${config.businessName}. Ahora mismo no puedo verificar ese dato automáticamente y prefiero no darte información incorrecta. El vendedor podrá confirmártelo cuando esté disponible.`;
+  }
 }
