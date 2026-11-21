@@ -2,10 +2,9 @@ import { createDb, eq, agentConfigs, workspaces } from "@workspace/db";
 import type { AgentConfig, AgentEnv } from "./types";
 import { TtlCache } from "../ttl-cache";
 
-// Defaults, aligned with the repo's existing embedding choice (bge-m3,
-// 1024-dim — the same model the message-search index wa-messages uses), so
-// a single embedding model serves both indexes and multilingual support is
-// retained. The generator is only invoked for grounded, in-scope messages.
+// The zero-cost profile uses workspace-scoped text retrieval in D1;
+// the legacy embedding model field remains only for saved-config compatibility
+// and is not invoked. The generator runs only for grounded, in-scope messages.
 export const ACTIVE_GENERATOR_MODEL = "@cf/google/gemma-4-26b-a4b-it";
 export const ACTIVE_CLASSIFIER_MODEL = "@cf/zai-org/glm-4.7-flash";
 
