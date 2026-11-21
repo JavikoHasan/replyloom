@@ -30,13 +30,6 @@ function queryTerms(query: string): string[] {
 // SQLite GLOB character classes match common Spanish accented variants.
 // lower() handles ordinary ASCII capitals; uppercase accented letters are
 // included explicitly because SQLite's built-in lower() is ASCII-only.
-function globFor(term: string): string {
-  const variants: Record<string, string> = {
-    a: "[aáÁ]", e: "[eéÉ]", i: "[iíÍ]", o: "[oóÓ]",
-    u: "[uúÚüÜ]", n: "[nñÑ]",
-  };
-  return `*${[...term].map((char) => variants[char] ?? char).join("")}*`;
-}
 
 /**
  * Returns only chunks with meaningful overlap. A missing match remains an
@@ -51,12 +44,13 @@ export async function retrieveContext(
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
 
-  const predicates = terms.map(() => "lower(text) GLOB ?").join(" OR ");
+  const normalizedTextSql = `replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(lower(text), 'á','a'), 'Á','a'), 'é','e'), 'É','e'), 'í','i'), 'Í','i'), 'ó','o'), 'Ó','o'), 'ú','u'), 'Ú','u'), 'ü','u'), 'Ü','u'), 'ñ','n'), 'Ñ','n')`;
+  const predicates = terms.map(() => `instr(${normalizedTextSql}, ?) > 0`).join(" OR ");
   const statement = env.DB.prepare(
     `SELECT id, text, source FROM doc_chunks
      WHERE workspace_id = ? AND (${predicates})
      LIMIT 100`,
-  ).bind(config.workspaceId, ...terms.map(globFor));
+  ).bind(config.workspaceId, ...terms);
 
   const result = await statement.all<{ id: string; text: string; source: string }>();
   const normalizedQuery = normalizeText(query).trim();
