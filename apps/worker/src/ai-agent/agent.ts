@@ -1,5 +1,5 @@
 import type { AgentConfig, AgentContext, AgentEnv, AgentInput, AgentReply, RetrievedChunk, ToolSchema } from "./types";
-import { classifyIntent, redactSensitive, shouldEscalateToHuman } from "./guardrails";
+import { classifyIntent, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "./guardrails";
 import { createDb, eq, desc, messages } from "@workspace/db";
 import { retrieveContext } from "./rag";
 import { buildSystemPrompt } from "./system-prompt";
@@ -50,6 +50,12 @@ export async function handleAgentMessage(
   if (!message) return { text: "", usedTools: [], usedContext: [], blocked: false, cached: false };
 
   const catalogOnlyBusiness = config.businessName === "Cell Phone Store - Sagua la Grande";
+  if (catalogOnlyBusiness) {
+    const locationReply = privateLocationReply(message);
+    if (locationReply) {
+      return { text: locationReply, usedTools: [], usedContext: [], blocked: true, blockReason: "SENSITIVE", cached: false };
+    }
+  }
   const replyCacheTtlSeconds = catalogOnlyBusiness
     ? Math.min(config.cacheTtlSeconds, 300)
     : config.cacheTtlSeconds;
@@ -82,7 +88,7 @@ export async function handleAgentMessage(
   // ── 1b) Conversation thread — gives the model continuity for follow-ups
   // like "and shipping?" without a full message-history tool call, and
   // grounds the RAG query in what the customer was actually asking about. ──
-  const thread = input.conversationId ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT) : "";
+  const thread = !catalogOnlyBusiness && input.conversationId ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT) : "";
   const query = thread ? `${thread}\\n\\n${message}` : message;
   // This store is a product-information-only assistant: do not expose CRM
   // customer/order tools or arbitrary workspace webhooks to its model.
