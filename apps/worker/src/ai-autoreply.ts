@@ -3,10 +3,10 @@
 // the same agent can also be driven by the HTTP integration surface.
 //
 // Runs only when the workspace has opted in (agent_configs.enabled), honours
-// the existing auto-reply access rules (blacklist/whitelist), and defaults to
-// private chats unless the workspace sets replyInGroups. Keyword auto-reply
-// rules run first (in whatsapp-session.ts) — this is the fallback when no
-// canned rule matched.
+// the existing auto-reply access rules (blacklist/whitelist), and is hard-
+// restricted to private one-to-one chats regardless of workspace settings.
+// Keyword auto-reply rules run first (in whatsapp-session.ts) — this is the
+// fallback when no canned rule matched.
 import type { Env } from "./index";
 import { createDb } from "@workspace/db";
 import { isBlocked } from "./automation";
