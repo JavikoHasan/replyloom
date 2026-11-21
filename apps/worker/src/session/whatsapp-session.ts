@@ -2692,7 +2692,7 @@ export class WhatsAppSession implements DurableObject {
     // on a live message could show up as two separate conversations. See
     // syncLidMapping's own comment for the merge behavior.
     this.socket.ev.on("lid-mapping.update", async (mapping: { lid: string; pn: string }) => {
-      this.log("info", `lid-mapping.update: ${mapping.lid} <-> ${mapping.pn}`);
+      this.log("info", "LID mapping event received");
       await this.withWorkspaceId(async (wsId) => {
         if (await this.shouldSkipStoreHistory(wsId)) {
           this.log("info", "Skipping historical LID mapping import for the store assistant");
