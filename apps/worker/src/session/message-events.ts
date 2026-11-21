@@ -15,6 +15,7 @@ import { maybeAiAutoReply } from "../ai-autoreply";
 import { indexMessageForSearch } from "../search";
 import { TtlCache } from "../ttl-cache";
 import { isPrivateDirectChatJid } from "./message-routing";
+import { loadAgentConfig } from "../ai-agent/config";
 
 // Group subject for the search index metadata -- was one D1 read per group message.
 const groupNameCache = new TtlCache<string | null>(5 * 60_000);
@@ -84,6 +85,17 @@ export async function processLiveMessage(
 
   const parsed = await parseBaileysMessage(ctx.db, ctx.sessionIdName, msg);
   if (!parsed) return;
+
+  // This business assistant must not export private chat content to arbitrary
+  // workspace webhooks or the cross-conversation semantic search index.
+  // If config cannot be read, fail closed for those side effects and keyword rules.
+  let catalogOnlyBusiness = true;
+  try {
+    const agentConfig = await loadAgentConfig(ctx.env, ctx.workspaceId);
+    catalogOnlyBusiness = agentConfig.businessName === "Cell Phone Store - Sagua la Grande";
+  } catch {
+    catalogOnlyBusiness = true;
+  }
 
   // No message text in logs: it's customer PII, and at scale one log line
   // per message is already the dominant log volume.
@@ -180,18 +192,20 @@ export async function processLiveMessage(
 
   // Outbound webhook -- handed to waitUntil so the delivery (up to 10s per
   // hook, sequential) survives this handler returning.
-  const webhookWork = dispatchWebhookEvent(ctx.db, ctx.workspaceId, parsed.fromMe ? "message.sent" : "message.received", {
-    sessionId: ctx.sessionIdName,
-    remoteJid: parsed.remoteJid,
-    fromMe: parsed.fromMe,
-    type: parsed.type,
-    body: parsed.body,
-    waMessageId: parsed.waMessageId,
-  }).catch((err: any) => ctx.log("error", `Webhook dispatch failed: ${err?.message || err}`));
-  if (ctx.waitUntil) ctx.waitUntil(webhookWork);
+  if (!catalogOnlyBusiness) {
+    const webhookWork = dispatchWebhookEvent(ctx.db, ctx.workspaceId, parsed.fromMe ? "message.sent" : "message.received", {
+      sessionId: ctx.sessionIdName,
+      remoteJid: parsed.remoteJid,
+      fromMe: parsed.fromMe,
+      type: parsed.type,
+      body: parsed.body,
+      waMessageId: parsed.waMessageId,
+    }).catch((err: any) => ctx.log("error", `Webhook dispatch failed: ${err?.message || err}`));
+    if (ctx.waitUntil) ctx.waitUntil(webhookWork);
+  }
 
   // Semantic search index
-  if (parsed.body) {
+  if (parsed.body && !catalogOnlyBusiness) {
     const isGroup = parsed.remoteJid.endsWith("@g.us");
     let groupName: string | null = null;
     let senderName: string | null = null;
@@ -241,12 +255,12 @@ export async function processLiveMessage(
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
       const senderJid = parsed.participant ?? parsed.remoteJid;
-      let replyText = await findAutoReply(ctx.db, ctx.workspaceId, ctx.sessionIdName, {
+      let replyText = catalogOnlyBusiness ? null : await findAutoReply(ctx.db, ctx.workspaceId, ctx.sessionIdName, {
         isGroup,
         body: parsed.body,
         senderJid,
       });
-      let source = "Keyword auto-reply";
+      let source = catalogOnlyBusiness ? "AI auto-reply" : "Keyword auto-reply";
       if (!replyText) {
         replyText = await maybeAiAutoReply(ctx.env, {
           waSessionId: ctx.sessionIdName,
