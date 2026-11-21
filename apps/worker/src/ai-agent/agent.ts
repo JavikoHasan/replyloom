@@ -16,7 +16,7 @@ const MAX_THREAD_CHARS = 1500;
 const THREAD_MESSAGE_LIMIT = 4;
 
 const NO_INFO_REPLY =
-  "No tengo información verificada sobre ese dato. Prefiero no inventarlo; puedes consultarlo directamente con el vendedor.";
+  "Soy el asistente virtual de Cell Phone Store. Solo estoy autorizado para informar sobre los productos publicados y datos que estén verificados. No tengo información confirmada sobre esa consulta; para evitar errores, puedes consultarlo directamente con el vendedor.";
 const CLARIFY_REPLY =
   "¡Hola! Soy el asistente virtual de Cell Phone Store. Puedo ayudarte con información sobre los productos de nuestro catálogo.";
 
@@ -96,6 +96,19 @@ export async function handleAgentMessage(
     const text = gate.cannedReply!;
     if (replyCacheTtlSeconds > 0) await cache(env, config, cacheKey, text, replyCacheTtlSeconds);
     return { text, usedTools: [], usedContext: [], blocked: true, blockReason: gate.label, cached: false };
+  }
+
+  // The store assistant has no CRM or external-search tools. If the public
+  // catalog contains no matching facts, return a fixed safe answer without
+  // spending a second Workers AI generation call.
+  if (catalogOnlyBusiness && context.length === 0) {
+    return {
+      text: isSimpleGreeting(message) ? CLARIFY_REPLY : NO_INFO_REPLY,
+      usedTools: [],
+      usedContext: [],
+      blocked: false,
+      cached: false,
+    };
   }
 
   // ── Tool list (built-ins + workspace webhooks) built once per message ──
