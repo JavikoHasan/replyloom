@@ -16,7 +16,7 @@
     "ws": "./src/compat/ws-shim.ts"
   },
   "vars": {
-    // AI Gateway id for every model call (classifier, generator, embeddings).
+    // AI Gateway id for model calls (classifier and generator).
     // Leave as "default" to use the account's auto-provisioned gateway; set a
     // named gateway once you create one in the dashboard.
     "AIG_GATEWAY_ID": "default",
@@ -51,10 +51,7 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
-  "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "whatsapp-ai-media" }
-  ],
-  // Anti-ban broadcast dispatch: each recipient is enqueued once with a
+// Anti-ban broadcast dispatch: each recipient is enqueued once with a
   // staggered delaySeconds (see src/broadcast.ts) instead of blasting the
   // whole list at once. Create once with `wrangler queues create wa-broadcast-dispatch`.
   "queues": {
@@ -73,27 +70,16 @@
   "triggers": {
     "crons": ["*/5 * * * *"]
   },
-  // Semantic search over message history: bge-m3 embeddings (Workers AI)
-  // upserted into a Vectorize index as each message is synced. Create the
-  // index once with:
-  //   wrangler vectorize create wa-messages --dimensions=1024 --metric=cosine
-  "ai": {
-    "binding": "AI"
-  },
-  "vectorize": [
-    { "binding": "VECTORIZE", "index_name": "wa-messages", "remote": true },
-    // AI agent grounding (RAG): doc chunks embedded with bge-m3 (1024-dim,
-    // cosine) and filtered per workspace. Create once with:
-    //   wrangler vectorize create wa-docs --dimensions=1024 --metric=cosine
-    { "binding": "AGENT_VECTORIZE", "index_name": "wa-docs", "remote": true }
-  ],
-  // Cheap per-message cache for the AI agent: exact-match FAQ answers (so
+// Cheap per-message cache for the AI agent: exact-match FAQ answers (so
   // repeated questions cost ~0 tokens) and a short-lived copy of each
   // workspace's agent config. Create once with:
   //   wrangler kv namespace create REPLY_CACHE
   // then paste the returned id below (pnpm setup does this for you).
   "kv_namespaces": [
-    { "binding": "REPLY_CACHE", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+    { "binding": "REPLY_CACHE", "id": "REPLACE_WITH_KV_NAMESPACE_ID" },
+    // Media files are stored separately so their writes do not consume the
+    // reply/config cache namespace's daily free KV write allowance.
+    { "binding": "MEDIA_STORE", "id": "REPLACE_WITH_MEDIA_KV_NAMESPACE_ID" }
   ],
   // Rate limiting via Cloudflare's built-in Rate Limiting API.
   // Requires wrangler 4.36.0+ and a paid Workers plan.
