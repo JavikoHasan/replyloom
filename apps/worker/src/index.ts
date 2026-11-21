@@ -838,7 +838,7 @@ const worker = {
 };
 
 // Wrap the whole Worker (fetch + queue + scheduled) with Sentry: unhandled
-// errors, request tracing, and automatic instrumentation of D1/KV/R2
+// errors, request tracing, and automatic instrumentation of D1/KV
 // bindings. Disabled unless SENTRY_DSN is set (same as apps/web).
 export default Sentry.withSentry<Env, BroadcastQueueMessage>(
   (env) => ({
