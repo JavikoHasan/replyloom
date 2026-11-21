@@ -7,6 +7,7 @@ import { TtlCache } from "../ttl-cache";
 // a single embedding model serves both indexes and multilingual support is
 // retained. The generator is only invoked for grounded, in-scope messages.
 export const ACTIVE_GENERATOR_MODEL = "@cf/google/gemma-4-26b-a4b-it";
+export const ACTIVE_CLASSIFIER_MODEL = "@cf/zai-org/glm-4.7-flash";
 
 /** Map model ids saved by older deployments to currently active Workers AI ids. */
 export function normalizeModelId(model: string): string {
@@ -16,14 +17,20 @@ export function normalizeModelId(model: string): string {
   ) {
     return ACTIVE_GENERATOR_MODEL;
   }
+  if (
+    model === "@cf/meta/llama-3.2-1b-instruct" ||
+    model === "@cf/meta/llama-3.2-3b-instruct"
+  ) {
+    return ACTIVE_CLASSIFIER_MODEL;
+  }
   return model;
 }
 export const defaultConfig = {
   models: {
     // Small, fast, current model for the per-message intent gate. Cheap
     // enough to run on every message; overridable per workspace.
-    classifier: "@cf/meta/llama-3.2-3b-instruct",
-    // Main reply model — active fast 8B model with function-calling support.
+    classifier: ACTIVE_CLASSIFIER_MODEL,
+    // Main reply model — current free-available Gemma 4 model with function-calling support.
     generator: ACTIVE_GENERATOR_MODEL,
     embedding: "@cf/baai/bge-m3",
   },
