@@ -15,7 +15,6 @@ import { maybeAiAutoReply } from "../ai-autoreply";
 import { indexMessageForSearch } from "../search";
 import { TtlCache } from "../ttl-cache";
 import { isPrivateDirectChatJid } from "./message-routing";
-import { loadAgentConfig } from "../ai-agent/config";
 
 // Group subject for the search index metadata -- was one D1 read per group message.
 const groupNameCache = new TtlCache<string | null>(5 * 60_000);
@@ -89,13 +88,10 @@ export async function processLiveMessage(
   // This business assistant must not export private chat content to arbitrary
   // workspace webhooks or the cross-conversation semantic search index.
   // If config cannot be read, fail closed for those side effects and keyword rules.
-  let catalogOnlyBusiness = true;
-  try {
-    const agentConfig = await loadAgentConfig(ctx.env, ctx.workspaceId);
-    catalogOnlyBusiness = agentConfig.businessName === "Cell Phone Store - Sagua la Grande";
-  } catch {
-    catalogOnlyBusiness = true;
-  }
+  // This deployment branch is exclusively the Cell Phone Store assistant.
+  // Never fall back to generic workspace webhooks, keyword rules, or search
+  // indexing if workspace configuration is missing or unexpectedly changed.
+  const catalogOnlyBusiness = true;
 
   // No message text in logs: it's customer PII, and at scale one log line
   // per message is already the dominant log volume.
@@ -114,7 +110,7 @@ export async function processLiveMessage(
     if (!botEcho) {
       try {
         await ctx.pauseAutoReply?.(parsed.remoteJid);
-        ctx.log("info", `Human activity detected; automatic replies paused for ${parsed.remoteJid}`);
+        ctx.log("info", "Human activity detected; automatic replies paused");
       } catch (err: any) {
         ctx.log("warn", `Could not persist human takeover pause: ${err?.message || err}`);
       }
@@ -126,7 +122,7 @@ export async function processLiveMessage(
   if (!parsed.fromMe) {
     const senderJid = parsed.participant ?? parsed.remoteJid;
     if (await isContactBlocked(ctx.db, ctx.sessionIdName, senderJid)) {
-      ctx.log("info", `Blocked contact ${senderJid} — message dropped`);
+      ctx.log("info", "Blocked contact message dropped");
       return;
     }
   }
@@ -277,7 +273,7 @@ export async function processLiveMessage(
         replyText = null; // loop breaker / pace: skip this auto-reply
       }
       if (replyText) {
-        ctx.log("info", `${source} firing for ${parsed.remoteJid}`);
+        ctx.log("info", `${source} firing`);
         // Mark this outgoing echo so it is not mistaken for a human takeover.
         try {
           await ctx.markBotReply?.(parsed.remoteJid);
