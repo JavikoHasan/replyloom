@@ -52,18 +52,18 @@ function tooMany(retryAfter = 60) {
   });
 }
 
-async function limited(key: string, limit: number): Promise<boolean> {
+async function limited(key: string, limit: number, failClosed = false): Promise<boolean> {
   try {
     const response = await callEngine("/internal/rate-limit", "rate-limit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, limit, windowMs: 60_000 }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) return failClosed;
     const result = await response.json() as { success?: boolean };
     return result.success === false;
   } catch {
-    return false; // preserve availability if the engine's limiter is unreachable
+    return failClosed; // authentication remains protected if the limiter is unreachable
   }
 }
 
@@ -73,7 +73,7 @@ const app = {
     const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
 
     if (request.method === "POST" && AUTH_SENSITIVE.test(url.pathname)) {
-      if (await limited(`web:auth:${ip}`, 10)) return tooMany();
+      if (await limited(`web:auth:${ip}`, 10, true)) return tooMany();
     }
     if (url.pathname.startsWith("/_serverFn") || url.pathname.startsWith("/api/")) {
       if (await limited(`web:api:${ip}`, 600)) return tooMany();
