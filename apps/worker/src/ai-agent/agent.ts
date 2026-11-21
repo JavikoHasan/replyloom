@@ -16,9 +16,9 @@ const MAX_THREAD_CHARS = 1500;
 const THREAD_MESSAGE_LIMIT = 4;
 
 const NO_INFO_REPLY =
-  "I don't have that information on hand. I'll flag this for a team member to follow up with you.";
+  "No tengo información verificada sobre ese dato. Prefiero no inventarlo; puedes consultarlo directamente con el vendedor.";
 const CLARIFY_REPLY =
-  "Hey! How can I help you today?";
+  "¡Hola! Soy el asistente virtual de Cell Phone Store. Puedo ayudarte con información sobre los productos de nuestro catálogo.";
 
 /**
  * The full agent pipeline for one inbound customer message:
@@ -105,11 +105,14 @@ export async function handleAgentMessage(
   if (context.length === 0) {
     const { text, usedTools } = await generateReply(ctx, message, [], toolSchemas, thread);
     if (usedTools.length === 0 || !text) {
+      if (isSimpleGreeting(message)) {
+        return { text: CLARIFY_REPLY, usedTools, usedContext: [], blocked: false, cached: false };
+      }
       if (shouldEscalateToHuman(message)) {
         await registry.run("escalate_to_human", { reason: `Customer requested help from a human or expressed frustration: ${message}` }, ctx);
         return { text: NO_INFO_REPLY, usedTools: ["escalate_to_human"], usedContext: [], blocked: false, cached: false };
       }
-      return { text: text || CLARIFY_REPLY, usedTools, usedContext: [], blocked: false, cached: false };
+      return { text: NO_INFO_REPLY, usedTools, usedContext: [], blocked: false, cached: false };
     }
     return { text: redactSensitive(text), usedTools, usedContext: [], blocked: false, cached: false };
   }
@@ -239,4 +242,9 @@ function normalize(message: string): string {
 
 function cache(env: AgentEnv, config: AgentConfig, key: string, value: string): Promise<void> {
   return env.REPLY_CACHE.put(key, value, { expirationTtl: config.cacheTtlSeconds }).catch(() => {});
+}
+
+/** Greetings may be answered without product data; substantive questions may not. */
+function isSimpleGreeting(message: string): boolean {
+  return /^(hola|buenas(?: tardes| noches)?|buenos días|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)[!.\s😊🙏]*$/i.test(message.trim());
 }
