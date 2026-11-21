@@ -20,14 +20,13 @@ export const agentConfigs = sqliteTable("agent_configs", {
   // Optional workspace-specific behavior instructions appended to the base
   // support prompt. Never use this field for secrets or credentials.
   systemPrompt: text("system_prompt"),
-  // null -> default model per role (classifier/generator/embedding)
+  // null -> default model per role; embeddingModel is legacy and unused by D1 text retrieval
   classifierModel: text("classifier_model"),
   generatorModel: text("generator_model"),
   embeddingModel: text("embedding_model"),
   maxContextChunks: integer("max_context_chunks").notNull().default(4),
-  // Cosine score floor before a chunk is trusted as grounding. Below this
-  // the agent must refuse rather than guess — the main anti-hallucination
-  // lever alongside the system prompt.
+  // Legacy cosine threshold retained for saved-config compatibility. The
+  // Free profile uses a fixed lexical coverage threshold for D1 text matches.
   similarityThreshold: real("similarity_threshold").notNull().default(0.72),
   // How long an exact-match FAQ answer stays cached in KV. Tool-backed
   // answers are never cached; only small, tool-free, grounded replies.
@@ -39,10 +38,9 @@ export const agentConfigs = sqliteTable("agent_configs", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
 });
 
-// RAG grounding store. Full text lives in D1; the Vectorize index (wa-docs)
-// holds only vectors + workspaceId so retrieval is filtered per workspace
-// and chunks are re-fetched from here by id (keeps the index lean, and the
-// text is never shipped to anyone but the requesting workspace's model call).
+// RAG grounding store. Full text lives in D1 and is retrieved by
+// workspace-scoped, accent-normalized text matching. No vector index or
+// embedding data is required in the zero-cost profile.
 export const docChunks = sqliteTable(
   "doc_chunks",
   {
