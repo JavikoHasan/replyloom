@@ -5,17 +5,6 @@ export interface AgentEnv {
   AI: Ai;
   DB: D1Database;
   REPLY_CACHE: KVNamespace; // exact-answer + short-lived config cache
-  /**
-   * Optional AI Gateway id. The agent can also call Workers AI directly when
-   * no gateway is configured.
-   */
-  AIG_GATEWAY_ID?: string;
-  /**
-   * Opt-in flag ("true") to persist raw request/response payloads in
-   * Cloudflare AI Gateway logs. Defaults to false so customer message
-   * bodies and RAG context are not retained in gateway logs.
-   */
-  AIG_COLLECT_LOG?: string;
 }
 
 export interface AgentModels {
