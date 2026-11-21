@@ -96,7 +96,7 @@ export function privateLocationReply(message: string): string | null {
   if (/\b(recoger|recogida|retirar|retiro|pasar a buscar|punto de encuentro|entrega personal|donde recojo|donde busco)\b/.test(m)) {
     return "El asistente no dispone de un punto público de recogida. Cualquier coordinación debe acordarse directamente con el vendedor mediante el contacto publicado en el anuncio.";
   }
-  if (/\b(donde vives|donde vive|donde viven|donde puedo encontrarte|donde puedo ubicarte|donde te encuentro|donde te ubico|direccion personal|domicilio|residencia|casa del dueno|casa del vendedor|donde esta tu casa|ubicacion personal|localizar al dueno)\b/.test(m)) {
+  if (/\b(donde vives|donde vive|donde viven|donde puedo encontrarte|donde puedo ubicarte|donde pueden ubicarme|donde te pueden ubicar|donde puedo localizarte|donde puedo encontrarte|donde puedo visitar(te)?|donde te encuentro|donde te ubico|donde se encuentra el dueno|donde esta el dueno|donde se encuentra el vendedor|direccion personal|direccion del dueno|direccion del vendedor|domicilio|residencia|casa del dueno|casa del vendedor|donde esta tu casa|donde queda tu casa|ubicacion personal|ubicacion del dueno|ubicacion del vendedor|localizar al dueno)\b/.test(m)) {
     return "No puedo proporcionar ni confirmar domicilios, residencia o ubicación privada del vendedor. Esa información no está disponible públicamente.";
   }
   return null;
