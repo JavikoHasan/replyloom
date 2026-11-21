@@ -5,7 +5,7 @@
 // the CLOUDFLARE_ACCOUNT_ID env var.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "wa-cf-poc",
+  "name": "telegram-image-studio",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-19",
   "compatibility_flags": ["nodejs_compat"],
