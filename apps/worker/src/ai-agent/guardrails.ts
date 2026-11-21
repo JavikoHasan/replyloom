@@ -101,5 +101,19 @@ const SENSITIVE_PATTERNS: RegExp[] = [
 ];
 
 export function redactSensitive(text: string): string {
-  return SENSITIVE_PATTERNS.reduce((t, re) => t.replace(re, "[redacted]"), text);
+  const redacted = SENSITIVE_PATTERNS.reduce((t, re) => t.replace(re, "[redacted]"), text);
+  // Enforce the store's official-site-only link rule at output time, not
+  // only through prompting. Keep HTTPS links on the exact Revolico origin.
+  return redacted.replace(/https?:\\/\\/[^\\s<>"'`]+/gi, (raw) => {
+    const trailing = raw.match(/[),.!?;:]+$/)?.[0] ?? "";
+    const candidate = trailing ? raw.slice(0, -trailing.length) : raw;
+    try {
+      const url = new URL(candidate);
+      return url.protocol === "https:" && url.origin === "https://revolico-sagua.pages.dev"
+        ? raw
+        : "[enlace externo omitido]" + trailing;
+    } catch {
+      return "[enlace no verificado]" + trailing;
+    }
+  });
 }
