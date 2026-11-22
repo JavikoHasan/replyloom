@@ -109,7 +109,7 @@ export async function semanticSearch(
   }>();
 
   const normalizedQuery = normalizeText(query).trim();
-  return (result.results ?? [])
+  return (result.results)
     .map((row) => {
       const normalizedBody = normalizeText(row.text);
       const matchedTerms = terms.filter((term) => normalizedBody.includes(term)).length;
