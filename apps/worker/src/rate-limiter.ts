@@ -24,7 +24,7 @@ export class RateLimiter implements DurableObject {
 
     let body: { keyHash?: unknown; limit?: number; windowMs?: number };
     try {
-      body = await request.json() as typeof body;
+      body = await request.json();
     } catch {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
