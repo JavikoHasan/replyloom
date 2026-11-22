@@ -5,9 +5,15 @@ name: CI
 permissions:
   contents: read
 
+# Run one current PR check set instead of duplicating every branch push.
+# New commits on the same PR cancel stale checks and save free runner minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
-    branches: [main, adaptacion-cell-phone-store]
+    branches: [main]
   pull_request:
     branches: [main]
 
