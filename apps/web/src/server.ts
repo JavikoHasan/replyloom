@@ -60,7 +60,7 @@ async function limited(key: string, limit: number, failClosed = false): Promise<
       body: JSON.stringify({ key, limit, windowMs: 60_000 }),
     });
     if (!response.ok) return failClosed;
-    const result = await response.json() as { success?: boolean };
+    const result = await response.json();
     return result.success === false;
   } catch {
     return failClosed; // authentication remains protected if the limiter is unreachable
