@@ -52,7 +52,7 @@ export async function retrieveContext(
 
   const result = await statement.all<{ id: string; text: string; source: string }>();
   const normalizedQuery = normalizeText(query).trim();
-  const ranked = (result.results ?? [])
+  const ranked = (result.results)
     .map((row) => {
       const normalizedChunk = normalizeText(row.text);
       const matchedTerms = terms.filter((term) => normalizedChunk.includes(term)).length;
