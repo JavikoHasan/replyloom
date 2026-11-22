@@ -108,8 +108,8 @@ export const uploadProfileImage = createServerFn({ method: "POST" })
       const bytes = Uint8Array.from(atob(data.base64), (c) => c.charCodeAt(0))
       const ext = (data.mime.split("/")[1] ?? "png").split(";")[0]
       const mediaKey = `user-avatars/${sessionUser.id}/${crypto.randomUUID()}.${ext}`
-      await env.MEDIA.put(mediaKey, bytes, {
-        httpMetadata: { contentType: data.mime },
+      await env.MEDIA_STORE.put(mediaKey, bytes, {
+        metadata: { contentType: data.mime },
       })
 
       // Replacing a previous upload? Drop the old KV object, but only if
