@@ -1,6 +1,6 @@
 // TEMPLATE — copied to wrangler.jsonc (gitignored) by `pnpm install` /
-// `pnpm setup`. Edit wrangler.jsonc, not this file. `pnpm setup` fills in
-// the D1/KV ids; set the URLs to your own domains before deploying.
+// `pnpm install`. Edit wrangler.jsonc, not this file. Resource IDs below
+// are the dedicated Cell Phone Store resources; set production URLs before deploying.
 // account_id is intentionally absent: wrangler uses `wrangler login` or
 // the CLOUDFLARE_ACCOUNT_ID env var.
 {
@@ -20,7 +20,7 @@
     // cross-origin (apps/web, incl. its WebSocket upgrade). Defaults to "*"
     // (dev only) when unset -- for production set it here or with
     // `wrangler secret put CORS_ORIGIN`. Must include the scheme.
-    "CORS_ORIGIN": "http://localhost:3000"
+    "CORS_ORIGIN": "https://whatsapp-ai-web.elprincipiante.workers.dev"
   },
   "durable_objects": {
     "bindings": [
@@ -36,8 +36,7 @@
     { "tag": "v3", "new_sqlite_classes": ["RateLimiter"] }
   ],
   // Shared with apps/web — both Workers must point at the SAME database_id.
-  // Create it once with `wrangler d1 create whatsapp-ai` after `wrangler login`,
-  // then paste the id here and in apps/web/wrangler.jsonc.
+  // This is the dedicated Cell Phone Store database; keep the same ID in apps/web.
   // D1 is "remote" (not the default local sqlite emulation) so apps/web and
   // apps/worker -- two separate local processes -- see the SAME database in
   // dev. Sharing a local sqlite file between them via wrangler's
@@ -47,7 +46,7 @@
   // production. This does mean local dev reads/writes your actual D1
   // database, not an isolated local copy.
   "d1_databases": [
-    { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
+    { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "91caa17d-86a4-433c-8036-35185bb91a8c", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
 // Anti-ban broadcast dispatch: each recipient is enqueued once with a
   // staggered delaySeconds (see src/broadcast.ts) instead of blasting the
@@ -71,13 +70,12 @@
 // Cheap per-message cache for the AI agent: exact-match FAQ answers (so
   // repeated questions cost ~0 tokens) and a short-lived copy of each
   // workspace's agent config. Create once with:
-  //   wrangler kv namespace create REPLY_CACHE
-  // then paste the returned id below (pnpm setup does this for you).
+  //   REPLY_CACHE and MEDIA_STORE are the dedicated Cell Phone Store namespaces.
   "kv_namespaces": [
-    { "binding": "REPLY_CACHE", "id": "REPLACE_WITH_KV_NAMESPACE_ID" },
+    { "binding": "REPLY_CACHE", "id": "766ba91e45554bd8b45226763890b3ac" },
     // Media files are stored separately so their writes do not consume the
     // reply/config cache namespace's daily free KV write allowance.
-    { "binding": "MEDIA_STORE", "id": "REPLACE_WITH_MEDIA_KV_NAMESPACE_ID" }
+    { "binding": "MEDIA_STORE", "id": "0376b325be364602890567786e952bcc" }
   ],
   // Direct Workers AI binding; uses the account Free quota and no paid AI Gateway.
   "ai": { "binding": "AI" }
