@@ -85,14 +85,6 @@ export async function processLiveMessage(
   const parsed = await parseBaileysMessage(ctx.db, ctx.sessionIdName, msg);
   if (!parsed) return;
 
-  // This business assistant must not export private chat content to arbitrary
-  // workspace webhooks or the cross-conversation semantic search index.
-  // If config cannot be read, fail closed for those side effects and keyword rules.
-  // This deployment branch is exclusively the Cell Phone Store assistant.
-  // Never fall back to generic workspace webhooks, keyword rules, or search
-  // indexing if workspace configuration is missing or unexpectedly changed.
-  const catalogOnlyBusiness = true;
-
   // No message text in logs: it's customer PII, and at scale one log line
   // per message is already the dominant log volume.
   ctx.log("info", `${parsed.fromMe ? "OUT" : "IN"} [${parsed.type}] ${parsed.waMessageId}`);
@@ -186,52 +178,6 @@ export async function processLiveMessage(
     },
   });
 
-  // Outbound webhook -- handed to waitUntil so the delivery (up to 10s per
-  // hook, sequential) survives this handler returning.
-  if (!catalogOnlyBusiness) {
-    const webhookWork = dispatchWebhookEvent(ctx.db, ctx.workspaceId, parsed.fromMe ? "message.sent" : "message.received", {
-      sessionId: ctx.sessionIdName,
-      remoteJid: parsed.remoteJid,
-      fromMe: parsed.fromMe,
-      type: parsed.type,
-      body: parsed.body,
-      waMessageId: parsed.waMessageId,
-    }).catch((err: any) => ctx.log("error", `Webhook dispatch failed: ${err?.message || err}`));
-    if (ctx.waitUntil) ctx.waitUntil(webhookWork);
-  }
-
-  // Semantic search index
-  if (parsed.body && !catalogOnlyBusiness) {
-    const isGroup = parsed.remoteJid.endsWith("@g.us");
-    let groupName: string | null = null;
-    let senderName: string | null = null;
-    if (isGroup) {
-      try {
-        groupName = await groupNameCache.get(`${ctx.sessionIdName}|${parsed.remoteJid}`, async () => {
-          const groupRow = await ctx.db
-            .select({ name: groups.name })
-            .from(groups)
-            .where(and(eq(groups.waSessionId, ctx.sessionIdName), eq(groups.jid, parsed.remoteJid)))
-            .get();
-          return groupRow?.name ?? null;
-        });
-      } catch {}
-      if (parsed.pushName) senderName = parsed.pushName;
-    }
-    const indexWork = indexMessageForSearch(ctx.env, {
-      messageId: parsed.waMessageId,
-      workspaceId: ctx.workspaceId,
-      waSessionId: ctx.sessionIdName,
-      conversationId,
-      text: parsed.body,
-      isGroup,
-      groupName,
-      senderName,
-      senderJid: parsed.participant ?? null,
-    }).catch((err: any) => ctx.log("error", `Search indexing failed: ${err?.message || err}`));
-    if (ctx.waitUntil) ctx.waitUntil(indexWork);
-  }
-
   // Auto-reply: keyword rules first (deterministic, cheap), then the AI
   // agent as a fallback when no rule matched. Only for genuinely fresh
   // messages -- see AUTO_REPLY_MAX_AGE_MS above.
@@ -251,12 +197,8 @@ export async function processLiveMessage(
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
       const senderJid = parsed.participant ?? parsed.remoteJid;
-      let replyText = catalogOnlyBusiness ? null : await findAutoReply(ctx.db, ctx.workspaceId, ctx.sessionIdName, {
-        isGroup,
-        body: parsed.body,
-        senderJid,
-      });
-      let source = catalogOnlyBusiness ? "AI auto-reply" : "Keyword auto-reply";
+      let replyText: string | null = null;
+      let source = "AI auto-reply";
       if (!replyText) {
         replyText = await maybeAiAutoReply(ctx.env, {
           waSessionId: ctx.sessionIdName,
