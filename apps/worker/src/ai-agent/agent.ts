@@ -269,5 +269,5 @@ function cache(env: AgentEnv, config: AgentConfig, key: string, value: string, t
 
 /** Greetings may be answered without product data; substantive questions may not. */
 function isSimpleGreeting(message: string): boolean {
-  return /^(hola|buenas(?: tardes| noches)?|buenos días|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)[!.\s😊🙏]*$/i.test(message.trim());
+  return /^(hola|buenas(?: tardes| noches)?|buenos días|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)[!.\s😊🙏]*$/iu.test(message.trim());
 }
