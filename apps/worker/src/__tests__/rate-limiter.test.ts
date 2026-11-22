@@ -12,11 +12,8 @@ describe("SQLite Durable Object rate limiter", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ keyHash: "a".repeat(64), limit: 5, windowMs: 60_000 }),
     }));
-    const body = await response.json();
-
     expect(response.status).toBe(200);
-    expect(body.success).toBe(true);
-    expect(body.remaining).toBe(4);
+    await expect(response.json()).resolves.toMatchObject({ success: true, remaining: 4 });
   });
 
   it("blocks requests after the limit is exceeded", async () => {
@@ -29,11 +26,8 @@ describe("SQLite Durable Object rate limiter", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ keyHash: "a".repeat(64), limit: 5, windowMs: 60_000 }),
     }));
-    const body = await response.json() as { success: boolean; remaining: number };
-
     expect(response.status).toBe(200);
-    expect(body.success).toBe(false);
-    expect(body.remaining).toBe(0);
+    await expect(response.json()).resolves.toMatchObject({ success: false, remaining: 0 });
   });
 
   it("rejects invalid limits", async () => {
