@@ -29,6 +29,9 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
+  "kv_namespaces": [
+    { "binding": "MEDIA_STORE", "id": "REPLACE_WITH_MEDIA_KV_NAMESPACE_ID" }
+  ],
 "vars": {
     // Public base URL Better Auth uses for cookies/redirects. BETTER_AUTH_SECRET
     // is intentionally NOT here — set it locally via .dev.vars and in prod via
