@@ -140,15 +140,17 @@ MEDIA_KV_ID=$(wrangler kv namespace list --json 2>/dev/null | node -e "
 if [ -n "${MEDIA_KV_ID:-}" ]; then
   node -e "
     const fs = require('fs');
-    let src = fs.readFileSync('$WORKER_CONFIG', 'utf8');
-    src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\$1\"$MEDIA_KV_ID\"');
-    fs.writeFileSync('$WORKER_CONFIG', src);
+    for (const path of ['$WORKER_CONFIG', '$WEB_CONFIG']) {
+      let src = fs.readFileSync(path, 'utf8');
+      src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\\$1\"$MEDIA_KV_ID\"');
+      fs.writeFileSync(path, src);
+    }
   "
-  echo "    wrote id into $WORKER_CONFIG"
+  echo "    wrote id into both Worker and web configs"
 else
-  echo "    WARNING: could not resolve media KV namespace id — set it manually in $WORKER_CONFIG" >&2
+  echo "    WARNING: could not resolve media KV namespace id — setup cannot continue safely" >&2
+  exit 1
 fi
-
 # ── Run D1 migrations (remote) ───────────────────────────────────────────
 echo "==> Applying D1 migrations..."
 CI=true wrangler d1 migrations apply "$DB_NAME" --remote
