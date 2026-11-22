@@ -177,7 +177,7 @@ async function consumeRateLimit(
     body: JSON.stringify({ keyHash: objectName, limit, windowMs }),
   });
   if (!response.ok) throw new Error(`Rate limiter failed (${response.status})`);
-  return await response.json() as { success: boolean; remaining: number; retryAfter: number };
+  return await response.json();
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -218,7 +218,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (caller.kind !== "internal") return forbidden();
     let body: { key?: unknown; limit?: unknown; windowMs?: unknown };
     try {
-      body = await request.json() as typeof body;
+      body = await request.json();
     } catch {
       return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
     }
