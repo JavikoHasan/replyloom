@@ -142,7 +142,7 @@ if [ -n "${MEDIA_KV_ID:-}" ]; then
     const fs = require('fs');
     for (const path of ['$WORKER_CONFIG', '$WEB_CONFIG']) {
       let src = fs.readFileSync(path, 'utf8');
-      src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\\$1\"$MEDIA_KV_ID\"');
+      src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\$1\"$MEDIA_KV_ID\"');
       fs.writeFileSync(path, src);
     }
   "
