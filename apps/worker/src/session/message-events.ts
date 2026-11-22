@@ -189,15 +189,15 @@ export async function processLiveMessage(
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
       const senderJid = parsed.participant ?? parsed.remoteJid;
-      const replyText = await maybeAiAutoReply(ctx.env, {
-          waSessionId: ctx.sessionIdName,
-          workspaceId: ctx.workspaceId,
-          conversationId,
-          remoteJid: parsed.remoteJid,
-          senderJid,
-          isGroup,
-          body: parsed.body,
-        });
+      let replyText = await maybeAiAutoReply(ctx.env, {
+        waSessionId: ctx.sessionIdName,
+        workspaceId: ctx.workspaceId,
+        conversationId,
+        remoteJid: parsed.remoteJid,
+        senderJid,
+        isGroup,
+        body: parsed.body,
+      });
       if (replyText && ctx.allowAutoReply && !ctx.allowAutoReply(parsed.remoteJid)) {
         replyText = null; // loop breaker / pace: skip this auto-reply
       }
