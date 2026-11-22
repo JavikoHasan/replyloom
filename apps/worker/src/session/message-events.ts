@@ -178,8 +178,7 @@ export async function processLiveMessage(
     },
   });
 
-  // Auto-reply: keyword rules first (deterministic, cheap), then the AI
-  // agent as a fallback when no rule matched. Only for genuinely fresh
+  // Auto-reply: the store assistant uses only its catalog-grounded AI agent. Only for genuinely fresh
   // messages -- see AUTO_REPLY_MAX_AGE_MS above.
   const isFresh = upsertType === "notify" || Date.now() - parsed.timestampMs < AUTO_REPLY_MAX_AGE_MS;
   let autoReplyPaused = false;
