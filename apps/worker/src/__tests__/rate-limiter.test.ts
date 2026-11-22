@@ -12,7 +12,7 @@ describe("SQLite Durable Object rate limiter", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ keyHash: "a".repeat(64), limit: 5, windowMs: 60_000 }),
     }));
-    const body = await response.json() as { success: boolean; remaining: number };
+    const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body.success).toBe(true);
