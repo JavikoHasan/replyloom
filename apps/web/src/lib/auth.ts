@@ -181,8 +181,8 @@ async function enforceAuthRateLimit(email: string) {
       if (!response.ok) {
         throw new UserFacingError("Sign-in protection is temporarily unavailable. Please try again shortly.")
       }
-      const result = await response.json()
-      if (result.success === false) {
+      const result: unknown = await response.json()
+      if (typeof result === "object" && result !== null && "success" in result && result.success === false) {
         throw new UserFacingError("Too many attempts. Please wait a minute and try again.")
       }
     } catch (err) {
