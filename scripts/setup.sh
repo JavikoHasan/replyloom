@@ -169,24 +169,28 @@ fi
 # it, apps/worker/src/session/whatsapp-session.ts verifies it). Must be the
 # SAME value in both apps — generate it once here and set it in both.
 echo "==> WebSocket token secret (WS_TOKEN_SECRET)..."
-if (cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "WS_TOKEN_SECRET"); then
-  echo "    already set"
+WEB_HAS_WS_SECRET=$(cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "WS_TOKEN_SECRET" && echo yes || echo no)
+WORKER_HAS_WS_SECRET=$(cd "$WORKER_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "WS_TOKEN_SECRET" && echo yes || echo no)
+if [ "$WEB_HAS_WS_SECRET" = "yes" ] && [ "$WORKER_HAS_WS_SECRET" = "yes" ]; then
+  echo "    already set in both apps"
 else
   GENERATED=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
   (cd "$WEB_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put WS_TOKEN_SECRET)
   (cd "$WORKER_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put WS_TOKEN_SECRET)
-  echo "    generated and set a new secret in both apps"
+  echo "    generated and synchronized secret in both apps"
 fi
 
 # ── Engine internal secret (web -> engine auth) ──────────────────────────
 echo "==> Engine internal secret (ENGINE_INTERNAL_SECRET)..."
-if (cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "ENGINE_INTERNAL_SECRET"); then
-  echo "    already set"
+WEB_HAS_ENGINE_SECRET=$(cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "ENGINE_INTERNAL_SECRET" && echo yes || echo no)
+WORKER_HAS_ENGINE_SECRET=$(cd "$WORKER_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "ENGINE_INTERNAL_SECRET" && echo yes || echo no)
+if [ "$WEB_HAS_ENGINE_SECRET" = "yes" ] && [ "$WORKER_HAS_ENGINE_SECRET" = "yes" ]; then
+  echo "    already set in both apps"
 else
   GENERATED=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
   (cd "$WEB_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put ENGINE_INTERNAL_SECRET)
   (cd "$WORKER_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put ENGINE_INTERNAL_SECRET)
-  echo "    generated and set a new secret in both apps"
+  echo "    generated and synchronized secret in both apps"
 fi
 
 # ── Validate BETTER_AUTH_URL ──────────────────────────────────────────────
