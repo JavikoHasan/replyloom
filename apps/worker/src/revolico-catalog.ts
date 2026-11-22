@@ -49,7 +49,7 @@ export async function syncRevolicoCatalog(env: Env): Promise<void> {
      LIMIT 2`,
   ).bind(BUSINESS_NAME).all<{ workspace_id: string }>();
 
-  for (const row of workspaces.results ?? []) {
+  for (const row of workspaces.results) {
     await syncWorkspaceCatalog(env, row.workspace_id);
   }
 }
