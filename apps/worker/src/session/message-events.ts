@@ -189,10 +189,7 @@ export async function processLiveMessage(
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
       const senderJid = parsed.participant ?? parsed.remoteJid;
-      let replyText: string | null = null;
-      let source = "AI auto-reply";
-      if (!replyText) {
-        replyText = await maybeAiAutoReply(ctx.env, {
+      const replyText = await maybeAiAutoReply(ctx.env, {
           waSessionId: ctx.sessionIdName,
           workspaceId: ctx.workspaceId,
           conversationId,
@@ -201,13 +198,11 @@ export async function processLiveMessage(
           isGroup,
           body: parsed.body,
         });
-        source = "AI auto-reply";
-      }
       if (replyText && ctx.allowAutoReply && !ctx.allowAutoReply(parsed.remoteJid)) {
         replyText = null; // loop breaker / pace: skip this auto-reply
       }
       if (replyText) {
-        ctx.log("info", `${source} firing`);
+        ctx.log("info", "AI auto-reply firing");
         // Mark this outgoing echo so it is not mistaken for a human takeover.
         try {
           await ctx.markBotReply?.(parsed.remoteJid);
