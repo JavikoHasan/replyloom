@@ -3,21 +3,14 @@
 // webhooks, search indexing, auto-reply). Pulled out of whatsapp-session.ts
 // so the socket/lifecycle DO class doesn't also have to carry all of this
 // business logic inline.
-import {  eq, and, groups } from "@workspace/db";
 import type {Db} from "@workspace/db";
 import type { WASocket } from "@whiskeysockets/baileys";
 import type { Env } from "../index";
 import { parseBaileysMessage, syncIncomingMessage, syncMessagesBatch, isContactBlocked  } from "../db/sync";
 import type {ParsedMessage} from "../db/sync";
 import { downloadAndStoreMedia } from "../media";
-import { findAutoReply, dispatchWebhookEvent } from "../automation";
 import { maybeAiAutoReply } from "../ai-autoreply";
-import { indexMessageForSearch } from "../search";
-import { TtlCache } from "../ttl-cache";
 import { isPrivateDirectChatJid } from "./message-routing";
-
-// Group subject for the search index metadata -- was one D1 read per group message.
-const groupNameCache = new TtlCache<string | null>(5 * 60_000);
 
 const MEDIA_TYPES = ["image", "video", "audio", "document", "sticker"];
 
