@@ -117,12 +117,13 @@ if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID
     echo "    found existing namespace"
   fi
   if [ -n "$KV_ID" ]; then
-    node -e "
-      const fs = require('fs');
-      let src = fs.readFileSync('$WORKER_CONFIG', 'utf8');
-      src = src.replace(/("kv_namespaces"[\s\S]*?"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify("$KV_ID"));
-      fs.writeFileSync('$WORKER_CONFIG', src);
-    "
+    KV_CONFIG_PATH="$WORKER_CONFIG" KV_NAMESPACE_ID="$KV_ID" node --input-type=module -e '
+      import fs from "node:fs";
+      const path = process.env.KV_CONFIG_PATH;
+      let src = fs.readFileSync(path, "utf8");
+      src = src.replace(/("kv_namespaces"[\s\S]*?"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify(process.env.KV_NAMESPACE_ID));
+      fs.writeFileSync(path, src);
+    '
     echo "    wrote id into $WORKER_CONFIG"
   else
     echo "    ERROR: Cloudflare created/has the KV namespace but its ID could not be read. Check Workers KV read permission; no deployment attempted." >&2
@@ -143,14 +144,14 @@ else
   echo "    found existing namespace"
 fi
 if [ -n "$MEDIA_KV_ID" ]; then
-  node -e "
-    const fs = require('fs');
-    for (const path of ['$WORKER_CONFIG', '$WEB_CONFIG']) {
-      let src = fs.readFileSync(path, 'utf8');
-      src = src.replace(/("binding": *"MEDIA_STORE", *"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify("$MEDIA_KV_ID"));
+  WORKER_CONFIG_PATH="$WORKER_CONFIG" WEB_CONFIG_PATH="$WEB_CONFIG" MEDIA_NAMESPACE_ID="$MEDIA_KV_ID" node --input-type=module -e '
+    import fs from "node:fs";
+    for (const path of [process.env.WORKER_CONFIG_PATH, process.env.WEB_CONFIG_PATH]) {
+      let src = fs.readFileSync(path, "utf8");
+      src = src.replace(/("binding": *"MEDIA_STORE", *"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify(process.env.MEDIA_NAMESPACE_ID));
       fs.writeFileSync(path, src);
     }
-  "
+  '
   echo "    wrote id into both Worker and web configs"
 else
   echo "    ERROR: Cloudflare media KV namespace ID could not be resolved; no deployment attempted." >&2
