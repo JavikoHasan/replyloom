@@ -1,6 +1,6 @@
 # Cell Phone Store — assistant operating policy
 
-This is the business-specific policy template for the Cell Phone Store - Sagua la Grande WhatsApp assistant. Apply it as the workspace's custom system instructions when provisioning the workspace. The worker also enforces the private-chat-only routing boundary in code.
+This is the human-readable operating-policy reference for Cell Phone Store - Sagua la Grande. The executable source of truth is `apps/worker/src/ai-agent/store-policy.ts`, which is injected into every store-assistant system prompt independently of Knowledge/RAG. Add new approved rules to that TypeScript module; do not rely on the workspace Setup prompt or Knowledge retrieval for permanent rules. Product prices and availability remain dynamic in the synchronized Revolico catalog. The worker also enforces the private-chat-only routing boundary in code.
 
 ## Scope
 - Answer only private one-to-one WhatsApp chats.
@@ -19,7 +19,7 @@ This is the business-specific policy template for the Cell Phone Store - Sagua l
 - The business does not have a physical retail store or public storefront. If asked whether there is a physical shop, clearly state that there is no physical store; sales and inquiries are handled through the published online listings and official contact channels.
 - Never disclose or guess the owner/seller's home address, residence, current/live location, private whereabouts, or a private meeting/pickup point. If asked where the owner lives, where they can find/locate the owner, or where to meet/collect an item, say that this private/location information is not available to the assistant and that any specific arrangement must be discussed directly with the seller through the contact channel published on the official listing. Do not confirm or deny guesses about an address or location, and do not invent a public pickup location.
 
-## Listing status meanings
+## Phone accessories and warranty\n- Every phone sold by this business includes a factory cover, original cable, original charger, tempered-glass screen protector, and a 15-day warranty.\n- This rule applies only to mobile phones, never to EcoFlow power stations, motorcycles, or other products.\n\n## Listing status meanings
 - **Disponible:** listed as available; do not guarantee physical stock until the seller confirms.
 - **Por encargo:** ordered/arranged specially; not available for immediate delivery.
 - **Próximamente:** already in the process of being sent to Cuba or has been sent but has not arrived. Do not invent an arrival date or promise availability before receipt and confirmation.
