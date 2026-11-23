@@ -39,11 +39,6 @@ export const defaultConfig = {
   replyInGroups: false,
 } as const;
 
-const CONFIG_CACHE_PREFIX = "agent:cfg:";
-// Config is tiny and changes rarely — a short KV cache dodges a D1 read on
-// every single inbound message (the hot per-message cost).
-const CONFIG_CACHE_TTL = 60;
-
 export const cachePrefixes = {
   replies: "agent:reply:",
 } as const;
@@ -58,10 +53,8 @@ export function isAgentEnabled(config: AgentConfig): boolean {
  * time a new isolate starts. Config changes invalidate this isolate's entry;
  * other isolates refresh within 60 seconds.
  */
-// In-isolate layer in front of KV. Disabled configs are cached too: the
-// agent is off for most workspaces, and every inbound message without a
-// keyword match used to cost 2 D1 reads (agent_configs + workspace name)
-// because only *enabled* configs were ever cached.
+// In-isolate cache. Disabled configs are cached too: the agent is off for
+// most workspaces, and repeated messages should not require D1 reads.
 const memoryConfigCache = new TtlCache<AgentConfig>(60_000);
 
 export async function loadAgentConfig(env: AgentEnv, workspaceId: string): Promise<AgentConfig> {
