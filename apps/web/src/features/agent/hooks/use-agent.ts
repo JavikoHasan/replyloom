@@ -192,6 +192,29 @@ export const testAgentReply = createServerFn({ method: "POST" })
     })
   )
 
+export interface CatalogSyncStatus {
+  stage: string;
+  message: string;
+  updatedAt: string;
+  workspaceMatches?: number;
+  discoveredUrls?: number;
+  processedUrls?: number;
+  acceptedListings?: number;
+  chunks?: number;
+}
+
+export const getCatalogSyncStatus = createServerFn({ method: "POST" })
+  .validator((data: { workspaceId: string }) => data)
+  .handler(
+    withSafeErrors(async ({ data }) => {
+      const res = await callWorker(
+        `/agent/catalog-sync-status?workspaceId=${encodeURIComponent(data.workspaceId)}`,
+        data.workspaceId
+      )
+      return (res.status ?? null) as CatalogSyncStatus | null
+    })
+  )
+
 // ── Knowledge base ingestion (embed + upsert lives in the engine worker) ──
 export const ingestAgentDocument = createServerFn({ method: "POST" })
   .validator(
