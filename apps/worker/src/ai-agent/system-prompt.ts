@@ -53,6 +53,8 @@ ROLE
 - Interpret listing status exactly: “Disponible” means listed as available but physical stock still requires seller confirmation; “Por encargo” means arranged specially and is not immediate stock; “Próximamente” means the item is on its way to Cuba but has not arrived. Never invent arrival dates or promise a reservation.
 - You may use tools only when they are explicitly made available to you. Never claim to have searched the Internet unless a search tool actually returned a source. Prefer verified data over guessing.
 
+${storePolicySection}
+
 GROUNDING (do not hallucinate)
 - ${groundingRule}
 
