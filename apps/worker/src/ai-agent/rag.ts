@@ -28,39 +28,50 @@ function queryTerms(query: string): string[] {
 }
 
 /**
- * Returns only chunks with meaningful overlap. A missing match remains an
- * empty context, so the caller's existing no-information branch prevents
- * the model from inventing prices, stock, delivery or other business facts.
+ * Returns matching catalog chunks plus any explicitly pinned policy documents.
+ * Pinned docs are scoped by workspace and docId, so generic business rules
+ * remain available even when their wording does not overlap a product query.
  */
 export async function retrieveContext(
   env: AgentEnv,
   config: AgentConfig,
   query: string,
   sourcePrefix?: string,
+  includeDocIds: string[] = [],
 ): Promise<RetrievedChunk[]> {
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
 
   const normalizedTextSql = `replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(lower(text), 'á','a'), 'Á','a'), 'é','e'), 'É','e'), 'í','i'), 'Í','i'), 'ó','o'), 'Ó','o'), 'ú','u'), 'Ú','u'), 'ü','u'), 'Ü','u'), 'ñ','n'), 'Ñ','n')`;
   const predicates = terms.map(() => `instr(${normalizedTextSql}, ?) > 0`).join(" OR ");
-  const sourceFilter = sourcePrefix ? " AND source LIKE ?" : "";
+  const catalogMatch = sourcePrefix
+    ? `(source LIKE ? AND (${predicates}))`
+    : `(${predicates})`;
+  const pinnedMatch = includeDocIds.length
+    ? ` OR doc_id IN (${includeDocIds.map(() => "?").join(", ")})`
+    : "";
   const statement = env.DB.prepare(
-    `SELECT id, text, source FROM doc_chunks
-     WHERE workspace_id = ?${sourceFilter} AND (${predicates})
+    `SELECT id, text, source, doc_id FROM doc_chunks
+     WHERE workspace_id = ? AND (${catalogMatch}${pinnedMatch})
      LIMIT 100`,
-  ).bind(config.workspaceId, ...(sourcePrefix ? [`${sourcePrefix}%`] : []), ...terms);
+  ).bind(
+    config.workspaceId,
+    ...(sourcePrefix ? [`${sourcePrefix}%`] : []),
+    ...terms,
+    ...includeDocIds,
+  );
 
-  const result = await statement.all<{ id: string; text: string; source: string }>();
+  const result = await statement.all<{ id: string; text: string; source: string; doc_id?: string | null }>();
   const normalizedQuery = normalizeText(query).trim();
-  const ranked = (result.results)
+  const ranked = result.results
     .map((row) => {
       const normalizedChunk = normalizeText(row.text);
       const matchedTerms = terms.filter((term) => normalizedChunk.includes(term)).length;
       const phraseMatch = normalizedQuery.length >= 4 && normalizedChunk.includes(normalizedQuery);
-      const score = phraseMatch ? 1 : matchedTerms / terms.length;
+      const isPinnedPolicy = Boolean(row.doc_id && includeDocIds.includes(row.doc_id));
+      const score = isPinnedPolicy ? 1 : phraseMatch ? 1 : matchedTerms / terms.length;
       return { id: row.id, text: row.text, source: row.source, score };
     })
-    // This is a lexical coverage score, not the old cosine similarity.
     .filter((chunk) => chunk.score >= 0.2)
     .sort((a, b) => b.score - a.score);
 
