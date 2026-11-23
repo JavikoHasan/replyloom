@@ -172,12 +172,12 @@ export async function handleAgentMessage(
       }
       return { text: NO_INFO_REPLY, usedTools, usedContext: [], blocked: false, cached: false };
     }
-    return { text: redactSensitive(text), usedTools, usedContext: [], blocked: false, cached: false };
+    return { text: redactSensitive(text, catalogOnlyBusiness), usedTools, usedContext: [], blocked: false, cached: false };
   }
 
   // ── 4+5) Grounded generation (context + tools, at most 2 tool turns) ──
   const { text, usedTools } = await generateReply(ctx, message, context, toolSchemas, thread);
-  const safeText = redactSensitive(text || (catalogOnlyBusiness ? NO_INFO_REPLY : "I will connect you with a team member for help."));
+  const safeText = redactSensitive(text || (catalogOnlyBusiness ? NO_INFO_REPLY : "I will connect you with a team member for help."), catalogOnlyBusiness);
 
   // ── 6) Cache tool-free grounded answers only — per-customer tool results
   //    (order status, balance, ...) are never cached. ──
