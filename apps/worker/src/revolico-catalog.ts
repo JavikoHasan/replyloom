@@ -40,14 +40,24 @@ export async function syncRevolicoCatalog(env: Env): Promise<void> {
   // The business name may be stored directly on agent_configs or inherited
   // from the workspace name by loadAgentConfig(). Match both representations
   // so a valid store workspace is not silently skipped when business_name is NULL.
+  // Resolve the dedicated store workspace from the organization table first.
+  // agent_configs is intentionally optional (the agent starts disabled and may
+  // not have been configured yet), so it must never be the driving table here.
   const workspaces = await env.DB.prepare(
-    `SELECT agent_configs.workspace_id
-     FROM agent_configs
-     LEFT JOIN organization ON organization.id = agent_configs.workspace_id
-     WHERE COALESCE(NULLIF(TRIM(agent_configs.business_name), ''), organization.name) = ?
+    `SELECT organization.id AS workspace_id
+     FROM organization
+     LEFT JOIN agent_configs ON agent_configs.workspace_id = organization.id
+     WHERE organization.name = ?
+        OR NULLIF(TRIM(agent_configs.business_name), '') = ?
      LIMIT 2`,
-  ).bind(BUSINESS_NAME).all<{ workspace_id: string }>();
+  ).bind(BUSINESS_NAME, BUSINESS_NAME).all<{ workspace_id: string }>();
 
+  if (workspaces.results.length === 0) {
+    console.warn("[revolico-catalog-sync] No matching Cell Phone Store workspace found; catalog sync skipped.");
+    return;
+  }
+
+  console.info("[revolico-catalog-sync] Matching workspace(s) found:", workspaces.results.length);
   for (const row of workspaces.results) {
     await syncWorkspaceCatalog(env, row.workspace_id);
   }
@@ -67,16 +77,28 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     }
     const html = await response.text();
     const urls = extractListingUrls(html).slice(0, MAX_LISTINGS);
+    console.info("[revolico-catalog-sync] Homepage fetched; listing links discovered:", urls.length);
     // An empty or unrecognizable homepage is not evidence that the seller's
     // catalog is empty. Keep the previous good catalog rather than deleting it.
-    if (urls.length === 0) return;
+    if (urls.length === 0) {
+      console.warn("[revolico-catalog-sync] No listing detail URLs found on homepage; previous catalog preserved.");
+      return;
+    }
     state = { urls, cursor: 0, records: [], startedAt: new Date().toISOString() };
   }
 
   const end = Math.min(state.cursor + BATCH_SIZE, state.urls.length);
   const batchUrls = state.urls.slice(state.cursor, end);
   const batch = await Promise.all(batchUrls.map((url) => fetchOwnedListing(url)));
-  const records = [...state.records, ...batch.filter((item): item is PublicListing => item !== null).map(formatListing)];
+  const accepted = batch.filter((item): item is PublicListing => item !== null);
+  const records = [...state.records, ...accepted.map(formatListing)];
+  console.info("[revolico-catalog-sync] Listing batch processed:", {
+    workspaceId,
+    batchSize: batchUrls.length,
+    accepted: accepted.length,
+    rejectedOrNotOwned: batch.length - accepted.length,
+    progress: `${end}/${state.urls.length}`,
+  });
   const next: SyncState = { ...state, cursor: end, records };
 
   if (end < state.urls.length) {
@@ -110,13 +132,20 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   // Keep the project/page/app information indexed even when the seller has
   // no active listings. Re-ingestion replaces old listing chunks, so expired
   // or removed ads are not retained while the static project information stays.
-  await ingestDocument(env, config, {
+  const ingested = await ingestDocument(env, config, {
     source: "revolico-sagua.pages.dev (información oficial y anuncios públicos del vendedor 5354590237)",
     docId: CATALOG_DOC_ID,
     text,
     chunkSize: 1100,
   });
 
+  console.info("[revolico-catalog-sync] Catalog document ingested:", {
+    workspaceId,
+    documentId: CATALOG_DOC_ID,
+    ownedListings: records.length,
+    chunks: ingested.chunks,
+    replacedChunks: ingested.deleted ?? 0,
+  });
   await env.REPLY_CACHE.delete(key);
 }
 
