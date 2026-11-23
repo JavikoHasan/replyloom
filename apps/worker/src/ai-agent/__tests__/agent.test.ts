@@ -24,7 +24,7 @@ describe("phone bundle replies", () => {
     id: "f07",
     source: "revolico-sagua.pages.dev (catalog)",
     score: 1,
-    text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\\nPrecio publicado: 150 USD",
+    text: ["PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM", "Precio publicado: 150 USD"].join("\\n"),
   }];
 
   it("answers accessories and warranty from permanent policy without a Knowledge policy chunk", () => {
