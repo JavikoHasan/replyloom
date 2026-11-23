@@ -107,6 +107,7 @@ describe("natural Spanish greeting recognition", () => {
   it("recognizes greetings with punctuation and time-of-day", () => {
     expect(isSimpleGreeting("Hola, buenas tardes.")).toBe(true);
     expect(isSimpleGreeting("¡Hola!")).toBe(true);
+    expect(isSimpleGreeting("Ola buenas tardes")).toBe(true);
     expect(isSimpleGreeting("Buenas noches")).toBe(true);
     expect(isSimpleGreeting("Buenos días.")).toBe(true);
   });
