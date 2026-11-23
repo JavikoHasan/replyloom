@@ -25,13 +25,12 @@ export interface AiAutoReplyParams {
   body: string;
 }
 
-// Anti-abuse: per-conversation cap on how many times the agent is invoked
-// (an LLM pipeline costs real money per call, and a chatty customer could
-// otherwise burn unbounded spend by paraphrasing the same question). The
-// window is a rolling one — every handled message slides the expiry, so a
-// quiet gap resets it. 0 = fully off to be safe.
+// Anti-abuse: generous per-conversation cap to prevent runaway usage without
+// interrupting normal customer conversations. Thirty messages in five minutes
+// allows rapid product follow-ups while retaining a burst limit. The window is
+// rolling — every handled message slides the expiry, so a quiet gap resets it.
 const RATE_WINDOW_SECONDS = 300; // 5 minutes
-const MAX_AGENT_INVOCATIONS_PER_WINDOW = 5;
+const MAX_AGENT_INVOCATIONS_PER_WINDOW = 30;
 const log = scopedLogger("ai-autoreply");
 
 /** Returns the reply text to send, or null if the agent is off / should stay quiet. */
@@ -59,8 +58,8 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
     count = 0;
   }
   if (count >= MAX_AGENT_INVOCATIONS_PER_WINDOW) {
-    // Stay completely quiet — don't even tell the customer we're throttled,
-    // that would just invite more messages.
+    // Keep the burst cap as a final safeguard; normal customer follow-ups
+    // should fit comfortably within the increased allowance.
     return null;
   }
   // write-back the incremented counter (KV has no atomic increment in the
