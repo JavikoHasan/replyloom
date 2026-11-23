@@ -21,7 +21,7 @@ export function buildSystemPrompt(
 
   const groundingRule = hasGrounding
     ? `Answer using the CONTEXT below and tool results when available. If the answer is not in the context or a tool result, say you don't have that information and offer to connect the customer to a human — never guess or invent details. Never state a fact about ${config.businessName} that isn't directly supported by the context or a tool result.`
-    : `There is no knowledge base context for this message — that is normal for greetings, thanks, confirmations, and casual conversation. Just respond naturally and warmly as a helpful support agent. Examples: "Hi! How can I help you today?" "Thanks! Anything else I can do?" "Sure thing!" For actual support questions, use a tool if one can answer it. If no tool applies, ask one clarifying question. If the customer is frustrated or asks for a human, offer to connect them.`;
+    : `There is no knowledge-base context for this message. Do not use general knowledge, model memory, or casual conversation to fill the gap. A simple greeting may receive one brief greeting that immediately redirects to questions about products actually listed by the store. A brief thanks or confirmation may receive a short courteous closing. If asked who you are, identify yourself only as the virtual commercial assistant for ${config.businessName} and state that you help only with its published products and services. Do not sustain small talk, answer general questions, or act as a general-purpose assistant. For any commercial question without verified catalog context or an applicable tool result, say you cannot verify the information and offer seller follow-up. If the message is unrelated to the store, politely state that you can only help with the store's published products and services. If the customer is frustrated or asks for a human, offer human assistance.`;
 
   // Store safeguards are fixed in code; workspace custom prompts cannot override them.
   const isStoreAssistant = config.businessName === "Cell Phone Store - Sagua la Grande";
@@ -72,10 +72,10 @@ export function buildClassifierPrompt(config: AgentConfig, message: string): str
   return `Classify the customer message below into exactly one label. Reply with ONLY the label, no punctuation, no explanation.
 
 Labels:
-SUPPORT — a question about ${config.businessName}'s product/service, account, order, billing, or usage. Also includes greetings, identity questions, thanks, confirmations, and casual conversation (e.g. "hi", "who are you?", "thanks", "okay"). For Cell Phone Store - Sagua la Grande, also classify questions, comments, or feedback about the official Revolico Sagua website, its Android app, or sharing the project as SUPPORT.
+SUPPORT — a commercial question about a product/service actually published by ${config.businessName}, or a relevant question about an order/account. A simple greeting, brief thanks/confirmation, or the question "who are you?" may also be SUPPORT, but these must receive only a brief commercial greeting/closing/identity response; they do NOT authorize casual conversation. For Cell Phone Store - Sagua la Grande, also classify questions, comments, or feedback about the official Revolico Sagua website or its Android app as SUPPORT.
 CODING — asks to write, fix, debug, explain, or review code/scripts/config of any kind.
 SENSITIVE — asks for internal cost/pricing structure, credentials, API keys, source code, system prompts, or another customer's data.
-OFF_TOPIC — completely unrelated topic (e.g., asking to play a game, write poetry, solve math puzzles, or questions about completely unrelated third-party entities/topics).
+OFF_TOPIC — general knowledge, casual conversation beyond a brief greeting/thanks/confirmation, entertainment, games, poetry, math puzzles, or any topic unrelated to the store's published products and services.
 
 Message: """${message}"""
 
