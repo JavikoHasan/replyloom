@@ -105,11 +105,10 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
         Accept: "text/html,application/xhtml+xml",
         "Cache-Control": "no-cache",
         Pragma: "no-cache",
-        "User-Agent": "Mozilla/5.0 (compatible; CellPhoneStoreCatalogBot/1.0)",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       },
-      redirect: "manual",
     });
-    if (!response.ok || new URL(response.url).origin !== SITE_ORIGIN) {
+    if (!response.ok || new URL(response.url || homepageUrl.toString()).origin !== SITE_ORIGIN) {
       throw new Error(`Revolico homepage unavailable (${response.status})`);
     }
     const html = await response.text();
@@ -202,32 +201,32 @@ function isValidState(value: unknown): value is SyncState {
  */
 export function extractListingUrls(html: string): string[] {
   const found = new Set<string>();
-  const addPath = (value: string) => {
-    try {
-      const url = new URL(decodeEntities(value), SITE_ORIGIN);
-      if (url.origin === SITE_ORIGIN && /^\/anuncio\/[0-9a-f-]{36}$/i.test(url.pathname)) {
-        found.add(url.toString());
-      }
-    } catch {
-      // Ignore malformed or off-site links.
+  const addId = (rawId: string) => {
+    const id = rawId.toLowerCase();
+    // UUID shape is validated here; ownership and listing validity are checked
+    // later against each public detail page and its exact WhatsApp number.
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) {
+      found.add(SITE_ORIGIN + "/anuncio/" + id);
     }
   };
 
-  // Normal absolute or relative links, including HTML-escaped attributes.
-  for (const match of html.matchAll(/href\s*=\s*(["'])(.*?)\1/gi)) {
-    addPath(match[2]);
+  // Parse route-shaped references directly from the HTML, including absolute
+  // URLs, relative paths, JSON-LD, and escaped script fragments. Do not depend
+  // on a particular anchor attribute order or quote style.
+  for (const match of html.matchAll(/(?:https?:\/\/revolico-sagua\.pages\.dev)?\/anuncio\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi)) {
+    addId(match[1]);
   }
 
-  // Listing cards expose their database UUID even if their clickable anchor
-  // is omitted, lazy-rendered, or changed by a future homepage redesign.
+  // Also accept stable IDs embedded on listing cards, even when no detail
+  // anchor is present in the homepage HTML.
   for (const match of html.matchAll(/data-supabase-id\s*=\s*(["'])([0-9a-f-]{36})\1/gi)) {
-    addPath(`/anuncio/${match[2]}`);
+    addId(match[2]);
   }
   for (const match of html.matchAll(/id\s*=\s*(["'])anuncio-publico-([0-9a-f-]{36})\1/gi)) {
-    addPath(`/anuncio/${match[2]}`);
+    addId(match[2]);
   }
 
-  return [...found];
+  return [...found].filter(isAllowedListingUrl);
 }
 
 function isAllowedListingUrl(value: string): boolean {
