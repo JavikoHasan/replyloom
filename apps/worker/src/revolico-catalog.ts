@@ -55,7 +55,6 @@ export interface PublicListing {
  * matches the store's exact number. No Supabase API or private DB is used.
  */
 export async function syncRevolicoCatalog(env: Env): Promise<void> {
-  await saveStatus(env, { stage: "starting", message: "El sincronizador se está ejecutando." });
   try {
   // The business name may be stored directly on agent_configs or inherited
   // from the workspace name by loadAgentConfig(). Match both representations
@@ -78,7 +77,6 @@ export async function syncRevolicoCatalog(env: Env): Promise<void> {
     return;
   }
 
-  await saveStatus(env, { stage: "workspace_found", message: "Se encontró el espacio de trabajo; buscando anuncios.", workspaceMatches: workspaces.results.length });
   console.info("[revolico-catalog-sync] Matching workspace(s) found:", workspaces.results.length);
   for (const row of workspaces.results) {
     await syncWorkspaceCatalog(env, row.workspace_id);
@@ -117,7 +115,6 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     const hasListingMarkup = /\/anuncio\/[0-9a-f-]{36}/i.test(html) ||
       /data-supabase-id\s*=\s*["'][0-9a-f-]{36}["']/i.test(html);
     const diagnostic = `HTTP ${response.status}; ${contentType}; ${html.length} caracteres; marcado de anuncios: ${hasListingMarkup ? "sí" : "no"}`;
-    await saveStatus(env, { stage: "homepage_read", message: `Página principal consultada. ${diagnostic}`, discoveredUrls: urls.length, processedUrls: 0, acceptedListings: 0 });
     console.info("[revolico-catalog-sync] Homepage fetched; listing links discovered:", urls.length);
     // An empty or unrecognizable homepage is not evidence that the seller's
     // catalog is empty. Keep the previous good catalog rather than deleting it.
