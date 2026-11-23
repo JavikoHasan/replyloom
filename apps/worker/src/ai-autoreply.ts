@@ -68,7 +68,7 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
     });
     if (!response.ok) throw new Error(`Agent rate limiter failed (${response.status})`);
     const result = await response.json();
-    if (!result.success) return null;
+    if (!result || typeof result !== "object" || !("success" in result) || result.success !== true) return null;
   } catch (err) {
     // Fail open if the limiter itself is unavailable; never silence a buyer
     // because an anti-abuse counter failed.
