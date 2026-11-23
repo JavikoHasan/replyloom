@@ -1,4 +1,5 @@
 import type { AgentConfig, RetrievedChunk } from "./types";
+import { STORE_POLICY } from "./store-policy";
 
 /**
  * Builds the system prompt for the generator model. Kept short on purpose —
@@ -27,6 +28,10 @@ export function buildSystemPrompt(
   const isStoreAssistant = config.businessName === "Cell Phone Store - Sagua la Grande";
   const customPromptSection = !isStoreAssistant && config.systemPrompt && config.systemPrompt.trim()
     ? `\n\nCUSTOM INSTRUCTIONS\n${config.systemPrompt.trim()}`
+    : "";
+  // The store policy is permanent prompt content, never dependent on RAG ranking.
+  const storePolicySection = isStoreAssistant
+    ? `\n\nPERMANENT STORE POLICY — ALWAYS APPLY\n${STORE_POLICY}`
     : "";
 
   return `You are the customer support assistant for ${config.businessName}. Reply for a WhatsApp chat in plain text.
