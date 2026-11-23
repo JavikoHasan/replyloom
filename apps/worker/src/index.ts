@@ -524,6 +524,32 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // ── Isolated AI preview: same catalogue-grounded pipeline, no WhatsApp send ──
+  // Only the authenticated CRM service binding may invoke this test route.
+  // The enabled flag is changed only on an in-memory config copy; no setting is saved.
+  if (request.method === "POST" && url.pathname === "/agent/preview") {
+    if (caller.kind !== "internal") return forbidden();
+    try {
+      const parsed = AgentReplyBodySchema.safeParse(await request.json());
+      if (!parsed.success) {
+        return Response.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+      }
+      const { workspaceId, message } = parsed.data;
+      const scopeError = assertCallerWorkspace(caller, workspaceId);
+      if (scopeError) return scopeError;
+      const config = await loadAgentConfig(env, workspaceId);
+      const previewConfig = { ...config, enabled: true, cacheTtlSeconds: 0 };
+      const reply = await handleAgentMessage(env, previewConfig, { message });
+      return Response.json({ ok: true, ...reply, previewOnly: true });
+    } catch (err: any) {
+      captureError(err, { module: "agent-preview" });
+      return Response.json(
+        { ok: false, error: publicMessage(err, "The agent preview couldn't run right now. Please try again.") },
+        { status: publicStatus(err, 500) }
+      );
+    }
+  }
+
   if (request.method === "POST" && url.pathname === "/agent/ingest") {
     try {
       const parsed = AgentIngestBodySchema.safeParse(await request.json());
