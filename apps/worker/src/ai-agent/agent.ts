@@ -309,22 +309,22 @@ export function buildCatalogPriceReply(
   const ageMs = now - syncedAt;
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 30 * 60_000) return null;
 
-  const normalizedQuestion = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
-  if (!/\\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\\b/.test(normalizedQuestion)) return null;
+  const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (!/\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\b/.test(normalizedQuestion)) return null;
 
-  const modelIds = [...normalizedQuestion.matchAll(/\\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\\b/g)].map((match) => match[0]);
+  const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
   if (modelIds.length === 0) return null;
 
-  const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\\s*)/));
+  const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = productBlocks.filter((block) => {
-    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
-    const normalizedTitle = title.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
+    const normalizedTitle = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     return modelIds.some((modelId) => new RegExp(`(^|[^a-z0-9])${modelId}([^a-z0-9]|$)`).test(normalizedTitle));
   });
   if (matches.length !== 1) return null;
 
-  const title = matches[0].match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
-  const price = matches[0].match(/^Precio publicado:\\s*(.+)$/im)?.[1]?.trim();
+  const title = matches[0].match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+  const price = matches[0].match(/^Precio publicado:\s*(.+)$/im)?.[1]?.trim();
   if (!title || !price) return null;
 
   return `El precio publicado de ${title} es ${price}. La disponibilidad física debe confirmarse directamente con el vendedor.`;
