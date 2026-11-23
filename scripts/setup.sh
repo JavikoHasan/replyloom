@@ -17,6 +17,9 @@ DB_NAME="whatsapp-ai"
 QUEUE_NAME="wa-broadcast-dispatch"
 KV_BINDING="REPLY_CACHE"
 MEDIA_KV_BINDING="MEDIA_STORE"
+# Use project-specific Cloudflare namespace titles; bindings remain stable in code.
+KV_NAMESPACE_NAME="cell-phone-store-reply-cache"
+MEDIA_KV_NAMESPACE_NAME="cell-phone-store-media-store"
 
 # Create wrangler.jsonc / .env.production from the templates if missing.
 node scripts/config.mjs
@@ -86,7 +89,7 @@ fi
 echo "==> KV namespace ($KV_BINDING)..."
 CURRENT_KV_ID=$(grep -A2 '"kv_namespaces"' "$WORKER_CONFIG" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID" ]; then
-  if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$KV_BINDING\""; then
+  if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$KV_NAMESPACE_NAME\""; then
     wrangler kv namespace create "$KV_BINDING" >/dev/null
     echo "    created namespace"
   else
@@ -120,7 +123,7 @@ fi
 
 # ── KV namespace (media storage) ────────────────────────────────────────
 echo "==> KV namespace ($MEDIA_KV_BINDING)..."
-if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$MEDIA_KV_BINDING\""; then
+if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$MEDIA_KV_NAMESPACE_NAME\""; then
   wrangler kv namespace create "$MEDIA_KV_BINDING" >/dev/null
   echo "    created namespace"
 else
