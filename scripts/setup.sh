@@ -90,7 +90,7 @@ echo "==> KV namespace ($KV_BINDING)..."
 CURRENT_KV_ID=$(grep -A2 '"kv_namespaces"' "$WORKER_CONFIG" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID" ]; then
   if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$KV_NAMESPACE_NAME\""; then
-    wrangler kv namespace create "$KV_BINDING" >/dev/null
+    wrangler kv namespace create "$KV_NAMESPACE_NAME" >/dev/null
     echo "    created namespace"
   else
     echo "    found existing namespace"
@@ -101,7 +101,7 @@ if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID
     process.stdin.on('end', () => {
       try {
         const list = JSON.parse(s);
-        const ns = list.find((n) => n.title === '$KV_BINDING');
+        const ns = list.find((n) => n.title === '$KV_NAMESPACE_NAME');
         if (ns) console.log(ns.id);
       } catch {}
     });
@@ -124,7 +124,7 @@ fi
 # ── KV namespace (media storage) ────────────────────────────────────────
 echo "==> KV namespace ($MEDIA_KV_BINDING)..."
 if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$MEDIA_KV_NAMESPACE_NAME\""; then
-  wrangler kv namespace create "$MEDIA_KV_BINDING" >/dev/null
+  wrangler kv namespace create "$MEDIA_KV_NAMESPACE_NAME" >/dev/null
   echo "    created namespace"
 else
   echo "    found existing namespace"
@@ -135,7 +135,7 @@ MEDIA_KV_ID=$(wrangler kv namespace list --json 2>/dev/null | node -e "
   process.stdin.on('end', () => {
     try {
       const list = JSON.parse(s);
-      const ns = list.find((n) => n.title === '$MEDIA_KV_BINDING');
+      const ns = list.find((n) => n.title === '$MEDIA_KV_NAMESPACE_NAME');
       if (ns) console.log(ns.id);
     } catch {}
   });
