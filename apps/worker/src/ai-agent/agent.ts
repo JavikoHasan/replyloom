@@ -312,7 +312,7 @@ export function buildCatalogPriceReply(
   const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (!/\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\b/.test(normalizedQuestion)) return null;
 
-  const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
+  const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
   if (modelIds.length === 0) return null;
 
   const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
