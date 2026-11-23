@@ -124,8 +124,8 @@ export async function handleAgentMessage(
     }
   }
 
-  // Answer the store's fixed phone bundle directly from its pinned policy.
-  // This avoids a model handoff when the policy is retrieved successfully.
+  // Answer the store's fixed phone bundle directly from the permanent code policy.
+  // This avoids dependence on a policy chunk being selected by RAG.
   if (catalogOnlyBusiness) {
     const phoneBundleReply = buildPhoneBundleReply(message, context);
     if (phoneBundleReply) {
