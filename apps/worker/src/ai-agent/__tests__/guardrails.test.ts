@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isHardBlockedIntent, keywordPrecheck, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "../guardrails";
+import { isHardBlockedIntent, isPhoneBundleSupportQuestion, keywordPrecheck, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "../guardrails";
 
 describe("shouldEscalateToHuman", () => {
   it("escalates explicit human requests and clear frustration", () => {
@@ -17,6 +17,18 @@ describe("isHardBlockedIntent", () => {
     expect(isHardBlockedIntent("OFF_TOPIC")).toBe(true);
     expect(isHardBlockedIntent("CODING")).toBe(true);
     expect(isHardBlockedIntent("SENSITIVE")).toBe(true);
+  });
+});
+
+describe("store phone bundle intent", () => {
+  it("recognizes model-specific accessory and warranty questions as commercial support", () => {
+    expect(isPhoneBundleSupportQuestion("¿Qué incluye la compra del Samsung F07 y cuántos días de garantía tiene?")).toBe(true);
+    expect(isPhoneBundleSupportQuestion("¿Qué accesorios trae el F07?")).toBe(true);
+  });
+
+  it("does not turn generic or unrelated questions into phone support", () => {
+    expect(isPhoneBundleSupportQuestion("¿Qué tiempo hace hoy?")).toBe(false);
+    expect(isPhoneBundleSupportQuestion("¿Cuántos días de garantía tienen?")).toBe(false);
   });
 });
 
