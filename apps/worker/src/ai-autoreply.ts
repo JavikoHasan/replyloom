@@ -44,31 +44,36 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
   const db = createDb(env.DB);
   if (await isBlocked(db, params.workspaceId, params.waSessionId, "auto_reply", params.senderJid)) return null;
 
-  // Rate-limit BEFORE doing any expensive work (classifier/RAG/generation).
-  // KV read-modify-write counter, sliding-window via a fresh TTL on every
-  // write. On a KV failure we fail OPEN (count 0) so a cache hiccup never
-  // silences a customer; the classifier gate is the real backstop.
-  const bucket = params.conversationId;
-  const rlKey = `agent:rl:${params.workspaceId}:${bucket}`;
-  let count = 0;
+  // Rate-limit BEFORE classifier/RAG/generation. Use the existing SQLite-backed
+  // Durable Object limiter: a customer message must never consume a Workers KV
+  // write just to increment a counter.
   try {
-    const parsed = Number((await env.REPLY_CACHE.get(rlKey)) ?? 0);
-    count = Number.isFinite(parsed) ? parsed : 0;
-  } catch {
-    count = 0;
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`agent:${params.workspaceId}:${params.conversationId}`),
+    );
+    const keyHash = Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    const shard = `rate-limiter:${keyHash.slice(0, 2)}`;
+    const limiter = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(shard));
+    const response = await limiter.fetch("https://rate-limit.internal/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        keyHash,
+        limit: MAX_AGENT_INVOCATIONS_PER_WINDOW,
+        windowMs: RATE_WINDOW_SECONDS * 1000,
+      }),
+    });
+    if (!response.ok) throw new Error(`Agent rate limiter failed (${response.status})`);
+    const result = await response.json() as { success?: boolean };
+    if (!result.success) return null;
+  } catch (err) {
+    // Fail open if the limiter itself is unavailable; never silence a buyer
+    // because an anti-abuse counter failed.
+    log.warn({ err, workspaceId: params.workspaceId }, "Agent rate limiter unavailable; continuing without KV");
   }
-  if (count >= MAX_AGENT_INVOCATIONS_PER_WINDOW) {
-    // Keep the burst cap as a final safeguard; normal customer follow-ups
-    // should fit comfortably within the increased allowance.
-    return null;
-  }
-  // write-back the incremented counter (KV has no atomic increment in the
-  // stable typing, so this is a soft, best-effort limiter — the classifier
-  // gate + per-message spend caps are the real backstops).
-  count += 1;
-  await env.REPLY_CACHE
-    .put(rlKey, String(count), { expirationTtl: RATE_WINDOW_SECONDS })
-    .catch(() => {});
 
   try {
     const reply = await handleAgentMessage(env, config, {
