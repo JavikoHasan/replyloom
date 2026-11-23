@@ -11,7 +11,7 @@ import { pruneWebhookDeliveries } from "./automation";
 import { handleAgentMessage } from "./ai-agent/agent";
 import { loadAgentConfig, invalidateConfigCache } from "./ai-agent/config";
 import { ingestDocument } from "./ai-agent/rag";
-import { syncRevolicoCatalog } from "./revolico-catalog";
+import { syncRevolicoCatalog, getCatalogSyncStatus } from "./revolico-catalog";
 import { listWorkspaceWebhookTools } from "./ai-agent/tools";
 import { resolveCaller, assertCallerWorkspace, unauthorized, forbidden, assertSafeOutboundUrlWithDns, MAX_MEDIA_UPLOAD_BYTES, MAX_SEND_MEDIA_BYTES  } from "./security";
 import {
@@ -211,6 +211,15 @@ async function route(request: Request, env: Env): Promise<Response> {
   // apps/web via the service binding) or a per-workspace API key.
   const caller = await resolveCaller(env, request);
   if (!caller) return unauthorized();
+
+  if (request.method === "GET" && url.pathname === "/agent/catalog-sync-status") {
+    const workspaceId = url.searchParams.get("workspaceId");
+    if (!workspaceId) return Response.json({ ok: false, error: "Missing 'workspaceId'" }, { status: 400 });
+    const scopeError = assertCallerWorkspace(caller, workspaceId);
+    if (scopeError) return scopeError;
+    const status = await getCatalogSyncStatus(env);
+    return Response.json({ ok: true, status });
+  }
 
   // Internal-only endpoint used by the web Worker for its own request and
   // authentication throttles. It shares the engine's SQLite DO limiter.
