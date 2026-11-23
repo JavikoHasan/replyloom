@@ -329,30 +329,30 @@ function cache(env: AgentEnv, config: AgentConfig, key: string, value: string, t
  * not confirm that a particular model is listed, available, or orderable.
  */
 export function buildStorePolicyOnlyReply(message: string): string | null {
-  const normalized = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
-  const asksConditions = /\\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación)\\b/.test(normalized);
+  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación)\b/.test(normalized);
   if (!asksConditions) return null;
 
-  if (/\\b(ecoflow|delta\\s*\\d|river\\s*\\d)\\b/.test(normalized)) {
-    if (/\\b(garantia|garantía|prueba|falla|fallo|responsabilidad|devolucion|devolución|reparacion|reparación)\\b/.test(normalized)) {
+  if (/\b(ecoflow|delta\s*\d|river\s*\d)\b/.test(normalized)) {
+    if (/\b(garantia|garantía|prueba|falla|fallo|responsabilidad|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
       return "Las estaciones EcoFlow anunciadas por el negocio no tienen garantía comercial del vendedor. Antes de la compra, el equipo se prueba durante tiempo suficiente en presencia del comprador. Después de la entrega, el negocio no se responsabiliza por daños derivados de uso inadecuado o manipulación incorrecta. Para confirmar las condiciones del modelo concreto, consulta su anuncio o al vendedor.";
     }
-    if (/\\b(entrega|envio|envío|domicilio)\\b/.test(normalized)) {
+    if (/\b(entrega|envio|envío|domicilio)\b/.test(normalized)) {
       return "La entrega a domicilio de las estaciones EcoFlow anunciadas es gratuita. La fecha y la hora se coordinan directamente con el vendedor según la disponibilidad y la carga del vehículo. La publicación vigente debe confirmar el modelo y su modalidad de venta.";
     }
-    if (/\\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|bateria|batería|baterias|baterías)\\b/.test(normalized)) {
+    if (/\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|bateria|batería|baterias|baterías)\b/.test(normalized)) {
       return "En las estaciones EcoFlow anunciadas, la compra incluye únicamente la caja y la unidad principal, salvo que el anuncio específico indique expresamente otra cosa. Las baterías de expansión se venden por separado y actualmente no hay baterías extra disponibles. No puedo confirmar desde esta consulta si ese modelo concreto está publicado; revisa el anuncio vigente o consúltalo con el vendedor.";
     }
   }
 
-  if (/\\b(moto|motos|motocicleta|motocicletas)\\b/.test(normalized)) {
-    if (/\\b(garantia|garantía|devolucion|devolución|reparacion|reparación)\\b/.test(normalized)) {
+  if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
+    if (/\b(garantia|garantía|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
       return "Las motocicletas anunciadas por encargo son nuevas y se gestionan a nombre del cliente. La garantía corresponde al fabricante; su cobertura, duración y procedimiento deben verificarse para el modelo concreto. Como el equipo está fuera de Cuba, una devolución o reparación internacional puede ser difícil, no viable y costosa, y el transporte podría correr por cuenta del cliente. Antes de encargar, confirma las condiciones oficiales con el vendedor.";
     }
-    if (/\\b(entrega|envio|envío|domicilio)\\b/.test(normalized)) {
+    if (/\b(entrega|envio|envío|domicilio)\b/.test(normalized)) {
       return "Las motocicletas anunciadas por encargo se entregan directamente en la puerta del domicilio del cliente. La fecha y la hora deben coordinarse con el vendedor; no se confirman automáticamente. La modalidad y disponibilidad del modelo deben verificarse en el anuncio vigente.";
     }
-    if (/\\b(por encargo|encargar|pedido|incluye|incluyen|nueva|nuevo|como funciona|cómo funciona)\\b/.test(normalized)) {
+    if (/\b(por encargo|encargar|pedido|incluye|incluyen|nueva|nuevo|como funciona|cómo funciona)\b/.test(normalized)) {
       return "Las motocicletas que aparecen anunciadas por encargo son nuevas y se solicitan a nombre del cliente. La garantía la ofrece el fabricante, no el vendedor local; sus condiciones dependen del modelo. Ten presente que gestionar una devolución o reparación internacional desde Cuba puede ser difícil y costoso. Para confirmar si un modelo está publicado y sus condiciones concretas, consulta el anuncio vigente o al vendedor.";
     }
   }
