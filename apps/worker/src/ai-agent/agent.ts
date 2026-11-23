@@ -360,10 +360,16 @@ export function buildStorePolicyOnlyReply(message: string): string | null {
 }
 
 /** Greetings may be answered without product data; substantive questions may not. */
-function isSimpleGreeting(message: string): boolean {
-  return /^(hola|buenas(?: tardes| noches)?|buenos días|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)[!.\s😊🙏]*$/iu.test(message.trim());
+export function isSimpleGreeting(message: string): boolean {
+  const normalized = message
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[¿?¡!.,;:]+/g, " ")
+    .replace(/\\s+/g, " ")
+    .trim();
+  return /^(?:hola(?: buenas(?: tardes| noches)?| buenos dias)?|buenas(?: tardes| noches)?|buenos dias|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)(?: 😊| 🙏)?$/.test(normalized);
 }
-
 
 /**
  * Answers questions about the fixed bundle included with listed phones.
