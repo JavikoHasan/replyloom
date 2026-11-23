@@ -10,6 +10,24 @@ const CATALOG_DOC_ID = "revolico-sagua-public-catalog";
 const BATCH_SIZE = 4;
 const STATE_TTL_SECONDS = 6 * 3600;
 const MAX_LISTINGS = 60;
+const STATUS_KEY = `${STATE_PREFIX}status`;
+export interface CatalogSyncStatus {
+  stage: string;
+  message: string;
+  updatedAt: string;
+  workspaceMatches?: number;
+  discoveredUrls?: number;
+  processedUrls?: number;
+  acceptedListings?: number;
+  chunks?: number;
+}
+async function saveStatus(env: Env, status: Omit<CatalogSyncStatus, "updatedAt">): Promise<void> {
+  await env.REPLY_CACHE.put(STATUS_KEY, JSON.stringify({ ...status, updatedAt: new Date().toISOString() } satisfies CatalogSyncStatus), { expirationTtl: 7 * 24 * 3600 });
+}
+export async function getCatalogSyncStatus(env: Env): Promise<CatalogSyncStatus | null> {
+  return env.REPLY_CACHE.get<CatalogSyncStatus>(STATUS_KEY, "json");
+}
+
 
 interface SyncState {
   urls: string[];
@@ -36,7 +54,7 @@ export interface PublicListing {
  * read-only; detail pages are accepted only when their WhatsApp contact link
  * matches the store's exact number. No Supabase API or private DB is used.
  */
-export async function syncRevolicoCatalog(env: Env): Promise<void> {
+export async function syncRevolicoCatalog(env: Env): Promise<void> {\n  await saveStatus(env, { stage: "starting", message: "El sincronizador se está ejecutando." });\n  try {
   // The business name may be stored directly on agent_configs or inherited
   // from the workspace name by loadAgentConfig(). Match both representations
   // so a valid store workspace is not silently skipped when business_name is NULL.
@@ -52,12 +70,12 @@ export async function syncRevolicoCatalog(env: Env): Promise<void> {
      LIMIT 2`,
   ).bind(BUSINESS_NAME, BUSINESS_NAME).all<{ workspace_id: string }>();
 
-  if (workspaces.results.length === 0) {
+  if (workspaces.results.length === 0) {\n    await saveStatus(env, { stage: "workspace_missing", message: "No se encontró el espacio de trabajo de Cell Phone Store.", workspaceMatches: 0 });
     console.warn("[revolico-catalog-sync] No matching Cell Phone Store workspace found; catalog sync skipped.");
     return;
   }
 
-  console.info("[revolico-catalog-sync] Matching workspace(s) found:", workspaces.results.length);
+  await saveStatus(env, { stage: "workspace_found", message: "Se encontró el espacio de trabajo; buscando anuncios.", workspaceMatches: workspaces.results.length });\n  console.info("[revolico-catalog-sync] Matching workspace(s) found:", workspaces.results.length);
   for (const row of workspaces.results) {
     await syncWorkspaceCatalog(env, row.workspace_id);
   }
@@ -77,7 +95,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     }
     const html = await response.text();
     const urls = extractListingUrls(html).slice(0, MAX_LISTINGS);
-    console.info("[revolico-catalog-sync] Homepage fetched; listing links discovered:", urls.length);
+    await saveStatus(env, { stage: "homepage_read", message: "Página principal consultada; enlaces de anuncios detectados.", discoveredUrls: urls.length, processedUrls: 0, acceptedListings: 0 });\n    console.info("[revolico-catalog-sync] Homepage fetched; listing links discovered:", urls.length);
     // An empty or unrecognizable homepage is not evidence that the seller's
     // catalog is empty. Keep the previous good catalog rather than deleting it.
     if (urls.length === 0) {
@@ -99,7 +117,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     rejectedOrNotOwned: batch.length - accepted.length,
     progress: `${end}/${state.urls.length}`,
   });
-  const next: SyncState = { ...state, cursor: end, records };
+  await saveStatus(env, { stage: "reading_listings", message: "Leyendo y verificando las fichas públicas.", discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length });\n  const next: SyncState = { ...state, cursor: end, records };
 
   if (end < state.urls.length) {
     await env.REPLY_CACHE.put(key, JSON.stringify(next), { expirationTtl: STATE_TTL_SECONDS });
@@ -111,7 +129,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   const config = await loadAgentConfig(env, workspaceId);
   // Catalog synchronization is independent of the agent's enabled state.
   // Preload fresh public listings while the owner configures and tests the agent.
-  if (config.businessName !== BUSINESS_NAME) {
+  if (config.businessName !== BUSINESS_NAME) {\n    await saveStatus(env, { stage: "business_name_mismatch", message: "El nombre comercial de la configuración no coincide con Cell Phone Store - Sagua la Grande.", discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length });
     await env.REPLY_CACHE.delete(key);
     return;
   }
@@ -139,7 +157,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     chunkSize: 1100,
   });
 
-  console.info("[revolico-catalog-sync] Catalog document ingested:", {
+  await saveStatus(env, { stage: "completed", message: "Catálogo guardado correctamente en Knowledge.", discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length, chunks: ingested.chunks });\n  console.info("[revolico-catalog-sync] Catalog document ingested:", {
     workspaceId,
     documentId: CATALOG_DOC_ID,
     ownedListings: records.length,
