@@ -182,20 +182,37 @@ function isValidState(value: unknown): value is SyncState {
     state.urls.every((url) => typeof url === "string" && isAllowedListingUrl(url));
 }
 
-/** Extract only same-origin listing detail links from the public homepage. */
+/** Extract only same-origin listing detail links from the public homepage.
+ * Accept both anchor hrefs and the stable IDs embedded in rendered listing cards.
+ * The second path keeps catalog discovery working if the site's card markup changes.
+ */
 export function extractListingUrls(html: string): string[] {
   const found = new Set<string>();
-  const pattern = /href=["']([^"']*\/anuncio\/[0-9a-f-]{36})["']/gi;
-  for (const match of html.matchAll(pattern)) {
+  const addPath = (value: string) => {
     try {
-      const url = new URL(decodeEntities(match[1]), SITE_ORIGIN);
+      const url = new URL(decodeEntities(value), SITE_ORIGIN);
       if (url.origin === SITE_ORIGIN && /^\/anuncio\/[0-9a-f-]{36}$/i.test(url.pathname)) {
         found.add(url.toString());
       }
     } catch {
       // Ignore malformed or off-site links.
     }
+  };
+
+  // Normal absolute or relative links, including HTML-escaped attributes.
+  for (const match of html.matchAll(/href\\s*=\\s*(["'])(.*?)\\1/gi)) {
+    addPath(match[2]);
   }
+
+  // Listing cards expose their database UUID even if their clickable anchor
+  // is omitted, lazy-rendered, or changed by a future homepage redesign.
+  for (const match of html.matchAll(/data-supabase-id\\s*=\\s*(["'])([0-9a-f-]{36})\\1/gi)) {
+    addPath(`/anuncio/${match[2]}`);
+  }
+  for (const match of html.matchAll(/id\\s*=\\s*(["'])anuncio-publico-([0-9a-f-]{36})\\1/gi)) {
+    addPath(`/anuncio/${match[2]}`);
+  }
+
   return [...found];
 }
 
