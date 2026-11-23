@@ -57,9 +57,10 @@ export async function handleAgentMessage(
       return { text: locationReply, usedTools: [], usedContext: [], blocked: true, blockReason: "SENSITIVE", cached: false };
     }
   }
-  const replyCacheTtlSeconds = catalogOnlyBusiness
-    ? Math.min(config.cacheTtlSeconds, 300)
-    : config.cacheTtlSeconds;
+  // The store's catalog and policy answers are cheap to retrieve from D1.
+  // Do not persist every unique customer message in KV: that turns ordinary
+  // WhatsApp traffic into a paid write operation. Other workspaces keep cache.
+  const replyCacheTtlSeconds = catalogOnlyBusiness ? 0 : config.cacheTtlSeconds;
 
   const customerPhone =
     input.customerPhone ??
