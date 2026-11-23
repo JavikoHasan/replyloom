@@ -55,7 +55,8 @@ export interface PublicListing {
  * matches the store's exact number. No Supabase API or private DB is used.
  */
 export async function syncRevolicoCatalog(env: Env): Promise<void> {
-  await saveStatus(env, { stage: "starting", message: "El sincronizador se está ejecutando." });\n  try {
+  await saveStatus(env, { stage: "starting", message: "El sincronizador se está ejecutando." });
+  try {
   // The business name may be stored directly on agent_configs or inherited
   // from the workspace name by loadAgentConfig(). Match both representations
   // so a valid store workspace is not silently skipped when business_name is NULL.
