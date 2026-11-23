@@ -104,6 +104,25 @@ export async function handleAgentMessage(
     return { text, usedTools: [], usedContext: [], blocked: true, blockReason: gate.label, cached: false };
   }
 
+  // For the store's public catalog, answer exact price questions deterministically
+  // from a fresh completed Revolico sync. This avoids a language model turning a
+  // clearly grounded price into a generic human handoff or inventing a value.
+  if (catalogOnlyBusiness && context.length > 0) {
+    const syncStatus = await env.REPLY_CACHE
+      .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+      .catch(() => null);
+    const catalogReply = buildCatalogPriceReply(message, context, syncStatus);
+    if (catalogReply) {
+      return {
+        text: catalogReply,
+        usedTools: [],
+        usedContext: context,
+        blocked: false,
+        cached: false,
+      };
+    }
+  }
+
   // The store assistant has no CRM or external-search tools. If the public
   // catalog contains no matching facts, return a fixed safe answer without
   // spending a second Workers AI generation call.
@@ -270,4 +289,43 @@ function cache(env: AgentEnv, config: AgentConfig, key: string, value: string, t
 /** Greetings may be answered without product data; substantive questions may not. */
 function isSimpleGreeting(message: string): boolean {
   return /^(hola|buenas(?: tardes| noches)?|buenos días|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)[!.\s😊🙏]*$/iu.test(message.trim());
+}
+
+
+/**
+ * Exact catalog-price answers are safer and more reliable than asking a
+ * generative model to restate a number. Only answer when a completed sync is
+ * recent and one unambiguous product block in retrieved context contains the
+ * requested model identifier and an explicit published price.
+ */
+export function buildCatalogPriceReply(
+  message: string,
+  context: RetrievedChunk[],
+  syncStatus: { stage?: string; updatedAt?: string } | null,
+  now = Date.now(),
+): string | null {
+  if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
+  const syncedAt = Date.parse(syncStatus.updatedAt);
+  const ageMs = now - syncedAt;
+  if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 30 * 60_000) return null;
+
+  const normalizedQuestion = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  if (!/\\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\\b/.test(normalizedQuestion)) return null;
+
+  const modelIds = [...normalizedQuestion.matchAll(/\\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\\b/g)].map((match) => match[0]);
+  if (modelIds.length === 0) return null;
+
+  const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\\s*)/));
+  const matches = productBlocks.filter((block) => {
+    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
+    const normalizedTitle = title.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+    return modelIds.some((modelId) => new RegExp(`(^|[^a-z0-9])${modelId}([^a-z0-9]|$)`).test(normalizedTitle));
+  });
+  if (matches.length !== 1) return null;
+
+  const title = matches[0].match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
+  const price = matches[0].match(/^Precio publicado:\\s*(.+)$/im)?.[1]?.trim();
+  if (!title || !price) return null;
+
+  return `El precio publicado de ${title} es ${price}. La disponibilidad física debe confirmarse directamente con el vendedor.`;
 }
