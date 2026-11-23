@@ -29,6 +29,29 @@ node scripts/config.mjs
 # bare `pnpm exec wrangler` at the repo root).
 wrangler() { (cd "$WORKER_DIR" && pnpm exec wrangler "$@"); }
 
+# Resolve KV IDs without grep -q pipelines (pipefail can abort on SIGPIPE).
+kv_namespace_id() {
+  local title="$1" output id attempt
+  for attempt in 1 2 3 4 5; do
+    output="$(wrangler kv namespace list --json 2>/dev/null || true)"
+    id="$(printf '%s' "$output" | node -e "
+      let s = '';
+      process.stdin.on('data', (d) => { s += d; });
+      process.stdin.on('end', () => {
+        try {
+          const parsed = JSON.parse(s);
+          const list = Array.isArray(parsed) ? parsed : (parsed.result || []);
+          const ns = list.find((n) => n.title === '$title');
+          if (ns) console.log(ns.id);
+        } catch {}
+      });
+    ")"
+    if [ -n "$id" ]; then printf '%s' "$id"; return 0; fi
+    sleep 2
+  done
+  return 1
+}
+
 echo "==> Checking Cloudflare auth..."
 if ! wrangler whoami >/dev/null 2>&1; then
   echo "Not logged in. Run '(cd apps/worker && pnpm exec wrangler login)' first, then re-run this script." >&2
@@ -87,35 +110,27 @@ fi
 
 # ── KV namespace (AI agent reply cache) ──────────────────────────────────
 echo "==> KV namespace ($KV_BINDING)..."
-CURRENT_KV_ID=$(grep -A2 '"kv_namespaces"' "$WORKER_CONFIG" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+CURRENT_KV_ID=$(grep -A2 '"kv_namespaces"' "$WORKER_CONFIG" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
 if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID" ]; then
-  if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$KV_NAMESPACE_NAME\""; then
-    wrangler kv namespace create "$KV_NAMESPACE_NAME" >/dev/null
+  KV_ID="$(kv_namespace_id "$KV_NAMESPACE_NAME" || true)"
+  if [ -z "$KV_ID" ]; then
+    wrangler kv namespace create "$KV_NAMESPACE_NAME"
     echo "    created namespace"
+    KV_ID="$(kv_namespace_id "$KV_NAMESPACE_NAME" || true)"
   else
     echo "    found existing namespace"
   fi
-  KV_ID=$(wrangler kv namespace list --json 2>/dev/null | node -e "
-    let s = '';
-    process.stdin.on('data', (d) => { s += d; });
-    process.stdin.on('end', () => {
-      try {
-        const list = JSON.parse(s);
-        const ns = list.find((n) => n.title === '$KV_NAMESPACE_NAME');
-        if (ns) console.log(ns.id);
-      } catch {}
-    });
-  ")
-  if [ -n "${KV_ID:-}" ]; then
+  if [ -n "$KV_ID" ]; then
     node -e "
       const fs = require('fs');
       let src = fs.readFileSync('$WORKER_CONFIG', 'utf8');
-      src = src.replace(/(\"kv_namespaces\"[\s\S]*?\"id\": *)\"[^\"]*\"/, '\$1\"$KV_ID\"');
+      src = src.replace(/(\"kv_namespaces\"[\s\S]*?\"id\": *)\"[^\"]*\"/, '\\$1\"$KV_ID\"');
       fs.writeFileSync('$WORKER_CONFIG', src);
     "
     echo "    wrote id into $WORKER_CONFIG"
   else
-    echo "    WARNING: could not resolve KV namespace id — set it manually in $WORKER_CONFIG" >&2
+    echo "    ERROR: Cloudflare created/has the KV namespace but its ID could not be read. Check Workers KV read permission; no deployment attempted." >&2
+    exit 1
   fi
 else
   echo "    already configured, id=$CURRENT_KV_ID"
@@ -123,35 +138,26 @@ fi
 
 # ── KV namespace (media storage) ────────────────────────────────────────
 echo "==> KV namespace ($MEDIA_KV_BINDING)..."
-if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$MEDIA_KV_NAMESPACE_NAME\""; then
-  wrangler kv namespace create "$MEDIA_KV_NAMESPACE_NAME" >/dev/null
+MEDIA_KV_ID="$(kv_namespace_id "$MEDIA_KV_NAMESPACE_NAME" || true)"
+if [ -z "$MEDIA_KV_ID" ]; then
+  wrangler kv namespace create "$MEDIA_KV_NAMESPACE_NAME"
   echo "    created namespace"
+  MEDIA_KV_ID="$(kv_namespace_id "$MEDIA_KV_NAMESPACE_NAME" || true)"
 else
   echo "    found existing namespace"
 fi
-MEDIA_KV_ID=$(wrangler kv namespace list --json 2>/dev/null | node -e "
-  let s = '';
-  process.stdin.on('data', (d) => { s += d; });
-  process.stdin.on('end', () => {
-    try {
-      const list = JSON.parse(s);
-      const ns = list.find((n) => n.title === '$MEDIA_KV_NAMESPACE_NAME');
-      if (ns) console.log(ns.id);
-    } catch {}
-  });
-")
-if [ -n "${MEDIA_KV_ID:-}" ]; then
+if [ -n "$MEDIA_KV_ID" ]; then
   node -e "
     const fs = require('fs');
     for (const path of ['$WORKER_CONFIG', '$WEB_CONFIG']) {
       let src = fs.readFileSync(path, 'utf8');
-      src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\$1\"$MEDIA_KV_ID\"');
+      src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\\$1\"$MEDIA_KV_ID\"');
       fs.writeFileSync(path, src);
     }
   "
   echo "    wrote id into both Worker and web configs"
 else
-  echo "    WARNING: could not resolve media KV namespace id — setup cannot continue safely" >&2
+  echo "    ERROR: Cloudflare media KV namespace ID could not be resolved; no deployment attempted." >&2
   exit 1
 fi
 # ── Run D1 migrations (remote) ───────────────────────────────────────────
