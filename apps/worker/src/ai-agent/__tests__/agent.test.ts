@@ -30,7 +30,7 @@ describe("catalog price replies", () => {
       "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM",
       "Precio publicado: 150 USD",
       "Disponibilidad publicada: Disponible",
-    ].join("\\n"),
+    ].join("\n"),
   }];
   const freshSync = { stage: "completed", updatedAt: "2026-11-23T09:55:00Z" };
 
