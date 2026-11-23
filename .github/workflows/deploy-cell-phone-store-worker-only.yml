@@ -86,7 +86,7 @@ jobs:
           NODE
 
       - name: Generate Worker types
-        run: pnpm --filter worker cf-typegen:ci
+        run: pnpm --filter web --filter worker cf-typegen:ci
 
       - name: Lint
         run: pnpm lint
