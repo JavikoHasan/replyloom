@@ -200,16 +200,16 @@ export function extractListingUrls(html: string): string[] {
   };
 
   // Normal absolute or relative links, including HTML-escaped attributes.
-  for (const match of html.matchAll(/href\\s*=\\s*(["'])(.*?)\\1/gi)) {
+  for (const match of html.matchAll(/href\s*=\s*(["'])(.*?)\1/gi)) {
     addPath(match[2]);
   }
 
   // Listing cards expose their database UUID even if their clickable anchor
   // is omitted, lazy-rendered, or changed by a future homepage redesign.
-  for (const match of html.matchAll(/data-supabase-id\\s*=\\s*(["'])([0-9a-f-]{36})\\1/gi)) {
+  for (const match of html.matchAll(/data-supabase-id\s*=\s*(["'])([0-9a-f-]{36})\1/gi)) {
     addPath(`/anuncio/${match[2]}`);
   }
-  for (const match of html.matchAll(/id\\s*=\\s*(["'])anuncio-publico-([0-9a-f-]{36})\\1/gi)) {
+  for (const match of html.matchAll(/id\s*=\s*(["'])anuncio-publico-([0-9a-f-]{36})\1/gi)) {
     addPath(`/anuncio/${match[2]}`);
   }
 
