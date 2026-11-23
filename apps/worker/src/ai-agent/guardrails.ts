@@ -139,9 +139,21 @@ const SENSITIVE_PATTERNS: RegExp[] = [
 
 export function redactSensitive(text: string): string {
   const redacted = SENSITIVE_PATTERNS.reduce((t, re) => t.replace(re, "[redacted]"), text);
+  // Internal operating notes must never appear in customer-facing copy.
+  let customerText = redacted
+    .replace(/\(\s*no\s+convertir\s+monedas\s*\)/gi, "")
+    .replace(/\bno\s+convertir\s+monedas\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // Replace common model-generated English handoff strings with a Spanish,
+  // business-appropriate response. This is a final output safeguard.
+  customerText = customerText.replace(
+    /\b(?:let me get|let me connect|i(?:'|’)ll get)\s+(?:a\s+)?(?:team member|human|representative|support agent)\s+to\s+help\s+with\s+that\.?/gi,
+    "Para confirmar esa información, nuestro vendedor puede ayudarte directamente."
+  );
   // Enforce the store's official-site-only link rule at output time, not
   // only through prompting. Keep HTTPS links on the exact Revolico origin.
-  return redacted.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
+  return customerText.replace(/https?:\/\/[^\s<>"']+/gi, (raw) => {
     const trailing = raw.match(/[),.!?;:]+$/)?.[0] ?? "";
     const candidate = trailing ? raw.slice(0, -trailing.length) : raw;
     try {
