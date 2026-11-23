@@ -9,6 +9,7 @@ const STATE_PREFIX = "revolico:catalog-sync:";
 const CATALOG_DOC_ID = "revolico-sagua-public-catalog";
 const BATCH_SIZE = 4;
 const STATE_TTL_SECONDS = 6 * 3600;
+const SYNC_COOLDOWN_SECONDS = 6 * 3600;
 const MAX_LISTINGS = 60;
 const STATUS_KEY = `${STATE_PREFIX}status`;
 export interface CatalogSyncStatus {
@@ -90,6 +91,13 @@ export async function syncRevolicoCatalog(env: Env): Promise<void> {
 
 async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void> {
   const key = `${STATE_PREFIX}${workspaceId}`;
+  const lastCompletedKey = `${STATE_PREFIX}last-completed:${workspaceId}`;
+  const lastCompleted = Number(await env.REPLY_CACHE.get(lastCompletedKey));
+  // A complete public-catalog scan stays fresh for six hours. Without this
+  // guard the 5-minute cron restarted the entire scan immediately after every
+  // completion, needlessly writing progress/status keys all day.
+  if (Number.isFinite(lastCompleted) && lastCompleted > 0 &&
+      Date.now() - lastCompleted < SYNC_COOLDOWN_SECONDS * 1000) return;
   let state = await env.REPLY_CACHE.get<SyncState>(key, "json");
 
   if (!isValidState(state)) {
@@ -137,7 +145,15 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     rejectedOrNotOwned: batch.length - accepted.length,
     progress: `${end}/${state.urls.length}`,
   });
-  await saveStatus(env, { stage: "reading_listings", message: "Leyendo y verificando las fichas públicas.", discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length });
+  if (state.cursor === 0) {
+    await saveStatus(env, {
+      stage: "reading_listings",
+      message: "Leyendo y verificando las fichas públicas.",
+      discoveredUrls: state.urls.length,
+      processedUrls: 0,
+      acceptedListings: 0,
+    });
+  }
   const next: SyncState = { ...state, cursor: end, records };
 
   if (end < state.urls.length) {
@@ -174,6 +190,9 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   });
 
   await saveStatus(env, { stage: "completed", message: "Catálogo guardado correctamente en Knowledge.", discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length, chunks: ingested.chunks });
+  await env.REPLY_CACHE.put(lastCompletedKey, String(Date.now()), {
+    expirationTtl: SYNC_COOLDOWN_SECONDS,
+  });
   console.info("[revolico-catalog-sync] Catalog document ingested:", {
     workspaceId,
     documentId: CATALOG_DOC_ID,
