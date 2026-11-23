@@ -63,19 +63,52 @@ export async function retrieveContext(
 
   const result = await statement.all<{ id: string; text: string; source: string; doc_id?: string | null }>();
   const normalizedQuery = normalizeText(query).trim();
-  const ranked = result.results
+
+  // When a customer names a specific model (F07, A07, DELTA 2, iPhone 13,
+  // Redmi 14C, etc.), generic matches such as "Samsung" or "4GB" must never
+  // crowd the requested product out of the small RAG context window. Keep only
+  // chunks whose PRODUCTO heading contains that exact model identifier, plus
+  // explicitly pinned policy docs. If no exact listing exists, fail closed:
+  // do not let another model's listing be used to answer this question.
+  const compactQuery = normalizedQuery.replace(/[^a-z0-9]/g, "");
+  const modelKeys = [
+    ...(compactQuery.match(/[a-z]{1,8}\\d{1,4}[a-z0-9]*/g) ?? []),
+    ...(compactQuery.match(/\\d{1,3}[a-z]{1,4}/g) ?? []),
+  ];
+  const uniqueModelKeys = [...new Set(modelKeys)];
+  let candidateRows = result.results;
+  if (sourcePrefix && uniqueModelKeys.length > 0) {
+    const exactProductRows = result.results.filter((row) =>
+      row.text.split(/(?=PRODUCTO:\\s*)/).some((block) => {
+        const heading = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
+        const compactHeading = normalizeText(heading).replace(/[^a-z0-9]/g, "");
+        return uniqueModelKeys.some((key) => compactHeading.includes(key));
+      }),
+    );
+    if (exactProductRows.length === 0) return [];
+    const pinnedRows = result.results.filter((row) => row.doc_id && includeDocIds.includes(row.doc_id));
+    candidateRows = [...exactProductRows, ...pinnedRows.filter((row) => !exactProductRows.some((match) => match.id === row.id))];
+  }
+
+  const ranked = candidateRows
     .map((row) => {
       const normalizedChunk = normalizeText(row.text);
       const matchedTerms = terms.filter((term) => normalizedChunk.includes(term)).length;
       const phraseMatch = normalizedQuery.length >= 4 && normalizedChunk.includes(normalizedQuery);
       const isPinnedPolicy = Boolean(row.doc_id && includeDocIds.includes(row.doc_id));
-      const score = isPinnedPolicy ? 1 : phraseMatch ? 1 : matchedTerms / terms.length;
+      const heading = row.text.split(/(?=PRODUCTO:\\s*)/).map((block) => block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "").join(" ");
+      const compactHeading = normalizeText(heading).replace(/[^a-z0-9]/g, "");
+      const exactModelMatch = uniqueModelKeys.some((key) => compactHeading.includes(key));
+      const score = isPinnedPolicy ? 1 : exactModelMatch ? 2 : phraseMatch ? 1 : matchedTerms / terms.length;
       return { id: row.id, text: row.text, source: row.source, score };
     })
     .filter((chunk) => chunk.score >= 0.2)
     .sort((a, b) => b.score - a.score);
 
-  return ranked.slice(0, Math.max(1, Math.min(config.maxContextChunks, 8)));
+  // Store catalog lookups can safely use the full supported context window;
+  // the exact-model filter above keeps it focused instead of adding noise.
+  const contextLimit = sourcePrefix ? 8 : config.maxContextChunks;
+  return ranked.slice(0, Math.max(1, Math.min(contextLimit, 8)));
 }
 
 /**
