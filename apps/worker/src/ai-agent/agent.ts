@@ -368,7 +368,7 @@ export function isSimpleGreeting(message: string): boolean {
     .replace(/[¿?¡!.,;:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return /^(?:hola(?: buenas(?: tardes| noches)?| buenos dias)?|buenas(?: tardes| noches)?|buenos dias|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)(?: 😊| 🙏)?$/.test(normalized);
+  return /^(?:hola|ola)(?: buenas(?: tardes| noches)?| buenos dias)?|buenas(?: tardes| noches)?|buenos dias|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)(?: 😊| 🙏)?$/.test(normalized);
 }
 
 /**
