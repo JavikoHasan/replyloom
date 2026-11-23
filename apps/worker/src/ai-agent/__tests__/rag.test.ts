@@ -75,6 +75,52 @@ describe("D1 knowledge retrieval", () => {
     expect(bind).toHaveBeenCalledWith("workspace-1", "revolico-sagua.pages.dev%", "samsung", "a17");
   });
 
+
+
+  it("includes a pinned phone policy even when its wording does not match the product query", async () => {
+    const all = vi.fn().mockResolvedValue({
+      results: [
+        {
+          id: "catalog-f07",
+          text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\\nPrecio publicado: 150 USD",
+          source: "revolico-sagua.pages.dev (catalog)",
+          doc_id: "revolico-sagua-public-catalog",
+        },
+        {
+          id: "phone-policy",
+          text: "Todos los teléfonos celulares incluyen cover de fábrica, cable, cargador, mica protectora de cristal templado y 15 días de garantía.",
+          source: "Condiciones de venta y garantía de teléfonos",
+          doc_id: "condiciones-venta-telefonos",
+        },
+      ],
+    });
+    const bind = vi.fn().mockReturnValue({ all });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const env = { DB: { prepare } } as any;
+    const config = { workspaceId: "workspace-1", maxContextChunks: 4 } as any;
+
+    const matches = await retrieveContext(
+      env,
+      config,
+      "Qué incluye la compra del Samsung F07?",
+      "revolico-sagua.pages.dev",
+      ["condiciones-venta-telefonos"],
+    );
+
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("doc_id IN (?)"));
+    expect(bind).toHaveBeenCalledWith(
+      "workspace-1",
+      "revolico-sagua.pages.dev%",
+      "incluye",
+      "compra",
+      "samsung",
+      "f07",
+      "condiciones-venta-telefonos",
+    );
+    expect(matches.map((chunk: { id: string }) => chunk.id)).toContain("phone-policy");
+    expect(matches.map((chunk: { id: string }) => chunk.id)).toContain("catalog-f07");
+  });
+
   it("returns no context when there are no meaningful search terms", async () => {
     const prepare = vi.fn();
     const env = { DB: { prepare } } as any;
