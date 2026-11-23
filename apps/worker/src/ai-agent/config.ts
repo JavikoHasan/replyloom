@@ -39,11 +39,6 @@ export const defaultConfig = {
   replyInGroups: false,
 } as const;
 
-const CONFIG_CACHE_PREFIX = "agent:cfg:";
-// Config is tiny and changes rarely — a short KV cache dodges a D1 read on
-// every single inbound message (the hot per-message cost).
-const CONFIG_CACHE_TTL = 60;
-
 export const cachePrefixes = {
   replies: "agent:reply:",
 } as const;
@@ -53,15 +48,13 @@ export function isAgentEnabled(config: AgentConfig): boolean {
 }
 
 /**
- * Loads + merges a workspace's agent config with defaults. Cached in KV for
- * `CONFIG_CACHE_TTL` seconds; PUT /agent/config invalidates the entry.
- * Never throws for a bad row — worst case you get defaults with enabled=false,
- * which is the safe (do-nothing) posture.
+ * Loads + merges a workspace's agent config with defaults. The isolate-local
+ * cache avoids repeated D1 reads without spending a Workers KV write every
+ * time a new isolate starts. Config changes invalidate this isolate's entry;
+ * other isolates refresh within 60 seconds.
  */
-// In-isolate layer in front of KV. Disabled configs are cached too: the
-// agent is off for most workspaces, and every inbound message without a
-// keyword match used to cost 2 D1 reads (agent_configs + workspace name)
-// because only *enabled* configs were ever cached.
+// In-isolate cache. Disabled configs are cached too: the agent is off for
+// most workspaces, and repeated messages should not require D1 reads.
 const memoryConfigCache = new TtlCache<AgentConfig>(60_000);
 
 export async function loadAgentConfig(env: AgentEnv, workspaceId: string): Promise<AgentConfig> {
@@ -69,35 +62,12 @@ export async function loadAgentConfig(env: AgentEnv, workspaceId: string): Promi
 }
 
 async function loadAgentConfigUncached(env: AgentEnv, workspaceId: string): Promise<AgentConfig> {
-  const key = `${CONFIG_CACHE_PREFIX}${workspaceId}`;
-  try {
-    const cached = await env.REPLY_CACHE.get(key);
-    if (cached) {
-      const parsed = JSON.parse(cached) as AgentConfig;
-      return {
-        ...parsed,
-        models: {
-          classifier: normalizeModelId(parsed.models.classifier),
-          generator: normalizeModelId(parsed.models.generator),
-          embedding: normalizeModelId(parsed.models.embedding),
-        },
-      };
-    }
-  } catch {
-    // stale/garbled cache entry — fall through and rebuild
-  }
-  const config = await buildAgentConfig(env, workspaceId);
-  if (config.enabled) {
-    await env.REPLY_CACHE
-      .put(key, JSON.stringify(config), { expirationTtl: CONFIG_CACHE_TTL })
-      .catch(() => {});
-  }
-  return config;
+  return buildAgentConfig(env, workspaceId);
 }
 
-export function invalidateConfigCache(env: AgentEnv, workspaceId: string): Promise<unknown> {
+export function invalidateConfigCache(_env: AgentEnv, workspaceId: string): Promise<void> {
   memoryConfigCache.invalidate(workspaceId);
-  return env.REPLY_CACHE.delete(`${CONFIG_CACHE_PREFIX}${workspaceId}`).catch(() => {});
+  return Promise.resolve();
 }
 
 async function buildAgentConfig(env: AgentEnv, workspaceId: string): Promise<AgentConfig> {
