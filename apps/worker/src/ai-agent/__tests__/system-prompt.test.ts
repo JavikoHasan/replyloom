@@ -33,6 +33,16 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Never set, schedule, promise, or confirm delivery dates or hours");
   });
 
+  it("injects the complete permanent store policy even when Knowledge has no chunks", () => {
+    const config = { ...baseConfig, businessName: "Cell Phone Store - Sagua la Grande" };
+    const prompt = buildSystemPrompt(config, [], false);
+    expect(prompt).toContain("PERMANENT STORE POLICY — ALWAYS APPLY");
+    expect(prompt).toContain("cover de fábrica, cable, cargador original y mica protectora de cristal templado");
+    expect(prompt).toContain("15 días de garantía");
+    expect(prompt).toContain("El negocio no acepta teléfonos nuevos o usados como pago");
+    expect(prompt).toContain("No importes contactos, chats previos");
+  });
+
   it("includes custom system prompt for ordinary workspaces", () => {
     const config = { ...baseConfig, systemPrompt: "Always respond in Spanish." };
     const prompt = buildSystemPrompt(config, [], false);
