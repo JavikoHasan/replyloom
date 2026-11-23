@@ -21,6 +21,14 @@ function normalizeText(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+export function shouldFallbackToCatalog(
+  sourcePrefix: string | undefined,
+  modelKeys: string[],
+  matchingCatalogRows: number,
+): boolean {
+  return Boolean(sourcePrefix) && modelKeys.length === 0 && matchingCatalogRows === 0;
+}
+
 export function queryTerms(query: string): string[] {
   const rawTerms = normalizeText(query).match(/[\p{L}\p{N}]{2,}/gu) ?? [];
   // Normalize common Spanish plurals so "productos" matches "PRODUCTO:"
@@ -93,7 +101,7 @@ export async function retrieveContext(
   const matchingCatalogRows = sourcePrefix
     ? result.results.filter((row) => row.source.startsWith(sourcePrefix))
     : [];
-  if (sourcePrefix && uniqueModelKeys.length === 0 && matchingCatalogRows.length === 0) {
+  if (shouldFallbackToCatalog(sourcePrefix, uniqueModelKeys, matchingCatalogRows.length)) {
     const fallback = await env.DB.prepare(
       `SELECT id, text, source, doc_id FROM doc_chunks
        WHERE workspace_id = ? AND source LIKE ?
