@@ -44,8 +44,7 @@ export async function syncRevolicoCatalog(env: Env): Promise<void> {
     `SELECT agent_configs.workspace_id
      FROM agent_configs
      LEFT JOIN organization ON organization.id = agent_configs.workspace_id
-     WHERE agent_configs.enabled = 1
-       AND COALESCE(NULLIF(TRIM(agent_configs.business_name), ''), organization.name) = ?
+     WHERE COALESCE(NULLIF(TRIM(agent_configs.business_name), ''), organization.name) = ?
      LIMIT 2`,
   ).bind(BUSINESS_NAME).all<{ workspace_id: string }>();
 
@@ -88,7 +87,9 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   // Only publish a complete scan. If any request fails, Promise.all rejects and
   // the old catalog remains intact; the next cron tick retries the same batch.
   const config = await loadAgentConfig(env, workspaceId);
-  if (!config.enabled || config.businessName !== BUSINESS_NAME) {
+  // Catalog synchronization is independent of the agent's enabled state.
+  // Preload fresh public listings while the owner configures and tests the agent.
+  if (config.businessName !== BUSINESS_NAME) {
     await env.REPLY_CACHE.delete(key);
     return;
   }
