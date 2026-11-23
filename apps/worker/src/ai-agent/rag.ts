@@ -75,7 +75,7 @@ export async function retrieveContext(
     ...(normalizedQuery.match(/\b\d{1,3}[a-z]{1,4}\b/g) ?? []),
   ]
     .map((key) => key.replace(/[^a-z0-9]/g, ""))
-    .filter((key) => !/^\\d+(?:gb|mb|ram|rom)$/i.test(key));
+    .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/i.test(key));
   const uniqueModelKeys = [...new Set(modelKeys)];
   let candidateRows = result.results;
   if (sourcePrefix && uniqueModelKeys.length > 0) {
