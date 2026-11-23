@@ -55,6 +55,27 @@ export class Scheduler implements DurableObject {
       await this.arm();
       return Response.json({ ok: true });
     }
+    // Persist the watchdog sweep cursor in Durable Object storage rather than
+    // Workers KV. The cursor changes on every five-minute sweep when many
+    // WhatsApp sessions are connected, which otherwise burns the daily KV
+    // write allowance even when the agent sends no replies.
+    if (request.method === "GET" && url.pathname === "/watchdog-cursor") {
+      const cursor = await this.state.storage.get<string>("watchdog-session-cursor") ?? "";
+      return Response.json({ cursor });
+    }
+    if (request.method === "POST" && url.pathname === "/watchdog-cursor") {
+      let body: { cursor?: unknown };
+      try {
+        body = await request.json() as { cursor?: unknown };
+      } catch {
+        return new Response("Invalid JSON", { status: 400 });
+      }
+      if (typeof body.cursor !== "string" || body.cursor.length > 256) {
+        return new Response("Invalid cursor", { status: 400 });
+      }
+      await this.state.storage.put("watchdog-session-cursor", body.cursor);
+      return Response.json({ ok: true });
+    }
     return new Response("Not found", { status: 404 });
   }
 
