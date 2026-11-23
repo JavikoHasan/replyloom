@@ -75,9 +75,9 @@ jobs:
           const path = 'apps/worker/wrangler.jsonc';
           let config = fs.readFileSync(path, 'utf8');
           const original = config;
-          config = config.replace(/("database_id"\\s*:\\s*)"[^"]+"/, (_m, prefix) => prefix + JSON.stringify(database.uuid));
-          config = config.replace(/("binding"\\s*:\\s*"REPLY_CACHE"\\s*,\\s*"id"\\s*:\\s*)"[^"]+"/, (_m, prefix) => prefix + JSON.stringify(reply.id));
-          config = config.replace(/("binding"\\s*:\\s*"MEDIA_STORE"\\s*,\\s*"id"\\s*:\\s*)"[^"]+"/, (_m, prefix) => prefix + JSON.stringify(media.id));
+          config = config.replace(/("database_id"\s*:\s*)"[^"]+"/, (_m, prefix) => prefix + JSON.stringify(database.uuid));
+          config = config.replace(/("binding"\s*:\s*"REPLY_CACHE"\s*,\s*"id"\s*:\s*)"[^"]+"/, (_m, prefix) => prefix + JSON.stringify(reply.id));
+          config = config.replace(/("binding"\s*:\s*"MEDIA_STORE"\s*,\s*"id"\s*:\s*)"[^"]+"/, (_m, prefix) => prefix + JSON.stringify(media.id));
           if (config === original || config.includes('REPLACE_WITH_')) {
             throw new Error('Worker config still contains unresolved resource placeholders.');
           }
