@@ -33,7 +33,7 @@ export interface MessageEventContext {
   broadcast: (data: Record<string, unknown>) => void;
   /** Anti-ban: per-contact auto-reply loop breaker + session pace. */
   allowAutoReply?: (jid: string) => boolean;
-  /** Human messages pause this chat's automatic replies for a short cooldown. */
+  /** Any human outbound message pauses automatic replies store-wide for a short cooldown. */
   pauseAutoReply?: (jid: string) => Promise<void>;
   isAutoReplyPaused?: (jid: string) => Promise<boolean>;
   /** Prevent the bot's own outgoing echo from being mistaken for a human reply. */
@@ -200,6 +200,16 @@ export async function processLiveMessage(
       });
       if (replyText && ctx.allowAutoReply && !ctx.allowAutoReply(parsed.remoteJid)) {
         replyText = null; // loop breaker / pace: skip this auto-reply
+      }
+      // Re-check immediately before sending: a human may have taken over
+      // while the AI was generating this response. Fail closed on read errors.
+      if (replyText && ctx.isAutoReplyPaused) {
+        try {
+          if (await ctx.isAutoReplyPaused(parsed.remoteJid)) replyText = null;
+        } catch (err: any) {
+          replyText = null;
+          ctx.log("warn", `Could not re-check global human takeover pause; reply suppressed: ${err?.message || err}`);
+        }
       }
       if (replyText) {
         ctx.log("info", "AI auto-reply firing");
