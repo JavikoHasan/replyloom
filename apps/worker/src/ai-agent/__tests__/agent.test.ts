@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, parseToolArgs } from "../agent";
+import { buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, isSimpleGreeting, parseToolArgs } from "../agent";
+import { queryTerms } from "../rag";
 
 describe("parseToolArgs", () => {
   it("passes objects through", () => {
@@ -98,5 +99,28 @@ describe("store policy-only replies", () => {
     expect(buildStorePolicyOnlyReply("¿Tienen EcoFlow en venta?")).toBeNull();
     expect(buildStorePolicyOnlyReply("¿Cuánto cuesta la moto?")).toBeNull();
     expect(buildStorePolicyOnlyReply("Hola")).toBeNull();
+  });
+});
+
+
+describe("natural Spanish greeting recognition", () => {
+  it("recognizes greetings with punctuation and time-of-day", () => {
+    expect(isSimpleGreeting("Hola, buenas tardes.")).toBe(true);
+    expect(isSimpleGreeting("¡Hola!")).toBe(true);
+    expect(isSimpleGreeting("Buenas noches")).toBe(true);
+    expect(isSimpleGreeting("Buenos días.")).toBe(true);
+  });
+
+  it("does not mistake commercial questions for greetings", () => {
+    expect(isSimpleGreeting("¿Qué productos tienen a la venta?")).toBe(false);
+    expect(isSimpleGreeting("¿Me pueden ayudar a comprar un equipo?")).toBe(false);
+  });
+});
+
+describe("Spanish catalog query normalization", () => {
+  it("singularizes common plural words to match catalog headings", () => {
+    expect(queryTerms("¿Qué productos tienen a la venta?")).toContain("producto");
+    expect(queryTerms("¿Qué anuncios tienen publicados?")).toContain("anuncio");
+    expect(queryTerms("¿Tienen teléfonos disponibles?")).toContain("telefono");
   });
 });
