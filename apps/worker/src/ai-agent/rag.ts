@@ -70,11 +70,10 @@ export async function retrieveContext(
   // chunks whose PRODUCTO heading contains that exact model identifier, plus
   // explicitly pinned policy docs. If no exact listing exists, fail closed:
   // do not let another model's listing be used to answer this question.
-  const compactQuery = normalizedQuery.replace(/[^a-z0-9]/g, "");
   const modelKeys = [
-    ...(compactQuery.match(/[a-z]{1,8}\d{1,4}[a-z0-9]*/g) ?? []),
-    ...(compactQuery.match(/\d{1,3}[a-z]{1,4}/g) ?? []),
-  ];
+    ...(normalizedQuery.match(/\b[a-z]{1,8}\s*\d{1,4}[a-z0-9]*\b/g) ?? []),
+    ...(normalizedQuery.match(/\b\d{1,3}[a-z]{1,4}\b/g) ?? []),
+  ].map((key) => key.replace(/[^a-z0-9]/g, ""));
   const uniqueModelKeys = [...new Set(modelKeys)];
   let candidateRows = result.results;
   if (sourcePrefix && uniqueModelKeys.length > 0) {
