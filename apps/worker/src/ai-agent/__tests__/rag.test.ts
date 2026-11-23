@@ -121,6 +121,51 @@ describe("D1 knowledge retrieval", () => {
     expect(matches.map((chunk: { id: string }) => chunk.id)).toContain("catalog-f07");
   });
 
+  it("prioritizes the exact requested store model over other catalog products", async () => {
+    const all = vi.fn().mockResolvedValue({ results: [
+      { id: "other-phone", text: "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM\\nPrecio publicado: 190 USD", source: "revolico-sagua.pages.dev (catalog)" },
+      { id: "requested-phone", text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\\nPrecio publicado: 150 USD", source: "revolico-sagua.pages.dev (catalog)" },
+      { id: "phone-policy", text: "Todos los teléfonos incluyen accesorios y 15 días de garantía.", source: "Condiciones", doc_id: "condiciones-venta-telefonos" },
+    ] });
+    const bind = vi.fn().mockReturnValue({ all });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const env = { DB: { prepare } } as any;
+    const config = { workspaceId: "workspace-1", maxContextChunks: 4 } as any;
+
+    const matches = await retrieveContext(
+      env,
+      config,
+      "¿Cuánto cuesta el Samsung F07 de 4GB RAM y 64GB de almacenamiento?",
+      "revolico-sagua.pages.dev",
+      ["condiciones-venta-telefonos"],
+    );
+
+    expect(matches.map((chunk) => chunk.id)).toContain("requested-phone");
+    expect(matches.map((chunk) => chunk.id)).toContain("phone-policy");
+    expect(matches.map((chunk) => chunk.id)).not.toContain("other-phone");
+  });
+
+  it("does not substitute another listing when the requested store model is absent", async () => {
+    const all = vi.fn().mockResolvedValue({ results: [
+      { id: "other-phone", text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM", source: "revolico-sagua.pages.dev (catalog)" },
+      { id: "phone-policy", text: "Todos los teléfonos incluyen accesorios.", source: "Condiciones", doc_id: "condiciones-venta-telefonos" },
+    ] });
+    const bind = vi.fn().mockReturnValue({ all });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const env = { DB: { prepare } } as any;
+    const config = { workspaceId: "workspace-1", maxContextChunks: 4 } as any;
+
+    const matches = await retrieveContext(
+      env,
+      config,
+      "¿Tienen disponible el Samsung A07?",
+      "revolico-sagua.pages.dev",
+      ["condiciones-venta-telefonos"],
+    );
+
+    expect(matches).toEqual([]);
+  });
+
   it("returns no context when there are no meaningful search terms", async () => {
     const prepare = vi.fn();
     const env = { DB: { prepare } } as any;
