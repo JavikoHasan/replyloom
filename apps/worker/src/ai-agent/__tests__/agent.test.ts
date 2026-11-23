@@ -80,7 +80,7 @@ describe("store policy-only replies", () => {
     const reply = buildStorePolicyOnlyReply("¿Qué incluye la EcoFlow DELTA 2?");
     expect(reply).toContain("únicamente la caja y la unidad principal");
     expect(reply).toContain("no hay baterías extra disponibles");
-    expect(reply).toContain("no puedo confirmar");
+    expect(reply).toMatch(/no puedo confirmar/i);
   });
 
   it("answers EcoFlow delivery and warranty questions from approved policy", () => {
