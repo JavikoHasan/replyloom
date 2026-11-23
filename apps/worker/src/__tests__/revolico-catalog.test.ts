@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractListingUrls, parseOwnedListingHtml } from "../revolico-catalog";
+import { extractListingUrls, parseOwnedListingHtml, shouldWriteCatalogStatus } from "../revolico-catalog";
 
 const url = "https://revolico-sagua.pages.dev/anuncio/a1b1aa34-ccc3-44d6-9e25-ebb7d55624a5";
 const validHtml = `
@@ -19,6 +19,30 @@ const validHtml = `
 </article>`;
 
 describe("Revolico public catalog import safety", () => {
+  it("does not rewrite an unchanged status on every five-minute cron tick", () => {
+    const current = {
+      stage: "workspace_missing",
+      message: "No se encontró el espacio de trabajo de Cell Phone Store.",
+      updatedAt: "2026-11-23T12:00:00.000Z",
+      workspaceMatches: 0,
+    };
+    expect(shouldWriteCatalogStatus(current, {
+      stage: current.stage,
+      message: current.message,
+      workspaceMatches: 0,
+    }, Date.parse("2026-11-23T12:05:00.000Z"))).toBe(false);
+    expect(shouldWriteCatalogStatus(current, {
+      stage: "error",
+      message: "Error distinto",
+      workspaceMatches: 0,
+    }, Date.parse("2026-11-23T12:05:00.000Z"))).toBe(true);
+    expect(shouldWriteCatalogStatus(current, {
+      stage: current.stage,
+      message: current.message,
+      workspaceMatches: 0,
+    }, Date.parse("2026-11-23T18:01:00.000Z"))).toBe(true);
+  });
+
   it("extracts only same-site listing detail URLs", () => {
     const html = `<a href="${url}">ad</a><a href="https://evil.example/anuncio/12345678-1234-1234-1234-123456789abc">bad</a>`;
     expect(extractListingUrls(html)).toEqual([url]);
