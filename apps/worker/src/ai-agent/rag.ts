@@ -22,7 +22,7 @@ function normalizeText(value: string): string {
 }
 
 export function queryTerms(query: string): string[] {
-  const rawTerms = normalizeText(query).match(/[\\p{L}\\p{N}]{2,}/gu) ?? [];
+  const rawTerms = normalizeText(query).match(/[\p{L}\p{N}]{2,}/gu) ?? [];
   // Normalize common Spanish plurals so "productos" matches "PRODUCTO:"
   // and "anuncios" matches "ANUNCIO" in the public catalog.
   const singularTerms = rawTerms.map((term) => {
