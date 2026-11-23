@@ -213,7 +213,7 @@ export function extractListingUrls(html: string): string[] {
   // Parse route-shaped references directly from the HTML, including absolute
   // URLs, relative paths, JSON-LD, and escaped script fragments. Do not depend
   // on a particular anchor attribute order or quote style.
-  for (const match of html.matchAll(/(?:https?:\/\/revolico-sagua\.pages\.dev)?\/anuncio\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi)) {
+  for (const match of html.matchAll(/(?<![a-z0-9.-])(?:https?:\/\/revolico-sagua\.pages\.dev)?\/anuncio\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi)) {
     addId(match[1]);
   }
 
