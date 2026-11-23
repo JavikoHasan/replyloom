@@ -140,12 +140,6 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   const config = await loadAgentConfig(env, workspaceId);
   // Catalog synchronization is independent of the agent's enabled state.
   // Preload fresh public listings while the owner configures and tests the agent.
-  if (config.businessName !== BUSINESS_NAME) {
-    await saveStatus(env, { stage: "business_name_mismatch", message: "El nombre comercial de la configuración no coincide con Cell Phone Store - Sagua la Grande.", discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length });
-    await env.REPLY_CACHE.delete(key);
-    return;
-  }
-
   const text = [
     `INFORMACIÓN DEL PROYECTO: REVOLICO SAGUA LA GRANDE es un proyecto local joven y en crecimiento para facilitar que las personas encuentren y publiquen anuncios. La página oficial es ${SITE_ORIGIN}. La aplicación oficial para Android se encuentra en ${SITE_ORIGIN}/download-apk. Los clientes pueden conocer el proyecto, visitar la página y compartirla voluntariamente con otras personas para ayudar a que llegue a más gente.`,
     `CATÁLOGO PÚBLICO DE ${BUSINESS_NAME}`,
