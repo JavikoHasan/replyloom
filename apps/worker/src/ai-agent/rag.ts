@@ -72,15 +72,15 @@ export async function retrieveContext(
   // do not let another model's listing be used to answer this question.
   const compactQuery = normalizedQuery.replace(/[^a-z0-9]/g, "");
   const modelKeys = [
-    ...(compactQuery.match(/[a-z]{1,8}\\d{1,4}[a-z0-9]*/g) ?? []),
-    ...(compactQuery.match(/\\d{1,3}[a-z]{1,4}/g) ?? []),
+    ...(compactQuery.match(/[a-z]{1,8}\d{1,4}[a-z0-9]*/g) ?? []),
+    ...(compactQuery.match(/\d{1,3}[a-z]{1,4}/g) ?? []),
   ];
   const uniqueModelKeys = [...new Set(modelKeys)];
   let candidateRows = result.results;
   if (sourcePrefix && uniqueModelKeys.length > 0) {
     const exactProductRows = result.results.filter((row) =>
-      row.text.split(/(?=PRODUCTO:\\s*)/).some((block) => {
-        const heading = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
+      row.text.split(/(?=PRODUCTO:\s*)/).some((block) => {
+        const heading = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
         const compactHeading = normalizeText(heading).replace(/[^a-z0-9]/g, "");
         return uniqueModelKeys.some((key) => compactHeading.includes(key));
       }),
@@ -96,7 +96,7 @@ export async function retrieveContext(
       const matchedTerms = terms.filter((term) => normalizedChunk.includes(term)).length;
       const phraseMatch = normalizedQuery.length >= 4 && normalizedChunk.includes(normalizedQuery);
       const isPinnedPolicy = Boolean(row.doc_id && includeDocIds.includes(row.doc_id));
-      const heading = row.text.split(/(?=PRODUCTO:\\s*)/).map((block) => block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "").join(" ");
+      const heading = row.text.split(/(?=PRODUCTO:\s*)/).map((block) => block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "").join(" ");
       const compactHeading = normalizeText(heading).replace(/[^a-z0-9]/g, "");
       const exactModelMatch = uniqueModelKeys.some((key) => compactHeading.includes(key));
       const score = isPinnedPolicy ? 1 : exactModelMatch ? 2 : phraseMatch ? 1 : matchedTerms / terms.length;
