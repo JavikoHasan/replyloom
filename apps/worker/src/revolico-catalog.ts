@@ -7,23 +7,53 @@ const BUSINESS_NAME = "Cell Phone Store - Sagua la Grande";
 const OWNER_WHATSAPP_DIGITS = "5354590237";
 const STATE_PREFIX = "revolico:catalog-sync:";
 const CATALOG_DOC_ID = "revolico-sagua-public-catalog";
-const BATCH_SIZE = 4;
+const BATCH_SIZE = 10;
 const STATE_TTL_SECONDS = 6 * 3600;
 const SYNC_COOLDOWN_SECONDS = 6 * 3600;
 const MAX_LISTINGS = 60;
 const STATUS_KEY = `${STATE_PREFIX}status`;
+const STATUS_REFRESH_INTERVAL_SECONDS = 6 * 3600;
 export interface CatalogSyncStatus {
   stage: string;
   message: string;
   updatedAt: string;
+  workspaceId?: string;
   workspaceMatches?: number;
   discoveredUrls?: number;
   processedUrls?: number;
   acceptedListings?: number;
   chunks?: number;
 }
+export function shouldWriteCatalogStatus(
+  current: CatalogSyncStatus | null,
+  next: Omit<CatalogSyncStatus, "updatedAt">,
+  now = Date.now(),
+): boolean {
+  if (!current) return true;
+  const fields = [
+    "stage", "message", "workspaceId", "workspaceMatches", "discoveredUrls",
+    "processedUrls", "acceptedListings", "chunks",
+  ] as const;
+  const unchanged = fields.every((field) => current[field] === next[field]);
+  if (!unchanged) return true;
+  const lastUpdated = Date.parse(current.updatedAt);
+  return !Number.isFinite(lastUpdated) ||
+    now - lastUpdated >= STATUS_REFRESH_INTERVAL_SECONDS * 1000;
+}
+
 async function saveStatus(env: Env, status: Omit<CatalogSyncStatus, "updatedAt">): Promise<void> {
-  await env.REPLY_CACHE.put(STATUS_KEY, JSON.stringify({ ...status, updatedAt: new Date().toISOString() } satisfies CatalogSyncStatus), { expirationTtl: 7 * 24 * 3600 });
+  // Cron runs every five minutes. Repeated identical errors (or a missing
+  // workspace) must not generate 288 identical KV writes per day.
+  const current = await getCatalogSyncStatus(env).catch(() => null);
+  if (!shouldWriteCatalogStatus(current, status)) return;
+  const next = { ...status, updatedAt: new Date().toISOString() } satisfies CatalogSyncStatus;
+  try {
+    await env.REPLY_CACHE.put(STATUS_KEY, JSON.stringify(next), { expirationTtl: 7 * 24 * 3600 });
+  } catch (error) {
+    // Status is diagnostic only: a KV quota error must never abort catalog
+    // ingestion or the rest of the scheduled Worker tasks.
+    console.warn("[revolico-catalog-sync] Unable to persist status:", error);
+  }
 }
 export async function getCatalogSyncStatus(env: Env): Promise<CatalogSyncStatus | null> {
   return env.REPLY_CACHE.get<CatalogSyncStatus>(STATUS_KEY, "json");
@@ -148,6 +178,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   if (state.cursor === 0) {
     await saveStatus(env, {
       stage: "reading_listings",
+      workspaceId,
       message: "Leyendo y verificando las fichas públicas.",
       discoveredUrls: state.urls.length,
       processedUrls: 0,
@@ -189,7 +220,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     chunkSize: 1100,
   });
 
-  await saveStatus(env, { stage: "completed", message: "Catálogo guardado correctamente en Knowledge.", discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length, chunks: ingested.chunks });
+  await saveStatus(env, { stage: "completed", message: "Catálogo guardado correctamente en Knowledge.", workspaceId, discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length, chunks: ingested.chunks });
   await env.REPLY_CACHE.put(lastCompletedKey, String(Date.now()), {
     expirationTtl: SYNC_COOLDOWN_SECONDS,
   });
