@@ -62,28 +62,18 @@ fi
 echo "==> D1 database ($DB_NAME)..."
 CURRENT_DB_ID=$(grep -A2 '"d1_databases"' "$WORKER_CONFIG" | grep -o '"database_id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 if [ "$CURRENT_DB_ID" = "REPLACE_WITH_D1_DATABASE_ID" ] || [ -z "$CURRENT_DB_ID" ]; then
-  EXISTING=$(wrangler d1 list --json 2>/dev/null | node -e "
-    let s = '';
-    process.stdin.on('data', (d) => { s += d; });
-    process.stdin.on('end', () => {
-      try {
-        const list = JSON.parse(s);
-        const db = list.find((d) => d.name === '$DB_NAME');
-        if (db) console.log(db.uuid);
-      } catch {}
-    });
-  ")
+  EXISTING=$(wrangler d1 list 2>/dev/null | awk -v name="$DB_NAME" '$0 ~ name { for (i=1; i<=NF; i++) if ($i ~ /^[0-9a-fA-F-]{36}$/) { print $i; exit } }')
 
   if [ -n "${EXISTING:-}" ]; then
     DB_ID="$EXISTING"
     echo "    found existing database, id=$DB_ID"
   else
-    OUTPUT=$(wrangler d1 create "$DB_NAME" --json)
-    DB_ID=$(echo "$OUTPUT" | node -e "
-      let s = '';
-      process.stdin.on('data', (d) => { s += d; });
-      process.stdin.on('end', () => console.log(JSON.parse(s).uuid));
-    ")
+    OUTPUT=$(wrangler d1 create "$DB_NAME")
+    DB_ID=$(printf '%s' "$OUTPUT" | grep -Eo '[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}' | head -1 || true)
+    if [ -z "$DB_ID" ]; then
+      echo "    ERROR: Could not read the new D1 database ID from Wrangler output." >&2
+      exit 1
+    fi
     echo "    created database, id=$DB_ID"
   fi
 
