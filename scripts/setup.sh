@@ -120,7 +120,7 @@ if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID
     node -e "
       const fs = require('fs');
       let src = fs.readFileSync('$WORKER_CONFIG', 'utf8');
-      src = src.replace(/(\"kv_namespaces\"[\s\S]*?\"id\": *)\"[^\"]*\"/, '\\$1\"$KV_ID\"');
+      src = src.replace(/("kv_namespaces"[\s\S]*?"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify("$KV_ID"));
       fs.writeFileSync('$WORKER_CONFIG', src);
     "
     echo "    wrote id into $WORKER_CONFIG"
@@ -147,7 +147,7 @@ if [ -n "$MEDIA_KV_ID" ]; then
     const fs = require('fs');
     for (const path of ['$WORKER_CONFIG', '$WEB_CONFIG']) {
       let src = fs.readFileSync(path, 'utf8');
-      src = src.replace(/(\"binding\": *\"MEDIA_STORE\", *\"id\": *)\"[^\"]*\"/, '\\$1\"$MEDIA_KV_ID\"');
+      src = src.replace(/("binding": *"MEDIA_STORE", *"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify("$MEDIA_KV_ID"));
       fs.writeFileSync(path, src);
     }
   "
