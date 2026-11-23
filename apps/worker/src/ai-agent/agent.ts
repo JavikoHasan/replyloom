@@ -95,12 +95,16 @@ export async function handleAgentMessage(
   // ── 1b) Conversation thread — gives the model continuity for follow-ups
   // like "and shipping?" without a full message-history tool call, and
   // grounds the RAG query in what the customer was actually asking about. ──
-  const thread = !catalogOnlyBusiness && input.conversationId ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT) : "";
-  const query = thread ? `${thread}\\n\\n${message}` : message;
+  const currentMessageHasModel = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(message)
+    && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(message);
+  const thread = input.conversationId && (!catalogOnlyBusiness || !currentMessageHasModel)
+    ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT)
+    : "";
+  const query = thread ? `${thread}\n\n${message}` : message;
   // This store is a product-information-only assistant: do not expose CRM
   // customer/order tools or arbitrary workspace webhooks to its model.
   const [gate, workspaceTools, context] = await Promise.all([
-    classifyIntent(env, config, message),
+    classifyIntent(env, config, catalogOnlyBusiness ? query : message),
     catalogOnlyBusiness ? Promise.resolve([]) : listWorkspaceWebhookTools(env, config.workspaceId),
     retrieveContext(env, config, query, catalogOnlyBusiness ? "revolico-sagua.pages.dev" : undefined, catalogOnlyBusiness ? ["condiciones-venta-telefonos"] : []),
   ]);
