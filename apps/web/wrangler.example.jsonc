@@ -27,7 +27,7 @@
   // production. This does mean local dev reads/writes your actual D1
   // database, not an isolated local copy.
   "d1_databases": [
-    { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
+    { "binding": "DB", "database_name": "cell-phone-store-whatsapp-ai-db", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
   "kv_namespaces": [
     { "binding": "MEDIA_STORE", "id": "REPLACE_WITH_MEDIA_KV_NAMESPACE_ID" }
