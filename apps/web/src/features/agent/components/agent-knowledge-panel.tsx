@@ -38,6 +38,7 @@ import { TableSkeleton } from "@/components/skeletons"
 import {
   ingestAgentDocument,
   getKnowledgeBase,
+  getCatalogSyncStatus,
   deleteKnowledgeDoc
   
 } from "@/features/agent/hooks/use-agent"
