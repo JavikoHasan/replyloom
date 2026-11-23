@@ -852,19 +852,23 @@ export default Sentry.withSentry<Env, BroadcastQueueMessage>(
 
 /** Re-arms the global Scheduler DO. */
 const WATCHDOG_SWEEP_BATCH = 200;
-const WATCHDOG_CURSOR_KEY = "watchdog:session-cursor";
 
 /**
- * Cron safety net for the per-session watchdog alarm. Each run pokes the
- * next WATCHDOG_SWEEP_BATCH sessions that D1 says should be online (keyset
- * over wa_sessions.id, cursor in KV), so every number is re-checked
- * periodically even if its alarm was never armed (sessions connected before
- * the watchdog shipped) -- bounded subrequests per run however many
- * sessions exist.
+ * Cron safety net for the per-session watchdog alarm. The cursor lives in the
+ * Scheduler Durable Object's persistent storage, not Workers KV, so a large
+ * WhatsApp fleet cannot consume hundreds of daily KV writes just to rotate
+ * through connected sessions.
  */
 async function pokeSessionWatchdogs(env: Env) {
   const db = createDb(env.DB);
-  const cursor = (await env.REPLY_CACHE.get(WATCHDOG_CURSOR_KEY).catch(() => null)) ?? "";
+  const scheduler = env.SCHEDULER.get(env.SCHEDULER.idFromName("global"));
+  const cursorResponse = await scheduler.fetch("https://scheduler.internal/watchdog-cursor");
+  if (!cursorResponse.ok) throw new Error("Unable to read watchdog cursor");
+  const cursorPayload: unknown = await cursorResponse.json();
+  const cursor = cursorPayload && typeof cursorPayload === "object" &&
+    "cursor" in cursorPayload && typeof cursorPayload.cursor === "string"
+    ? cursorPayload.cursor
+    : "";
   const rows = await db
     .select({ id: waSessions.id })
     .from(waSessions)
@@ -878,9 +882,13 @@ async function pokeSessionWatchdogs(env: Env) {
     .limit(WATCHDOG_SWEEP_BATCH)
     .all();
   const next = rows.length === WATCHDOG_SWEEP_BATCH ? rows[rows.length - 1].id : "";
-  // Do not spend a KV write on every cron tick when the cursor has not changed.
   if (next !== cursor) {
-    await env.REPLY_CACHE.put(WATCHDOG_CURSOR_KEY, next).catch(() => {});
+    const saved = await scheduler.fetch("https://scheduler.internal/watchdog-cursor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cursor: next }),
+    });
+    if (!saved.ok) throw new Error("Unable to save watchdog cursor");
   }
   await Promise.allSettled(
     rows.map((r) =>
