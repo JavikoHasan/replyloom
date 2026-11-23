@@ -313,32 +313,32 @@ function isSimpleGreeting(message: string): boolean {
  * Requires both a matching product block and the pinned phone policy chunk.
  */
 export function buildPhoneBundleReply(message: string, context: RetrievedChunk[]): string | null {
-  const normalizedQuestion = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
-  const asksAboutBundle = /\\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios|garantia|dias de garantia)\\b/.test(normalizedQuestion);
+  const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const asksAboutBundle = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios|garantia|dias de garantia)\b/.test(normalizedQuestion);
   if (!asksAboutBundle) return null;
 
-  const modelIds = [...normalizedQuestion.matchAll(/\\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\\b/g)].map((match) => match[0]);
+  const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
   if (modelIds.length === 0) return null;
 
-  const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\\s*)/));
+  const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = productBlocks.filter((block) => {
-    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
-    const normalizedTitle = title.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
-    const isPhone = /\\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\\b/.test(normalizedTitle);
-    return isPhone && modelIds.some((modelId) => new RegExp(`(^|[^a-z0-9])${modelId}([^a-z0-9]|$)`).test(normalizedTitle));
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
+    const normalizedTitle = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const isPhone = /\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(normalizedTitle);
+    return isPhone && modelIds.some((modelId) => new RegExp("(^|[^a-z0-9])" + modelId + "([^a-z0-9]|$)").test(normalizedTitle));
   });
   if (matches.length !== 1) return null;
 
   // The fixed phone bundle is sourced from the permanent code policy, not a
   // pinned RAG chunk that can be dropped by the context-size limit.
-  const policy = STORE_POLICY.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  const policy = STORE_POLICY.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (!["cover de fabrica", "cable", "cargador", "mica protectora", "15 dias de garantia"].every((fact) => policy.includes(fact))) {
     return null;
   }
 
-  const title = matches[0].match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
+  const title = matches[0].match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
   if (!title) return null;
-  return `La compra de ${title} incluye cover de fábrica, cable, cargador original y mica protectora de cristal templado. Además, cuenta con 15 días de garantía.`;
+  return "La compra de " + title + " incluye cover de fábrica, cable, cargador original y mica protectora de cristal templado. Además, cuenta con 15 días de garantía.";
 }
 
 /**
