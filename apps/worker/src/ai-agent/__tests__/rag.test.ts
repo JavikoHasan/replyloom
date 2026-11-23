@@ -71,7 +71,7 @@ describe("D1 knowledge retrieval", () => {
 
     await retrieveContext(env, config, "Samsung A17", "revolico-sagua.pages.dev");
 
-    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("AND source LIKE ?"));
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("source LIKE ?"));
     expect(bind).toHaveBeenCalledWith("workspace-1", "revolico-sagua.pages.dev%", "samsung", "a17");
   });
 
