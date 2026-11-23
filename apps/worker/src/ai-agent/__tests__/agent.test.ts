@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, isSimpleGreeting, parseToolArgs } from "../agent";
-import { queryTerms } from "../rag";
+import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
   it("passes objects through", () => {
@@ -122,5 +122,23 @@ describe("Spanish catalog query normalization", () => {
     expect(queryTerms("¿Qué productos tienen a la venta?")).toContain("producto");
     expect(queryTerms("¿Qué anuncios tienen publicados?")).toContain("anuncio");
     expect(queryTerms("¿Tienen teléfonos disponibles?")).toContain("telefono");
+  });
+});
+
+describe("catalog fallback for natural-language wording", () => {
+  it("uses verified store catalog chunks when wording does not match and no model is named", () => {
+    expect(shouldFallbackToCatalog("revolico-sagua.pages.dev", [], 0)).toBe(true);
+  });
+
+  it("keeps exact model protection when a model identifier is present", () => {
+    expect(shouldFallbackToCatalog("revolico-sagua.pages.dev", ["f07"], 0)).toBe(false);
+  });
+
+  it("does not use store catalog fallback for other businesses", () => {
+    expect(shouldFallbackToCatalog(undefined, [], 0)).toBe(false);
+  });
+
+  it("does not need fallback when matching catalog rows already exist", () => {
+    expect(shouldFallbackToCatalog("revolico-sagua.pages.dev", [], 2)).toBe(false);
   });
 });
