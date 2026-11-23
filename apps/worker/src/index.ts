@@ -864,8 +864,11 @@ async function pokeSessionWatchdogs(env: Env) {
   const scheduler = env.SCHEDULER.get(env.SCHEDULER.idFromName("global"));
   const cursorResponse = await scheduler.fetch("https://scheduler.internal/watchdog-cursor");
   if (!cursorResponse.ok) throw new Error("Unable to read watchdog cursor");
-  const cursorPayload = await cursorResponse.json() as { cursor?: unknown };
-  const cursor = typeof cursorPayload.cursor === "string" ? cursorPayload.cursor : "";
+  const cursorPayload: unknown = await cursorResponse.json();
+  const cursor = cursorPayload && typeof cursorPayload === "object" &&
+    "cursor" in cursorPayload && typeof cursorPayload.cursor === "string"
+    ? cursorPayload.cursor
+    : "";
   const rows = await db
     .select({ id: waSessions.id })
     .from(waSessions)
