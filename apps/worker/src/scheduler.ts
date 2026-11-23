@@ -64,13 +64,14 @@ export class Scheduler implements DurableObject {
       return Response.json({ cursor });
     }
     if (request.method === "POST" && url.pathname === "/watchdog-cursor") {
-      let body: { cursor?: unknown };
+      let body: unknown;
       try {
-        body = await request.json() as { cursor?: unknown };
+        body = await request.json();
       } catch {
         return new Response("Invalid JSON", { status: 400 });
       }
-      if (typeof body.cursor !== "string" || body.cursor.length > 256) {
+      if (!body || typeof body !== "object" || !("cursor" in body) ||
+          typeof body.cursor !== "string" || body.cursor.length > 256) {
         return new Response("Invalid cursor", { status: 400 });
       }
       await this.state.storage.put("watchdog-session-cursor", body.cursor);
