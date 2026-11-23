@@ -82,7 +82,7 @@ describe("D1 knowledge retrieval", () => {
       results: [
         {
           id: "catalog-f07",
-          text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\\nPrecio publicado: 150 USD",
+          text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\nPrecio publicado: 150 USD",
           source: "revolico-sagua.pages.dev (catalog)",
           doc_id: "revolico-sagua-public-catalog",
         },
@@ -123,8 +123,8 @@ describe("D1 knowledge retrieval", () => {
 
   it("prioritizes the exact requested store model over other catalog products", async () => {
     const all = vi.fn().mockResolvedValue({ results: [
-      { id: "other-phone", text: "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM\\nPrecio publicado: 190 USD", source: "revolico-sagua.pages.dev (catalog)" },
-      { id: "requested-phone", text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\\nPrecio publicado: 150 USD", source: "revolico-sagua.pages.dev (catalog)" },
+      { id: "other-phone", text: "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM\nPrecio publicado: 190 USD", source: "revolico-sagua.pages.dev (catalog)" },
+      { id: "requested-phone", text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\nPrecio publicado: 150 USD", source: "revolico-sagua.pages.dev (catalog)" },
       { id: "phone-policy", text: "Todos los teléfonos incluyen accesorios y 15 días de garantía.", source: "Condiciones", doc_id: "condiciones-venta-telefonos" },
     ] });
     const bind = vi.fn().mockReturnValue({ all });
