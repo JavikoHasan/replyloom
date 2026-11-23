@@ -312,28 +312,28 @@ function isSimpleGreeting(message: string): boolean {
  * Requires both a matching product block and the pinned phone policy chunk.
  */
 export function buildPhoneBundleReply(message: string, context: RetrievedChunk[]): string | null {
-  const normalizedQuestion = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
-  if (!/\\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios)\\b/.test(normalizedQuestion)) return null;
+  const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (!/\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios)\b/.test(normalizedQuestion)) return null;
 
-  const modelIds = [...normalizedQuestion.matchAll(/\\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\\b/g)].map((match) => match[0]);
+  const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
   if (modelIds.length === 0) return null;
 
-  const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\\s*)/));
+  const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = productBlocks.filter((block) => {
-    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
-    const normalizedTitle = title.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
+    const normalizedTitle = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     return modelIds.some((modelId) => new RegExp(`(^|[^a-z0-9])${modelId}([^a-z0-9]|$)`).test(normalizedTitle));
   });
   if (matches.length !== 1) return null;
 
   const policy = context.find((chunk) => {
-    const text = chunk.text.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+    const text = chunk.text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     return text.includes("cover de fabrica") && text.includes("cable") &&
       text.includes("cargador") && text.includes("mica protectora") && text.includes("15 dias");
   });
   if (!policy) return null;
 
-  const title = matches[0].match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
+  const title = matches[0].match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
   if (!title) return null;
   return `La compra de ${title} incluye cover de fábrica, cable, cargador y mica protectora de cristal templado. Además, cuenta con 15 días de garantía.`;
 }
