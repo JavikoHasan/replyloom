@@ -31,41 +31,30 @@ wrangler() { (cd "$WORKER_DIR" && pnpm exec wrangler "$@"); }
 
 # Resolve KV IDs without grep -q pipelines (pipefail can abort on SIGPIPE).
 kv_namespace_id() {
-  local title="$1" output id attempt
-  for attempt in 1 2 3 4 5; do
-    # Wrangler 4.152 does not accept --json for this command. Read the
-    # normal listing and support both JSON-like and table output formats.
-    output="$(wrangler kv namespace list 2>/dev/null || true)"
-    id="$(printf '%s' "$output" | KV_EXPECTED_TITLE="$title" node -e "
-      let s = '';
-      process.stdin.on('data', (d) => { s += d; });
-      process.stdin.on('end', () => {
-        const title = process.env.KV_EXPECTED_TITLE;
-        const uuid = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
-        const visit = (value) => {
-          if (!value || typeof value !== 'object') return '';
-          if (Array.isArray(value)) {
-            for (const item of value) { const found = visit(item); if (found) return found; }
-            return '';
-          }
-          if (value.title === title && typeof value.id === 'string' && uuid.test(value.id)) return value.id;
-          for (const item of Object.values(value)) { const found = visit(item); if (found) return found; }
-          return '';
-        };
-        try {
-          const found = visit(JSON.parse(s));
-          if (found) { console.log(found); return; }
-        } catch {}
-        for (const line of s.split(/\\r?\\n/)) {
-          if (!line.includes(title)) continue;
-          const found = line.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/i);
-          if (found) { console.log(found[0]); return; }
-        }
-      });
-    ")"
-    if [ -n "$id" ]; then printf '%s' "$id"; return 0; fi
-    sleep 2
-  done
+  local title="$1" id
+  # Query Cloudflare's API directly. Wrangler's table output differs between
+  # versions and --json is not supported by all installed Wrangler releases.
+  id="$(KV_EXPECTED_TITLE="$title" node --input-type=module -e "
+    const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const token = process.env.CLOUDFLARE_API_TOKEN;
+    const title = process.env.KV_EXPECTED_TITLE;
+    if (!account || !token) process.exit(2);
+    const response = await fetch('https://api.cloudflare.com/client/v4/accounts/' + account + '/storage/kv/namespaces', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!response.ok) {
+      console.error('Cloudflare KV list API returned HTTP ' + response.status);
+      process.exit(3);
+    }
+    const payload = await response.json();
+    if (!payload.success) {
+      console.error('Cloudflare KV list API reported an error');
+      process.exit(4);
+    }
+    const namespace = (payload.result || []).find((item) => item.title === title);
+    if (namespace?.id) console.log(namespace.id);
+  ")"
+  if [ -n "$id" ]; then printf '%s' "$id"; return 0; fi
   return 1
 }
 
