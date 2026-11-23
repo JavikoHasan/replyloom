@@ -878,7 +878,10 @@ async function pokeSessionWatchdogs(env: Env) {
     .limit(WATCHDOG_SWEEP_BATCH)
     .all();
   const next = rows.length === WATCHDOG_SWEEP_BATCH ? rows[rows.length - 1].id : "";
-  await env.REPLY_CACHE.put(WATCHDOG_CURSOR_KEY, next).catch(() => {});
+  // Do not spend a KV write on every cron tick when the cursor has not changed.
+  if (next !== cursor) {
+    await env.REPLY_CACHE.put(WATCHDOG_CURSOR_KEY, next).catch(() => {});
+  }
   await Promise.allSettled(
     rows.map((r) =>
       env.WHATSAPP_SESSION.get(env.WHATSAPP_SESSION.idFromName(r.id)).fetch("http://do/internal/watchdog", {
