@@ -26,9 +26,9 @@ export interface AiAutoReplyParams {
 }
 
 // Anti-abuse: generous per-conversation cap to prevent runaway usage without
-// interrupting normal customer conversations. Thirty messages in five minutes
-// allows rapid product follow-ups while retaining a burst limit. The window is
-// rolling — every handled message slides the expiry, so a quiet gap resets it.
+// interrupting normal customer conversations. Thirty messages in a fixed
+// five-minute window allows rapid product follow-ups while retaining a burst
+// limit. The counter lives in the SQLite Durable Object, not Workers KV.
 const RATE_WINDOW_SECONDS = 300; // 5 minutes
 const MAX_AGENT_INVOCATIONS_PER_WINDOW = 30;
 const log = scopedLogger("ai-autoreply");
