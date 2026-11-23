@@ -21,12 +21,19 @@ function normalizeText(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function queryTerms(query: string): string[] {
-  return [...new Set(normalizeText(query).match(/[\p{L}\p{N}]{2,}/gu) ?? [])]
+export function queryTerms(query: string): string[] {
+  const rawTerms = normalizeText(query).match(/[\\p{L}\\p{N}]{2,}/gu) ?? [];
+  // Normalize common Spanish plurals so "productos" matches "PRODUCTO:"
+  // and "anuncios" matches "ANUNCIO" in the public catalog.
+  const singularTerms = rawTerms.map((term) => {
+    if (term.length > 5 && term.endsWith("es")) return term.slice(0, -2);
+    if (term.length > 4 && term.endsWith("s")) return term.slice(0, -1);
+    return term;
+  });
+  return [...new Set(singularTerms)]
     .filter((term) => !STOP_WORDS.has(term))
     .slice(0, 8);
 }
-
 /**
  * Returns matching catalog chunks plus any explicitly pinned policy documents.
  * Pinned docs are scoped by workspace and docId, so generic business rules
