@@ -43,8 +43,8 @@ export async function syncRevolicoCatalog(env: Env): Promise<void> {
   const workspaces = await env.DB.prepare(
     `SELECT agent_configs.workspace_id
      FROM agent_configs
-     LEFT JOIN organization ON organization.id = agent_configs.workspace_id
-     WHERE COALESCE(NULLIF(TRIM(agent_configs.business_name), ''), organization.name) = ?
+     LEFT JOIN workspaces ON workspaces.id = agent_configs.workspace_id
+     WHERE COALESCE(NULLIF(TRIM(agent_configs.business_name), ''), workspaces.name) = ?
      LIMIT 2`,
   ).bind(BUSINESS_NAME).all<{ workspace_id: string }>();
 
