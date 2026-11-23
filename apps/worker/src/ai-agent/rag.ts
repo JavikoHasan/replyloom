@@ -85,6 +85,25 @@ export async function retrieveContext(
     .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/i.test(key));
   const uniqueModelKeys = [...new Set(modelKeys)];
   let candidateRows = result.results;
+
+  // If a natural-language catalog question uses different wording (or a
+  // misspelled category word), do not return an empty knowledge base. When
+  // there is no explicit model identifier, fall back to real catalog chunks
+  // from this store only. Specific model queries retain the exact-match guard.
+  const matchingCatalogRows = sourcePrefix
+    ? result.results.filter((row) => row.source.startsWith(sourcePrefix))
+    : [];
+  if (sourcePrefix && uniqueModelKeys.length === 0 && matchingCatalogRows.length === 0) {
+    const fallback = await env.DB.prepare(
+      `SELECT id, text, source, doc_id FROM doc_chunks
+       WHERE workspace_id = ? AND source LIKE ?
+       LIMIT 100`,
+    ).bind(config.workspaceId, `${sourcePrefix}%`)
+      .all<{ id: string; text: string; source: string; doc_id?: string | null }>();
+    const pinnedRows = result.results.filter((row) => row.doc_id && includeDocIds.includes(row.doc_id));
+    candidateRows = [...fallback.results, ...pinnedRows];
+  }
+
   if (sourcePrefix && uniqueModelKeys.length > 0) {
     const exactProductRows = result.results.filter((row) =>
       row.text.split(/(?=PRODUCTO:\s*)/).some((block) => {
@@ -107,7 +126,7 @@ export async function retrieveContext(
       const heading = row.text.split(/(?=PRODUCTO:\s*)/).map((block) => block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "").join(" ");
       const compactHeading = normalizeText(heading).replace(/[^a-z0-9]/g, "");
       const exactModelMatch = uniqueModelKeys.some((key) => compactHeading.includes(key));
-      const score = isPinnedPolicy ? 1 : exactModelMatch ? 2 : phraseMatch ? 1 : matchedTerms / terms.length;
+      const score = isPinnedPolicy ? 1 : exactModelMatch ? 2 : phraseMatch ? 1 : matchedTerms > 0 ? matchedTerms / terms.length : sourcePrefix && uniqueModelKeys.length === 0 ? 0.25 : 0;
       return { id: row.id, text: row.text, source: row.source, score };
     })
     .filter((chunk) => chunk.score >= 0.2)
