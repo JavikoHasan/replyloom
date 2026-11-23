@@ -78,7 +78,7 @@ export async function handleAgentMessage(
   };
 
   // ── 1) Cheap exact-match cache — zero model spend on repeat FAQs ──
-  const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v2:" : ""}${normalize(message)}`;
+  const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v3:" : ""}${normalize(message)}`;
   if (replyCacheTtlSeconds > 0) {
     const cached = await env.REPLY_CACHE.get(cacheKey);
     if (cached) {
@@ -177,7 +177,7 @@ export async function handleAgentMessage(
 
   // ── 4+5) Grounded generation (context + tools, at most 2 tool turns) ──
   const { text, usedTools } = await generateReply(ctx, message, context, toolSchemas, thread);
-  const safeText = redactSensitive(text || "Let me get a team member to help with that.");
+  const safeText = redactSensitive(text || (catalogOnlyBusiness ? NO_INFO_REPLY : "I will connect you with a team member for help."));
 
   // ── 6) Cache tool-free grounded answers only — per-customer tool results
   //    (order status, balance, ...) are never cached. ──
