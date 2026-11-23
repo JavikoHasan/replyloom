@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalogPriceReply, parseToolArgs } from "../agent";
+import { buildCatalogPriceReply, buildPhoneBundleReply, parseToolArgs } from "../agent";
 
 describe("parseToolArgs", () => {
   it("passes objects through", () => {
@@ -16,6 +16,30 @@ describe("parseToolArgs", () => {
     expect(parseToolArgs(undefined)).toEqual({});
     expect(parseToolArgs(null)).toEqual({});
     expect(parseToolArgs(42)).toEqual({});
+  });
+});
+
+describe("phone bundle replies", () => {
+  const phoneContext = [{
+    id: "f07",
+    source: "revolico-sagua.pages.dev (catalog)",
+    score: 1,
+    text: "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM\\nPrecio publicado: 150 USD",
+  }];
+
+  it("answers accessories and warranty from permanent policy without a Knowledge policy chunk", () => {
+    expect(buildPhoneBundleReply("¿Qué incluye la compra del Samsung F07 y cuántos días de garantía tiene?", phoneContext))
+      .toBe("La compra de SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM incluye cover de fábrica, cable, cargador original y mica protectora de cristal templado. Además, cuenta con 15 días de garantía.");
+    expect(buildPhoneBundleReply("¿Cuántos días de garantía tiene el F07?", phoneContext)).toContain("15 días de garantía");
+  });
+
+  it("does not apply phone accessories to energy stations or other products", () => {
+    const energyContext = [{ ...phoneContext[0], text: "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh" }];
+    expect(buildPhoneBundleReply("¿Qué incluye la compra de DELTA 2?", energyContext)).toBeNull();
+  });
+
+  it("does not answer for a model absent from the retrieved catalog", () => {
+    expect(buildPhoneBundleReply("¿Qué incluye el Samsung A07?", phoneContext)).toBeNull();
   });
 });
 
