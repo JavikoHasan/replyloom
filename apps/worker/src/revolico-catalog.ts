@@ -95,8 +95,18 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   let state = await env.REPLY_CACHE.get<SyncState>(key, "json");
 
   if (!isValidState(state)) {
-    const response = await fetch(SITE_ORIGIN, {
-      headers: { Accept: "text/html" },
+    // Avoid a stale edge-cached homepage and request the same HTML variant
+    // a normal browser receives. The timestamp is a cache-busting query only;
+    // it does not change or mutate the public Revolico site.
+    const homepageUrl = new URL(SITE_ORIGIN);
+    homepageUrl.searchParams.set("_catalog_sync", String(Date.now()));
+    const response = await fetch(homepageUrl.toString(), {
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+        "User-Agent": "Mozilla/5.0 (compatible; CellPhoneStoreCatalogBot/1.0)",
+      },
       redirect: "manual",
     });
     if (!response.ok || new URL(response.url).origin !== SITE_ORIGIN) {
@@ -104,7 +114,11 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     }
     const html = await response.text();
     const urls = extractListingUrls(html).slice(0, MAX_LISTINGS);
-    await saveStatus(env, { stage: "homepage_read", message: "Página principal consultada; enlaces de anuncios detectados.", discoveredUrls: urls.length, processedUrls: 0, acceptedListings: 0 });
+    const contentType = response.headers.get("content-type") ?? "desconocido";
+    const hasListingMarkup = /\/anuncio\/[0-9a-f-]{36}/i.test(html) ||
+      /data-supabase-id\s*=\s*["'][0-9a-f-]{36}["']/i.test(html);
+    const diagnostic = `HTTP ${response.status}; ${contentType}; ${html.length} caracteres; marcado de anuncios: ${hasListingMarkup ? "sí" : "no"}`;
+    await saveStatus(env, { stage: "homepage_read", message: `Página principal consultada. ${diagnostic}`, discoveredUrls: urls.length, processedUrls: 0, acceptedListings: 0 });
     console.info("[revolico-catalog-sync] Homepage fetched; listing links discovered:", urls.length);
     // An empty or unrecognizable homepage is not evidence that the seller's
     // catalog is empty. Keep the previous good catalog rather than deleting it.
