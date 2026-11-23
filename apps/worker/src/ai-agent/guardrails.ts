@@ -34,6 +34,10 @@ export async function classifyIntent(
   config: AgentConfig,
   message: string,
 ): Promise<GuardrailResult> {
+  // Known commercial phone-bundle questions must not be misclassified as OFF_TOPIC.
+  if (config.businessName === "Cell Phone Store - Sagua la Grande" && isPhoneBundleSupportQuestion(message)) {
+    return { allowed: true, label: "SUPPORT" };
+  }
   const keywordLabel = keywordPrecheck(message);
   if (keywordLabel) return toResult(keywordLabel, config.businessName);
 
@@ -67,6 +71,15 @@ export async function classifyIntent(
  * "write me an invoice" as CODING) would wrongly silence a real support
  * question, so the classifier handles everything that isn't unmistakable.
  */
+/** Store-only intent exception for model-specific phone bundle/warranty questions. */
+export function isPhoneBundleSupportQuestion(message: string): boolean {
+  const m = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  const asksBundle = /\\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios|garantia|dias de garantia)\\b/.test(m);
+  const namesPhone = /\\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\\b/.test(m);
+  const hasModelCode = /\\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\\b/.test(m);
+  return asksBundle && (namesPhone || hasModelCode);
+}
+
 export function keywordPrecheck(message: string): IntentLabel | null {
   const m = message.toLowerCase().trim();
 
