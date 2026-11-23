@@ -184,7 +184,7 @@ export const testAgentReply = createServerFn({ method: "POST" })
   .handler(
     withSafeErrors(async ({ data }) => {
       await requirePermission(data.workspaceId, "manage_settings")
-      const res = await callWorker("/agent/reply", data.workspaceId, {
+      const res = await callWorker("/agent/preview", data.workspaceId, {
         method: "POST",
         body: JSON.stringify(data),
       })
