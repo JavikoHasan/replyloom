@@ -15,11 +15,12 @@ const baseConfig: AgentConfig = {
 };
 
 describe("buildSystemPrompt", () => {
-  it("includes greeting instructions when no context is provided", () => {
+  it("keeps no-context replies limited to brief commercial redirection", () => {
     const prompt = buildSystemPrompt(baseConfig, [], false);
-    expect(prompt).toContain("greeting");
-    expect(prompt).toContain("warmly");
-    expect(prompt).toContain("Acme Co");
+    expect(prompt).toContain("simple greeting may receive one brief greeting");
+    expect(prompt).toContain("Do not sustain small talk");
+    expect(prompt).toContain("only help with the store's published products and services");
+    expect(prompt).not.toContain("respond naturally and warmly");
   });
 
   it("includes grounding rules when context is provided", () => {
@@ -37,6 +38,14 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt(config, [], false);
     expect(prompt).toContain("Always respond in Spanish.");
   });
+  it("includes the Zelle surcharge only for USD-priced listings", () => {
+    const config = { ...baseConfig, businessName: "Cell Phone Store - Sagua la Grande" };
+    const prompt = buildSystemPrompt(config, [], false);
+    expect(prompt).toContain("10% surcharge");
+    expect(prompt).toContain("150 USD → 165 USD");
+    expect(prompt).toContain("Never apply it to CUP-priced listings");
+  });
+
   it("does not allow a workspace custom prompt to override store safeguards", () => {
     const config = {
       ...baseConfig,
@@ -50,10 +59,11 @@ describe("buildSystemPrompt", () => {
 });
 
 describe("buildClassifierPrompt", () => {
-  it("classifies greetings as SUPPORT", () => {
+  it("allows only brief greetings and courtesy messages as SUPPORT, not casual chat", () => {
     const prompt = buildClassifierPrompt(baseConfig, "hi");
-    expect(prompt).toContain("SUPPORT");
-    expect(prompt).toContain("hi");
+    expect(prompt).toContain("simple greeting");
+    expect(prompt).toContain("do NOT authorize casual conversation");
+    expect(prompt).toContain("OFF_TOPIC — general knowledge, casual conversation");
   });
 
   it("includes all four labels", () => {
