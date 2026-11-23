@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalogPriceReply, buildPhoneBundleReply, parseToolArgs } from "../agent";
+import { buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, parseToolArgs } from "../agent";
 
 describe("parseToolArgs", () => {
   it("passes objects through", () => {
@@ -71,5 +71,32 @@ describe("catalog price replies", () => {
   it("does not guess when the requested product or price is absent", () => {
     expect(buildCatalogPriceReply("¿Cuánto cuesta el A07?", context, freshSync, now)).toBeNull();
     expect(buildCatalogPriceReply("¿Cuánto cuesta el F07?", [{ ...context[0], text: context[0].text.replace("Precio publicado: 150 USD", "") }], freshSync, now)).toBeNull();
+  });
+});
+
+
+describe("store policy-only replies", () => {
+  it("answers EcoFlow inclusion questions without claiming a model is listed", () => {
+    const reply = buildStorePolicyOnlyReply("¿Qué incluye la EcoFlow DELTA 2?");
+    expect(reply).toContain("únicamente la caja y la unidad principal");
+    expect(reply).toContain("no hay baterías extra disponibles");
+    expect(reply).toContain("no puedo confirmar");
+  });
+
+  it("answers EcoFlow delivery and warranty questions from approved policy", () => {
+    expect(buildStorePolicyOnlyReply("¿La EcoFlow tiene entrega a domicilio?")).toContain("entrega a domicilio");
+    expect(buildStorePolicyOnlyReply("¿Qué garantía tiene EcoFlow?")).toContain("no tienen garantía comercial");
+  });
+
+  it("explains motorcycle order and international warranty limitations", () => {
+    const reply = buildStorePolicyOnlyReply("¿Qué garantía tienen las motocicletas?");
+    expect(reply).toContain("corresponde al fabricante");
+    expect(reply).toContain("transporte podría correr por cuenta del cliente");
+  });
+
+  it("does not answer availability or unrelated questions from policy alone", () => {
+    expect(buildStorePolicyOnlyReply("¿Tienen EcoFlow en venta?")).toBeNull();
+    expect(buildStorePolicyOnlyReply("¿Cuánto cuesta la moto?")).toBeNull();
+    expect(buildStorePolicyOnlyReply("Hola")).toBeNull();
   });
 });
