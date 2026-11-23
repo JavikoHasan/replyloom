@@ -95,7 +95,7 @@ export async function handleAgentMessage(
   const [gate, workspaceTools, context] = await Promise.all([
     classifyIntent(env, config, message),
     catalogOnlyBusiness ? Promise.resolve([]) : listWorkspaceWebhookTools(env, config.workspaceId),
-    retrieveContext(env, config, query, catalogOnlyBusiness ? "revolico-sagua.pages.dev" : undefined),
+    retrieveContext(env, config, query, catalogOnlyBusiness ? "revolico-sagua.pages.dev" : undefined, catalogOnlyBusiness ? ["condiciones-venta-telefonos"] : []),
   ]);
 
   if (!gate.allowed) {
