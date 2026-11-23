@@ -430,14 +430,19 @@ export class WhatsAppSession implements DurableObject {
     return null;
   }
 
-  /** Persist a per-chat pause after a human sends a message. */
-  private async pauseAutoReply(jid: string): Promise<void> {
-    await this.state.storage.put(`autoReplyPaused:${jid}`, Date.now() + HUMAN_AUTO_REPLY_PAUSE_MS);
+  /**
+   * A human taking over ANY customer chat pauses the assistant for the
+   * entire store, not just that one conversation. This is an inactivity
+   * heuristic (30 minutes after the last human outbound message), not a
+   * reliable signal that the owner's phone has lost Internet.
+   */
+  private async pauseAutoReply(_jid: string): Promise<void> {
+    await this.state.storage.put("autoReplyPaused:global", Date.now() + HUMAN_AUTO_REPLY_PAUSE_MS);
   }
 
-  /** The pause expires automatically after 30 minutes without human activity. */
-  private async isAutoReplyPaused(jid: string): Promise<boolean> {
-    const key = `autoReplyPaused:${jid}`;
+  /** Global human-takeover pause; expires after 30 minutes without human activity. */
+  private async isAutoReplyPaused(_jid: string): Promise<boolean> {
+    const key = "autoReplyPaused:global";
     const until = await this.state.storage.get<number>(key);
     if (!until) return false;
     if (until > Date.now()) return true;
