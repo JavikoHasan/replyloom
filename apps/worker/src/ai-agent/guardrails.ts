@@ -73,10 +73,10 @@ export async function classifyIntent(
  */
 /** Store-only intent exception for model-specific phone bundle/warranty questions. */
 export function isPhoneBundleSupportQuestion(message: string): boolean {
-  const m = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
-  const asksBundle = /\\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios|garantia|dias de garantia)\\b/.test(m);
-  const namesPhone = /\\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\\b/.test(m);
-  const hasModelCode = /\\b[a-z]{1,6}\\d{1,4}[a-z0-9]*\\b/.test(m);
+  const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const asksBundle = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios|garantia|dias de garantia)\b/.test(m);
+  const namesPhone = /\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(m);
+  const hasModelCode = /\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/.test(m);
   return asksBundle && (namesPhone || hasModelCode);
 }
 
