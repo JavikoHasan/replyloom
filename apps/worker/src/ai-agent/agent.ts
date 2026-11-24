@@ -1,7 +1,7 @@
 import type { AgentConfig, AgentContext, AgentEnv, AgentInput, AgentReply, RetrievedChunk, ToolSchema } from "./types";
 import { classifyIntent, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "./guardrails";
 import { createDb, eq, desc, messages } from "@workspace/db";
-import { retrieveContext } from "./rag";
+import { retrieveContext, retrieveCatalogChunks } from "./rag";
 import { buildSystemPrompt } from "./system-prompt";
 import { STORE_POLICY } from "./store-policy";
 import { cachePrefixes } from "./config";
@@ -159,6 +159,23 @@ export async function handleAgentMessage(
         text: catalogReply,
         usedTools: [],
         usedContext: context,
+        blocked: false,
+        cached: false,
+      };
+    }
+  }
+
+  if (catalogOnlyBusiness && isCatalogLookupQuestion(message)) {
+    const syncStatus = await env.REPLY_CACHE
+      .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+      .catch(() => null);
+    const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+    const catalogLookupReply = buildCatalogLookupReply(message, allCatalogChunks, syncStatus);
+    if (catalogLookupReply) {
+      return {
+        text: catalogLookupReply,
+        usedTools: [],
+        usedContext: allCatalogChunks,
         blocked: false,
         cached: false,
       };
@@ -446,6 +463,84 @@ function normalize(message: string): string {
 
 function cache(env: AgentEnv, config: AgentConfig, key: string, value: string, ttlSeconds = config.cacheTtlSeconds): Promise<void> {
   return env.REPLY_CACHE.put(key, value, { expirationTtl: ttlSeconds }).catch(() => {});
+}
+
+
+/** Detect a catalog lookup that can be answered without generative guessing. */
+export function isCatalogLookupQuestion(message: string): boolean {
+  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const hasModelCode = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(normalized)
+    && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(normalized);
+  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estaciones? de energia|productos?|equipos?|catalogo|que venden|que tienen|a la venta)\b/.test(normalized);
+  return hasModelCode || asksInventory;
+}
+
+/** Deterministic answers for current catalog inventory and exact-model lookups. */
+export function buildCatalogLookupReply(
+  message: string,
+  context: RetrievedChunk[],
+  syncStatus: { stage?: string; updatedAt?: string } | null,
+  now = Date.now(),
+): string | null {
+  if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
+  const syncedAt = Date.parse(syncStatus.updatedAt);
+  const ageMs = now - syncedAt;
+  if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
+
+  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
+  const byTitle = new Map<string, { title: string; category: string; price: string; availability: string }>();
+  for (const block of blocks) {
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+    if (!title) continue;
+    const key = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const entry = byTitle.get(key) ?? { title, category: "", price: "", availability: "" };
+    entry.category ||= block.match(/^Categor[ií]a:\s*(.+)$/im)?.[1]?.trim() ?? "";
+    entry.price ||= block.match(/^Precio publicado:\s*(.+)$/im)?.[1]?.trim() ?? "";
+    entry.availability ||= block.match(/^Disponibilidad publicada:\s*(.+)$/im)?.[1]?.trim() ?? "";
+    byTitle.set(key, entry);
+  }
+  const products = [...byTitle.values()];
+  if (products.length === 0) return null;
+
+  const modelIds = [...normalized.matchAll(/\b([a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/g)]
+    .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
+    .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/.test(key));
+  if (modelIds.length > 0) {
+    const matches = products.filter((product) => {
+      const title = product.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      return modelIds.some((id) => title.includes(id));
+    });
+    if (matches.length !== 1) {
+      return "No encuentro un anuncio vigente que coincida exactamente con ese modelo en nuestro catálogo. Puedes pedir al vendedor que confirme si está disponible.";
+    }
+    const product = matches[0];
+    const status = product.availability ? " El anuncio indica: " + product.availability + "." : "";
+    const price = product.price ? " El precio publicado es " + product.price + "." : "";
+    return "Sí, " + product.title + " aparece en nuestro catálogo." + price + status + " La existencia física debe confirmarse directamente con el vendedor.";
+  }
+
+  const isPhoneQuery = /\b(telefonos?|celulares?|moviles?|smartphones?)\b/.test(normalized);
+  const isEcoFlowQuery = /\b(ecoflow|estaciones? de energia)\b/.test(normalized);
+  let filtered = products;
+  if (isPhoneQuery) {
+    filtered = products.filter((product) => {
+      const value = (product.title + " " + product.category).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return /\b(telefonia|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(value);
+    });
+  } else if (isEcoFlowQuery) {
+    filtered = products.filter((product) => /\b(ecoflow|delta|river)\b/i.test(product.title));
+  }
+  if (filtered.length === 0) {
+    const label = isPhoneQuery ? "teléfonos" : isEcoFlowQuery ? "estaciones de energía EcoFlow" : "productos";
+    return "Ahora mismo no encuentro anuncios vigentes de " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
+  }
+  const label = isPhoneQuery ? "teléfonos" : isEcoFlowQuery ? "estaciones de energía EcoFlow" : "productos";
+  const lines = filtered.slice(0, 20).map((product) => {
+    const details = [product.price, product.availability].filter(Boolean).join(" · ");
+    return "• " + product.title + (details ? " — " + details : "");
+  });
+  return "Estos son los " + label + " que aparecen en nuestro catálogo publicado:\n" + lines.join("\n") + "\n\nLa disponibilidad física debe confirmarse directamente con el vendedor.";
 }
 
 /**
