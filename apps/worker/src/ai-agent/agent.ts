@@ -125,6 +125,18 @@ export async function handleAgentMessage(
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
+  // Explicit requests for a same-day/next-day delivery need a safe, deterministic
+  // handoff. Never let the language model imply that a slot has been booked.
+  if (catalogOnlyBusiness && isDeliverySchedulingQuestion(message)) {
+    return {
+      text: "No puedo confirmar ni programar una entrega para hoy o mañana. El vendedor debe confirmar la disponibilidad del producto, la carga del vehículo y el horario. Escríbele directamente por WhatsApp para coordinarlo: https://wa.me/5354590237.",
+      usedTools: [],
+      usedContext: [],
+      blocked: false,
+      cached: false,
+    };
+  }
+
   // Delivery questions are answered from the delivery field of the exact live
   // listing. Category defaults are never used to override a listing's explicit
   // delivery option.
@@ -601,6 +613,14 @@ export function isDeliveryQuestion(message: string): boolean {
   return /\b(entrega|entregan|entregar|envio|envian|domicilio|direccion|direcciones|a casa|servicio a domicilio|reparto|llevarlo|llevarla|traeme|traerme|llevarme|mandame|enviame|cuando llega|cuando entregan|cuanto cuesta el domicilio|cuanto cobran por el domicilio)\b/.test(normalizeBusinessText(message));
 }
 
+/** Detect explicit requests for delivery today/tomorrow; these must never be booked by the bot. */
+export function isDeliverySchedulingQuestion(message: string): boolean {
+  const normalized = normalizeBusinessText(message);
+  const asksForDelivery = /\b(necesito|quiero|quisiera|pueden traer|me pueden traer|traigan|lleven|entreguen|manden|envien|me lo traen|me lo llevan|me lo entregan)\b/.test(normalized);
+  const namesTime = /\b(hoy|manana|pasado manana|esta tarde|esta noche)\b/.test(normalized);
+  return asksForDelivery && namesTime;
+}
+
 /** Safe category-level delivery guidance when the customer has not named a model. */
 export function buildGeneralDeliveryPolicyReply(message: string, contextualProductQuery = ""): string | null {
   const normalized = normalizeBusinessText(message + " " + contextualProductQuery);
@@ -629,7 +649,9 @@ export function resolveRecentProductQuery(message: string, conversationThread: s
   if (!conversationThread) return message;
   const customerMessages = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]);
   for (const previous of customerMessages.reverse()) {
-    if (hasProductReference(previous)) return previous;
+    // A newer category/catalog lookup is a context boundary too. Do not skip
+    // it and accidentally revive an older phone model from earlier in the chat.
+    if (isCatalogLookupQuestion(previous) || hasProductReference(previous)) return previous;
   }
   return message;
 }
