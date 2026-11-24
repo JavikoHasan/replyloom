@@ -75,13 +75,20 @@ describe("privateLocationReply", () => {
     expect(privateLocationReply("¿Tienen tienda física?")).toContain("No disponemos de una tienda física");
     expect(privateLocationReply("¿Dónde está el local?")).toContain("No disponemos de una tienda física");
   });
-  it("does not disclose residence or private whereabouts", () => {
-    expect(privateLocationReply("¿Dónde vives?")).toContain("ubicación privada");
-    expect(privateLocationReply("¿Cuál es tu dirección personal?")).toContain("domicilios");
-    expect(privateLocationReply("¿Dónde puedo ubicarte?")).toContain("ubicación privada");
+  it("shares the visit address only when the customer asks how to visit or pick up", () => {
+    const reply = privateLocationReply("¿Me das la dirección para ir a buscar el teléfono?");
+    expect(reply).toContain("Edificio #5, Apartamento #1, Reparto 26 de Julio");
+    expect(reply).toContain("Pregunta por Frank");
+    expect(reply).toContain("https://wa.me/5354590237");
+    expect(privateLocationReply("¿Dónde vives?")).not.toContain("Edificio #5");
   });
-  it("requires pickup arrangements to be coordinated with the seller", () => {
-    expect(privateLocationReply("¿Dónde puedo recoger el teléfono?")).toContain("contacto publicado en el anuncio");
+  it("does not volunteer the home address for general business-location questions", () => {
+    expect(privateLocationReply("¿Por dónde radican?")).toContain("No tenemos tienda física");
+    expect(privateLocationReply("¿Tienen negocio o tienda?")).toContain("No tenemos tienda física");
+    expect(privateLocationReply("¿Cuál es tu dirección personal?")).not.toContain("Edificio #5");
+  });
+  it("requires customers to coordinate before visiting", () => {
+    expect(privateLocationReply("¿Dónde puedo recoger el teléfono?")).toContain("antes te pongas de acuerdo");
   });
   it("does not intercept ordinary product questions", () => {
     expect(privateLocationReply("¿Dónde está publicado el Samsung A17?")).toBeNull();
