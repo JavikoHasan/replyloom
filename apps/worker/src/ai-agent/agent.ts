@@ -134,7 +134,8 @@ export async function handleAgentMessage(
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
       const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const deliveryReply = buildCatalogDeliveryReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      const deliveryReply = buildCatalogDeliveryReply(contextualProductQuery, allCatalogChunks, syncStatus)
+        ?? buildGeneralDeliveryPolicyReply(message);
       if (deliveryReply) {
         console.info("[catalog-agent] deterministic-delivery-policy", { responsePresent: true, contextRows: allCatalogChunks.length });
         return { text: deliveryReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
@@ -586,7 +587,27 @@ function normalizeBusinessText(value: string): string {
 
 /** Detect whether the customer is asking about delivery or home service. */
 export function isDeliveryQuestion(message: string): boolean {
-  return /\b(entrega|entregan|entregar|envio|envian|domicilio|a casa|servicio a domicilio|reparto|llevarlo|llevarla)\b/.test(normalizeBusinessText(message));
+  return /\b(entrega|entregan|entregar|envio|envian|domicilio|direccion|direcciones|a casa|servicio a domicilio|reparto|llevarlo|llevarla|traeme|traerme|llevarme|mandame|enviame|cuando llega|cuando entregan|cuanto cuesta el domicilio|cuanto cobran por el domicilio)\b/.test(normalizeBusinessText(message));
+}
+
+/** Safe category-level delivery guidance when the customer has not named a model. */
+export function buildGeneralDeliveryPolicyReply(message: string): string | null {
+  const normalized = normalizeBusinessText(message);
+  const asksToSendAddress = /\b(direccion|direcciones|mi casa|mi domicilio|esta direccion|a esta direccion)\b/.test(normalized)
+    && /\b(traeme|traer|llevar|entregar|envio|enviar|mandar|domicilio|reparto)\b/.test(normalized);
+  if (asksToSendAddress) {
+    return "Por seguridad y para evitar comprometer una entrega que aún no está coordinada, no puedo recibir, guardar ni reenviar direcciones ni programar entregas. Primero consulta el anuncio y coordina directamente con el vendedor mediante el contacto publicado; él confirmará si puede realizar la entrega y cuándo.";
+  }
+  if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
+    return "Las motocicletas anunciadas por encargo se solicitan a nombre del cliente y, una vez gestionadas, se entregan en la puerta de su domicilio. El vendedor debe confirmar el modelo, las condiciones del encargo y la fecha de entrega. No puedo confirmar pedidos, plazos ni horarios.";
+  }
+  if (/\b(ecoflow|delta\s*\d|river\s*\d|estacion(?:es)? de energia)\b/.test(normalized)) {
+    return "Las estaciones EcoFlow anunciadas tienen entrega a domicilio gratuita. La fecha y la hora se coordinan directamente con el vendedor según la disponibilidad y la carga del vehículo. Confirma el modelo y su publicación vigente antes de coordinar.";
+  }
+  if (/\b(telefono|telefonos|celular|celulares|movil|moviles|smartphone)\b/.test(normalized)) {
+    return "La entrega a domicilio de los teléfonos es gratuita en Sagua la Grande, Isabela de Sagua, Cifuentes y Quemado. Se realiza mediante motorina eléctrica; el horario depende de la carga disponible y se coordina directamente con el vendedor.";
+  }
+  return "El costo y la modalidad de entrega dependen del producto y de lo que indique su anuncio. La entrega de teléfonos en las zonas atendidas y la de estaciones EcoFlow anunciadas es gratuita. Para otros productos, el costo debe confirmarse en la ficha o directamente con el vendedor; no puedo fijar fechas ni horarios.";
 }
 
 /** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
@@ -746,16 +767,32 @@ export function buildPaymentPolicyReply(message: string): string | null {
   const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const asksZelle = /\bzelle\b/.test(normalized);
   const asksCup = /\bcup\b|pesos? cubanos?|moneda nacional/.test(normalized);
+  const asksDollarRate = /\b(dolar|dolares|cambio|tasa|cotizacion|cotizar|valoras|valoracion)\b/.test(normalized)
+    && /\b(cuanto|a como|valor|precio|cambio|tasa|cotizacion|cotizar|valoras)\b/.test(normalized);
+  const asksTransfer = /\b(transferencia|transferencias|transferir)\b/.test(normalized);
+  const asksUsd = /\busd\b|\bdolares?\b|\ben dolares?\b/.test(normalized);
   const asksPayment = /\b(pago|pagar|pagarte|pagarles|aceptan|aceptas|reciben|recibir|cobran|metodo|forma|moneda|transferencia|efectivo|cash|tarjeta)\b/.test(normalized);
 
+  if (asksDollarRate) {
+    return "No ofrecemos una tasa fija para valorar el dólar. La relación entre USD y CUP fluctúa, por lo que los precios de nuestros anuncios se mantienen en la moneda publicada y no hacemos conversiones estimadas.";
+  }
   if (asksZelle) {
     return "Sí, aceptamos Zelle para los anuncios publicados en USD. Se aplica un recargo del 10% sobre el precio publicado. Si me dices qué producto te interesa, puedo indicarte el total exacto por Zelle.";
   }
   if (asksCup) {
     return "No aceptamos efectivo en CUP ni transferencias en CUP para los anuncios publicados en USD. Los precios se mantienen en la moneda indicada en cada anuncio.";
   }
+  if (asksTransfer && asksUsd) {
+    return "Los precios de los anuncios se publican en USD, pero no tengo confirmada la aceptación de transferencias en USD. El método confirmado es Zelle, con un recargo del 10%. Para otra modalidad, debes consultarlo directamente con el vendedor.";
+  }
+  if (asksTransfer) {
+    return "No aceptamos transferencias en CUP para los anuncios publicados en USD. Las transferencias en USD no están confirmadas por el asistente; el método confirmado es Zelle, con un recargo del 10%.";
+  }
+  if (asksUsd) {
+    return "Los precios de nuestros anuncios pueden estar publicados en USD. El método de pago confirmado por el asistente es Zelle, con un recargo del 10%. No puedo confirmar efectivo ni otras modalidades en USD; debes consultarlas con el vendedor.";
+  }
   if (asksPayment) {
-    return "Los precios se respetan en la moneda indicada en cada anuncio. Para publicaciones en USD, aceptamos Zelle con un recargo del 10%. No aceptamos efectivo ni transferencias en CUP para esos anuncios.";
+    return "Los precios se respetan en la moneda indicada en cada anuncio. Para publicaciones en USD, el método confirmado es Zelle con un recargo del 10%. No aceptamos efectivo ni transferencias en CUP para esos anuncios. Otras modalidades en USD deben confirmarse con el vendedor.";
   }
   return null;
 }
@@ -787,7 +824,7 @@ export function buildZelleTotalReply(catalogReply: string, conversationThread: s
  */
 export function buildStorePolicyOnlyReply(message: string): string | null {
   const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación)\b/.test(normalized);
+  const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación|encargo|encargar|encargue|pedido|proceso|pasos|funciona)\b/.test(normalized);
   if (!asksConditions) return null;
 
   if (/\b(ecoflow|delta\s*\d|river\s*\d)\b/.test(normalized)) {
@@ -809,8 +846,8 @@ export function buildStorePolicyOnlyReply(message: string): string | null {
     if (/\b(entrega|envio|envío|domicilio)\b/.test(normalized)) {
       return "Las motocicletas anunciadas por encargo se entregan directamente en la puerta del domicilio del cliente. La fecha y la hora deben coordinarse con el vendedor; no se confirman automáticamente. La modalidad y disponibilidad del modelo deben verificarse en el anuncio vigente.";
     }
-    if (/\b(por encargo|encargar|pedido|incluye|incluyen|nueva|nuevo|como funciona|cómo funciona)\b/.test(normalized)) {
-      return "Las motocicletas que aparecen anunciadas por encargo son nuevas y se solicitan a nombre del cliente. La garantía la ofrece el fabricante, no el vendedor local; sus condiciones dependen del modelo. Ten presente que gestionar una devolución o reparación internacional desde Cuba puede ser difícil y costoso. Para confirmar si un modelo está publicado y sus condiciones concretas, consulta el anuncio vigente o al vendedor.";
+    if (/\b(por encargo|encargar|encargo|pedido|proceso|pasos|incluye|incluyen|nueva|nuevo|como funciona|cómo funciona)\b/.test(normalized)) {
+      return "El proceso es solicitar la motocicleta anunciada por encargo a nombre del propio cliente. Antes de confirmar, el vendedor debe verificar el modelo, el precio y las condiciones concretas del pedido. La entrega se realiza en la puerta del domicilio una vez coordinada con el vendedor. No puedo confirmar un pedido, anticipo, plazo ni fecha de llegada: esos detalles debe confirmarlos directamente el vendedor. La garantía corresponde al fabricante y sus condiciones dependen del modelo.";
     }
   }
   return null;
