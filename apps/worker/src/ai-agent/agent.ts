@@ -1021,10 +1021,15 @@ export function buildStorePolicyOnlyReply(message: string, productQuery = ""): s
   }
 
   if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
-    if (/\b(garantia|garantía|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
+    const asksMotoWarranty = /\b(garantia|garantía|devolucion|devolución|reparacion|reparación)\b/.test(normalized);
+    const asksMotoDelivery = /\b(entrega|entregan|entregar|entregado|entregada|envio|envío|domicilio)\b/.test(normalized);
+    if (asksMotoWarranty && asksMotoDelivery) {
+      return "Entrega: no tengo confirmada la modalidad de entrega de las motocicletas anunciadas por encargo. El vendedor debe confirmar si existe entrega a domicilio, su costo y la fecha posible antes de formalizar el pedido. Garantía: no tengo condiciones de garantía verificadas; antes de encargar, pide al vendedor que confirme por escrito la cobertura, duración y procedimiento aplicables al modelo concreto. Puedes consultarlo directamente por WhatsApp: https://wa.me/5354590237.";
+    }
+    if (asksMotoWarranty) {
       return "No tengo condiciones de garantía verificadas para las motocicletas anunciadas. Antes de encargar, pide al vendedor que confirme por escrito la cobertura, duración y procedimiento aplicables al modelo concreto.";
     }
-    if (/\b(entrega|entregan|entregar|entregado|entregada|envio|envío|domicilio)\b/.test(normalized)) {
+    if (asksMotoDelivery) {
       return "No tengo confirmada la modalidad de entrega de las motocicletas anunciadas por encargo. El vendedor debe confirmar si existe entrega a domicilio, su costo y la fecha posible antes de formalizar el pedido.";
     }
     if (/\b(por encargo|encargar|encargo|pedido|proceso|pasos|incluye|incluyen|nueva|nuevo|como funciona|cómo funciona)\b/.test(normalized)) {
