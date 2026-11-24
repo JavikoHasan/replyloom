@@ -4,6 +4,16 @@
  * Only known intent/category vocabulary is corrected. Product identifiers
  * containing digits are never fuzzy-matched, preventing A1 -> A16 mistakes.
  */
+const TYPO_ALIASES: Record<string, string> = {
+  trasferencia: "transferencia",
+  trasferencias: "transferencias",
+  domisilio: "domicilio",
+  domisilios: "domicilios",
+  aseptan: "aceptan",
+  aseptas: "aceptas",
+  ef ectivo: "efectivo",
+};
+
 const VOCABULARY = [
   "tienes", "tienen", "hay", "venden", "vendemos", "venta", "disponible",
   "precio", "cuanto", "cuesta", "vale", "telefono", "telefonos", "celular", "celulares", "movil", "moviles",
@@ -41,6 +51,7 @@ function distanceAtMostTwo(a: string, b: string, limit: number): boolean {
 }
 
 function canonicalWord(word: string): string {
+  if (TYPO_ALIASES[word]) return TYPO_ALIASES[word];
   if (!/^[a-z]+$/.test(word)) return word;
   if ((VOCABULARY as readonly string[]).includes(word)) return word;
   const candidates = VOCABULARY.filter((candidate) => {
