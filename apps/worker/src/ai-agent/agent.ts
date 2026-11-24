@@ -143,6 +143,15 @@ export async function handleAgentMessage(
     };
   }
 
+  // Reservation requests must be handed to the seller; the bot cannot
+  // hold inventory, accept deposits, or confirm an order.
+  if (catalogOnlyBusiness) {
+    const reservationReply = buildReservationPolicyReply(message, contextualProductQuery);
+    if (reservationReply) {
+      return { text: reservationReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   // Delivery questions are answered from the delivery field of the exact live
   // listing. Category defaults are never used to override a listing's explicit
   // delivery option.
@@ -627,6 +636,20 @@ export function isDeliverySchedulingQuestion(message: string): boolean {
   return asksForDelivery && namesTime;
 }
 
+/** Deterministic reservation guidance; never claims a hold or booking exists. */
+export function buildReservationPolicyReply(message: string, contextualProductQuery = ""): string | null {
+  const normalized = normalizeStoreCatalogQuery(message + " " + contextualProductQuery);
+  const asksReservation = /\b(reservar|reserva|reservas|apartar|apartame|apartarlo|apartarla|separar|separame|guardame)\b/.test(normalizeStoreCatalogQuery(message));
+  if (!asksReservation) return null;
+  if (/\b(moto|motos|motocicleta|motocicletas|xmx|izuki|huracan)\b/.test(normalized)) {
+    return "Las motocicletas se gestionan por encargo a nombre del cliente. No puedo reservar ni formalizar el pedido desde este chat, ni confirmar anticipos, plazos o fecha de llegada. El vendedor debe confirmar el modelo, el precio y las condiciones del encargo directamente por WhatsApp: https://wa.me/5354590237.";
+  }
+  if (/\b(telefono|telefonos|celular|celulares|samsung|galaxy|redmi|iphone|f07|a16|a17)\b/.test(normalized)) {
+    return "No puedo apartar ni garantizar una reserva desde este chat. El vendedor debe confirmar que el teléfono siga físicamente disponible y coordinar contigo si puede reservarlo y bajo qué condiciones. Escríbele directamente por WhatsApp: https://wa.me/5354590237; indícale el modelo y para cuándo lo necesitas.";
+  }
+  return "No puedo formalizar ni garantizar reservas desde este chat. El vendedor debe confirmar la disponibilidad física y las condiciones de cualquier reserva directamente por WhatsApp: https://wa.me/5354590237.";
+}
+
 /** Safe category-level delivery guidance when the customer has not named a model. */
 export function buildGeneralDeliveryPolicyReply(message: string, contextualProductQuery = ""): string | null {
   const normalized = normalizeStoreCatalogQuery(message + " " + contextualProductQuery);
@@ -636,7 +659,7 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
     return "No envíes tu dirección a este asistente: no recibe, guarda ni reenvía direcciones. Para coordinar la entrega, escríbele directamente al vendedor por WhatsApp: https://wa.me/5354590237. Indícale el modelo o producto que deseas comprar, tu nombre, un número de teléfono para contactarte y, si necesitas que lleven cambio o vuelto, la cantidad exacta. Cuando el vendedor esté conectado, te atenderá y coordinará contigo los detalles.";
   }
   if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
-    return "Las motocicletas anunciadas por encargo se solicitan a nombre del cliente y, una vez gestionadas, se entregan en la puerta de su domicilio. El vendedor debe confirmar el modelo, las condiciones del encargo y la fecha de entrega. No puedo confirmar pedidos, plazos ni horarios.";
+    return "Las motocicletas se anuncian por encargo y se gestionan a nombre del cliente. La modalidad, el costo y la fecha de entrega deben confirmarse directamente con el vendedor; no puedo prometer entrega a domicilio ni reservar una unidad desde este chat. Escríbele por WhatsApp: https://wa.me/5354590237.";
   }
   if (/\b(ecoflow|delta\s*\d|river\s*\d|estacion(?:es)? de energia)\b/.test(normalized)) {
     return "Las estaciones EcoFlow anunciadas tienen entrega a domicilio gratuita. La fecha y la hora se coordinan directamente con el vendedor según la disponibilidad y la carga del vehículo. Confirma el modelo y su publicación vigente antes de coordinar.";
@@ -919,13 +942,13 @@ export function buildStorePolicyOnlyReply(message: string): string | null {
 
   if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
     if (/\b(garantia|garantía|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
-      return "Las motocicletas anunciadas por encargo son nuevas y se gestionan a nombre del cliente. La garantía corresponde al fabricante; su cobertura, duración y procedimiento deben verificarse para el modelo concreto. Como el equipo está fuera de Cuba, una devolución o reparación internacional puede ser difícil, no viable y costosa, y el transporte podría correr por cuenta del cliente. Antes de encargar, confirma las condiciones oficiales con el vendedor.";
+      return "No tengo condiciones de garantía verificadas para las motocicletas anunciadas. Antes de encargar, pide al vendedor que confirme por escrito la cobertura, duración y procedimiento aplicables al modelo concreto.";
     }
     if (/\b(entrega|envio|envío|domicilio)\b/.test(normalized)) {
-      return "Las motocicletas anunciadas por encargo se entregan directamente en la puerta del domicilio del cliente. La fecha y la hora deben coordinarse con el vendedor; no se confirman automáticamente. La modalidad y disponibilidad del modelo deben verificarse en el anuncio vigente.";
+      return "No tengo confirmada la modalidad de entrega de las motocicletas anunciadas por encargo. El vendedor debe confirmar si existe entrega a domicilio, su costo y la fecha posible antes de formalizar el pedido.";
     }
     if (/\b(por encargo|encargar|encargo|pedido|proceso|pasos|incluye|incluyen|nueva|nuevo|como funciona|cómo funciona)\b/.test(normalized)) {
-      return "El proceso es solicitar la motocicleta anunciada por encargo a nombre del propio cliente. Antes de confirmar, el vendedor debe verificar el modelo, el precio y las condiciones concretas del pedido. La entrega se realiza en la puerta del domicilio una vez coordinada con el vendedor. No puedo confirmar un pedido, anticipo, plazo ni fecha de llegada: esos detalles debe confirmarlos directamente el vendedor. La garantía corresponde al fabricante y sus condiciones dependen del modelo.";
+      return "El proceso consiste en solicitar la motocicleta anunciada por encargo a nombre del propio cliente. Antes de confirmar, el vendedor debe verificar el modelo, el precio y las condiciones concretas del pedido. No puedo confirmar ni formalizar una reserva, anticipo, plazo ni fecha de llegada; esos detalles debe confirmarlos directamente el vendedor por WhatsApp: https://wa.me/5354590237.";
     }
   }
   return null;
