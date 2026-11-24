@@ -94,7 +94,7 @@ export class AutoReplyLimiter {
 export class AutoReplyContentDeduper {
   private recent = new Map<string, number>();
 
-  constructor(private readonly windowMs = 45_000) {}
+  constructor(private readonly windowMs = 3_000) {}
 
   allow(jid: string, text: string, now = Date.now()): boolean {
     const normalized = text.normalize("NFD")
