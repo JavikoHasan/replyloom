@@ -579,6 +579,15 @@ describe("store policy-only replies", () => {
     expect(reply).toContain("a nombre del propio cliente");
     expect(reply).toContain("No puedo confirmar ni formalizar una reserva, anticipo, plazo ni fecha de llegada");
   });
+  it("answers motorcycle delivery and warranty questions together", () => {
+    const reply = buildStorePolicyOnlyReply("¿Cómo es el servicio de entrega y garantía de las motos?");
+    expect(reply).toContain("Entrega:");
+    expect(reply).toContain("Garantía:");
+    expect(reply).toContain("no tengo confirmada la modalidad de entrega");
+    expect(reply).toContain("no tengo condiciones de garantía verificadas");
+    expect(reply).toContain("https://wa.me/5354590237");
+  });
+
   it("does not promise motorcycle home delivery or an unverified warranty", () => {
     expect(buildStorePolicyOnlyReply("¿Las motos las entregan en la casa?"))
       .toContain("No tengo confirmada la modalidad de entrega");
