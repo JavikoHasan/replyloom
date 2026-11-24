@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AutoReplyLimiter, TokenBucket, newChatDailyCap, parseSendKind } from "../session/outbound-guard";
+import { AutoReplyContentDeduper, AutoReplyLimiter, TokenBucket, newChatDailyCap, parseSendKind } from "../session/outbound-guard";
 
 describe("outbound guard", () => {
   it("token bucket allows a burst, then paces", () => {
@@ -25,6 +25,18 @@ describe("outbound guard", () => {
     expect(allowed).toBe(120); // high ceiling allows ordinary multi-question buying conversations
     expect(l.allow("customer@s.whatsapp.net", t0 + 120 * 10_000)).toBe(false); // hourly loop breaker
     expect(l.allow("another-customer@s.whatsapp.net", t0 + 5_000)).toBe(true); // other contacts unaffected
+  });
+
+  it("suppresses identical replies to the same chat during a burst, but allows different replies", () => {
+    const deduper = new AutoReplyContentDeduper(45_000);
+    const t0 = 8_000_000;
+    const jid = "customer@s.whatsapp.net";
+    const reply = "La entrega a domicilio es gratuita en Sagua la Grande.";
+    expect(deduper.allow(jid, reply, t0)).toBe(true);
+    expect(deduper.allow(jid, reply, t0 + 1_000)).toBe(false);
+    expect(deduper.allow(jid, "El precio publicado es 190 USD.", t0 + 2_000)).toBe(true);
+    expect(deduper.allow("other@s.whatsapp.net", reply, t0 + 2_000)).toBe(true);
+    expect(deduper.allow(jid, reply, t0 + 46_000)).toBe(true);
   });
 
   it("new-chat cap follows warm-up tiers", () => {
