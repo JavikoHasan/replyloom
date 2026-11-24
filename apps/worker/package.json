@@ -12,7 +12,8 @@
     "cf-typegen:ci": "wrangler types --env-file .dev.vars.example",
     "postinstall": "patch-package",
     "test": "vitest run",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:stress": "vitest run src/ai-agent/__tests__/stress-lab.test.ts"
   },
   "dependencies": {
     "@noble/ciphers": "^2.4.0",
