@@ -133,17 +133,22 @@ export async function handleAgentMessage(
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
+      const recentThread = await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT);
       const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
       const catalogLookupReply = buildCatalogLookupReply(message, allCatalogChunks, syncStatus);
+      const zelleAwareReply = catalogLookupReply
+        ? buildZelleTotalReply(catalogLookupReply, recentThread) ?? catalogLookupReply
+        : null;
       console.info("[catalog-agent] deterministic-catalog-lookup", {
         queryType: "inventory-or-model",
         contextRows: allCatalogChunks.length,
         syncStage: syncStatus?.stage ?? "missing",
-        responsePresent: Boolean(catalogLookupReply),
-        responseLength: catalogLookupReply?.length ?? 0,
+        responsePresent: Boolean(zelleAwareReply),
+        responseLength: zelleAwareReply?.length ?? 0,
+        zelleFollowUp: zelleAwareReply !== catalogLookupReply,
       });
       return {
-        text: catalogLookupReply ?? NO_INFO_REPLY,
+        text: zelleAwareReply ?? NO_INFO_REPLY,
         usedTools: [],
         usedContext: allCatalogChunks,
         blocked: false,
@@ -623,6 +628,27 @@ export function buildPaymentPolicyReply(message: string): string | null {
     return "Los precios se respetan en la moneda indicada en cada anuncio. Para publicaciones en USD, aceptamos Zelle con un recargo del 10%. No aceptamos efectivo ni transferencias en CUP para esos anuncios.";
   }
   return null;
+}
+
+/**
+ * When a customer asks about Zelle and then names a product, calculate the
+ * 10% surcharge from that product's verified catalog price. Conversation
+ * context is required so ordinary catalog replies never assume Zelle.
+ */
+export function buildZelleTotalReply(catalogReply: string, conversationThread: string): string | null {
+  const normalizedThread = conversationThread.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const hasZellePaymentExchange =
+    /Customer:[^\\n]*\\bzelle\\b[\\s\\S]*Agent:[^\\n]*aceptamos Zelle/i.test(normalizedThread);
+  if (!hasZellePaymentExchange) return null;
+
+  const priceMatch = catalogReply.match(/\\bprecio publicado es\\s+([\\d,.]+)\\s*USD\\b/i);
+  if (!priceMatch) return null;
+  const publishedPrice = Number(priceMatch[1].replace(/,/g, ""));
+  if (!Number.isFinite(publishedPrice) || publishedPrice <= 0) return null;
+
+  const total = Math.round(publishedPrice * 1.1 * 100) / 100;
+  const formattedTotal = Number.isInteger(total) ? String(total) : total.toFixed(2);
+  return catalogReply + " Con el recargo del 10% por Zelle, el total es " + formattedTotal + " USD.";
 }
 
 /**
