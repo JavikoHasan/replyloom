@@ -172,7 +172,7 @@ export function redactSensitive(text: string, storeAssistant = false): string {
     const candidate = trailing ? raw.slice(0, -trailing.length) : raw;
     try {
       const url = new URL(candidate);
-      return url.protocol === "https:" && url.origin === "https://revolico-sagua.pages.dev"
+      return url.protocol === "https:" && (url.origin === "https://revolico-sagua.pages.dev" || (url.hostname === "wa.me" && url.pathname === "/5354590237"))
         ? raw
         : "[enlace externo omitido]" + trailing;
     } catch {
