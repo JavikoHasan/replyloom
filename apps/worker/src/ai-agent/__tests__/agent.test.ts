@@ -143,13 +143,15 @@ describe("catalog inventory and model availability replies", () => {
     expect(reply).toContain("BLUETTI ELITE 100 V2");
   });
 
-  it("answers accessory inventory without confusing included phone accessories with separate listings", () => {
-    const question = "¿Tienes cable y cargador en venta?";
-    expect(isCatalogLookupQuestion(question)).toBe(true);
-    const reply = buildCatalogLookupReply(question, catalog, sync, now);
-    expect(reply).toContain("no aparecen anuncios independientes");
-    expect(reply).toContain("cable USB y cargador original");
-    expect(reply).not.toContain("ECOFLOW");
+  it("clearly states that phone cables and chargers are included, never sold separately", () => {
+    for (const question of ["¿Tienes cable y cargador en venta?", "¿Venden cargadores sueltos?", "¿Cuánto cuesta el cable?"]) {
+      expect(isCatalogLookupQuestion(question)).toBe(true);
+      const reply = buildCatalogLookupReply(question, catalog, sync, now);
+      expect(reply).toContain("No vendemos cables ni cargadores por separado");
+      expect(reply).toContain("Se incluyen con la compra de cualquiera de nuestros teléfonos");
+      expect(reply).not.toContain("anuncios independientes");
+      expect(reply).not.toContain("ECOFLOW");
+    }
   });
 
   it("does not make inventory claims from stale or incomplete catalog syncs", () => {
