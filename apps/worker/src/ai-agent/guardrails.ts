@@ -118,12 +118,17 @@ export function privateLocationReply(message: string): string | null {
   return null;
 }
 
-/** Only escalate automatically when the customer asks for it or is clearly upset. */
+/** Escalate explicit human requests and clear frustration in English or Spanish. */
 export function shouldEscalateToHuman(message: string): boolean {
-  const m = message.toLowerCase();
-  return /\b(human|person|agent|representative|team member|support staff)\b/.test(m) &&
-    /\b(connect|speak|talk|transfer|escalat|real|please)\b/.test(m) ||
-    /\b(frustrat|angry|furious|ridiculous|unacceptable|terrible|worst|useless|fed up)\b/.test(m);
+  const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const asksHuman =
+    (/\b(human|person|agent|representative|team member|support staff)\b/.test(m) &&
+      /\b(connect|speak|talk|transfer|escalat|real|please|need|want)\b/.test(m)) ||
+    /\b(quiero|quisiera|necesito|puedo|puede|podria|puedes|pasame|comunicame|conectame|transferirme|atenderme|hablar)\b.{0,45}\b(persona|alguien|humano|agente|representante|vendedor|asesor)\b/.test(m) ||
+    /\b(hablar con|pasar con|comunicarme con|conectarme con|quiero al vendedor|necesito al vendedor)\b/.test(m);
+  const frustrated =
+    /\b(frustrat|angry|furious|ridiculous|unacceptable|terrible|worst|useless|fed up|frustrado|frustrada|molesto|molesta|enojado|enojada|furioso|furiosa|harto|harta|ridiculo|inaceptable|pesimo|pesima|inutil|decepcionado|decepcionada|estafado|estafada)\b/.test(m);
+  return asksHuman || frustrated;
 }
 
 // Regex net for anything the model might leak despite the system prompt.
