@@ -62,6 +62,13 @@ describe("keywordPrecheck", () => {
   });
 });
 
+describe("customer delivery address is not seller private location", () => {
+  it("does not block the customer's own address as sensitive seller information", () => {
+    expect(privateLocationReply("Te puedo dejar mi dirección para la entrega?")).toBeNull();
+    expect(privateLocationReply("Tráeme el teléfono a mi domicilio")).toBeNull();
+  });
+});
+
 describe("privateLocationReply", () => {
   it("says there is no physical store", () => {
     expect(privateLocationReply("¿Tienen tienda física?")).toContain("No disponemos de una tienda física");
