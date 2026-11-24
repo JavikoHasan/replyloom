@@ -120,6 +120,23 @@ describe("catalog inventory and model availability replies", () => {
   });
 });
 
+describe("exact catalog model matching", () => {
+  const sync = { stage: "completed", updatedAt: "2026-11-24T17:00:00.000Z" };
+  const now = Date.parse("2026-11-24T17:05:00.000Z");
+
+  it("does not match a short model identifier inside a longer model", () => {
+    const a16 = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
+    expect(buildCatalogLookupReply("¿Tienes A1?", a16, sync, now)).toContain("no encuentro un anuncio vigente");
+    const a160 = [{ text: "PRODUCTO: SAMSUNG GALAXY A160 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
+    expect(buildCatalogLookupReply("¿Tienes A16?", a160, sync, now)).toContain("no encuentro un anuncio vigente");
+  });
+
+  it("still matches the exact model in a longer product title", () => {
+    const a16 = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
+    expect(buildCatalogLookupReply("¿Tienes A16?", a16, sync, now)).toContain("SAMSUNG GALAXY A16");
+  });
+});
+
 describe("grounded phone technical replies", () => {
   const now = Date.parse("2026-11-24T12:00:00Z");
   const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
