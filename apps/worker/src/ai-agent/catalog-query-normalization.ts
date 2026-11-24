@@ -11,7 +11,7 @@ const TYPO_ALIASES: Record<string, string> = {
   domisilios: "domicilios",
   aseptan: "aceptan",
   aseptas: "aceptas",
-  ef ectivo: "efectivo",
+  efectibo: "efectivo",
 };
 
 const VOCABULARY = [
