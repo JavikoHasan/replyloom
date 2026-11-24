@@ -180,6 +180,15 @@ export async function handleAgentMessage(
         cached: false,
       };
     }
+    // Never fall through to generative answers for inventory/availability:
+    // missing or stale catalog data must remain an explicit human handoff.
+    return {
+      text: NO_INFO_REPLY,
+      usedTools: [],
+      usedContext: allCatalogChunks,
+      blocked: false,
+      cached: false,
+    };
   }
 
   // Answer the store's fixed phone bundle directly from the permanent code policy.
