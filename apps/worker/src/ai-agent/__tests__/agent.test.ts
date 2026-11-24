@@ -226,6 +226,11 @@ describe("Zelle product follow-up totals", () => {
       .toContain("Con el recargo del 10% por Zelle, el total es 165 USD.");
   });
 
+  it("calculates the total when the current message explicitly asks for Zelle and names the product", () => {
+    expect(buildZelleTotalReply(catalogReply, "[Previous messages]\\nCustomer: F07", true))
+      .toContain("el total es 165 USD");
+  });
+
   it("does not add a Zelle total without a prior Zelle payment exchange", () => {
     expect(buildZelleTotalReply(catalogReply, "[Previous messages]\\nCustomer: F07")).toBeNull();
     expect(buildZelleTotalReply(catalogReply, "Customer: ¿Aceptan Zelle?\\nAgent: No tengo esa información")).toBeNull();
