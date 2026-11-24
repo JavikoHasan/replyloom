@@ -1,7 +1,6 @@
 import type { AgentConfig, AgentContext, AgentEnv, AgentInput, AgentReply, RetrievedChunk, ToolSchema } from "./types";
 import { classifyIntent, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "./guardrails";
-import { createDb, eq, desc, messages } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { createDb, eq, desc, sql, messages } from "@workspace/db";
 import { retrieveContext, retrieveCatalogChunks } from "./rag";
 import { buildSystemPrompt } from "./system-prompt";
 import { STORE_POLICY } from "./store-policy";
