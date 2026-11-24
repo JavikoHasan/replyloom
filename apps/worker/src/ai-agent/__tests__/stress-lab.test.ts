@@ -105,7 +105,7 @@ describe("Cell Phone Store query stress laboratory", () => {
 
   it("treats a fresh category query as a context boundary after a previous product", () => {
     const thread = "[Previous messages]\nCustomer: ¿Tienes F07?\nAgent: Sí, aparece en catálogo.";
-    expect(resolveRecentProductQuery("¿Tienes EcoFlow?", thread)).toBe("¿tienes ecoflow?");
+    expect(resolveRecentProductQuery("¿Tienes EcoFlow?", thread)).toBe("¿Tienes EcoFlow?");
   });
 
   it("does not make claims when the catalog synchronization is stale", () => {
