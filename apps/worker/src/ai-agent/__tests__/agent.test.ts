@@ -534,6 +534,13 @@ describe("category-level delivery replies", () => {
     expect(buildGeneralDeliveryPolicyReply("¿Te puedo dejar mi dirección para que me lleves el A17?")).toContain("https://wa.me/5354590237");
     expect(buildGeneralDeliveryPolicyReply("Te puedo dejar mi dirección y se la pasas al dueño para que cuando esté disponible me traiga el teléfono?")).toContain("No envíes tu dirección a este asistente");
   });
+  it("does not extend EcoFlow free delivery to Bluetti in a broad energy-station follow-up", () => {
+    const reply = buildGeneralDeliveryPolicyReply("¿Cómo es la entrega?", "¿Tienes estaciones de energía?");
+    expect(reply).toContain("EcoFlow");
+    expect(reply).toContain("Bluetti Elite 100 V2");
+    expect(reply).toContain("modalidad de entrega confirmada");
+  });
+
   it("answers delivery questions without inventing a fee", () => {
     expect(buildGeneralDeliveryPolicyReply("¿Cuánto cuesta el domicilio de los teléfonos?")).toContain("es gratuita");
     expect(buildGeneralDeliveryPolicyReply("¿Cómo es el domicilio de las EcoFlow?")).toContain("gratuita");
