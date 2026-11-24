@@ -46,18 +46,22 @@ export async function classifyIntent(
       config.models.classifier,
       {
         messages: [{ role: "user", content: buildClassifierPrompt(config, message) }],
-        max_completion_tokens: 8,
+        max_completion_tokens: config.businessName === "Cell Phone Store - Sagua la Grande" ? 64 : 8,
         chat_template_kwargs: { enable_thinking: false },
       },
       gatewayRunOptions(env, config.workspaceId, "classifier"),
     );
-    const raw = String(result?.response ?? "").trim().toUpperCase();
+    const raw = String(result?.response ?? result?.choices?.[0]?.message?.content ?? "").trim();
     // Default open on an ambiguous parse — the RAG grounding + strict system
     // prompt are the real backstop for anything that slips past here.
     const label = (["SUPPORT", "CODING", "SENSITIVE", "OFF_TOPIC"] as IntentLabel[]).find((l) =>
-      raw.startsWith(l),
+      new RegExp("^" + l + "\\b", "i").test(raw),
     );
-    return toResult(label ?? "SUPPORT", config.businessName);
+    const base = toResult(label ?? "SUPPORT", config.businessName);
+    const searchQuery = config.businessName === "Cell Phone Store - Sagua la Grande"
+      ? raw.match(/^(?:SEARCH|BUSQUEDA|QUERY)\\s*:\\s*(.+)$/im)?.[1]?.trim().replace(/[\\r\\n]+/g, " ").slice(0, 180)
+      : undefined;
+    return { ...base, ...(base.allowed && searchQuery ? { searchQuery } : {}) };
   } catch {
     // Classifier down — fail closed rather than risk answering an unrelated
     // question or leaving the business-only scope. The customer can retry.
