@@ -33,6 +33,7 @@ import { syncContactUpsert, syncContactsFromHistory, syncGroupsFromHistory, sync
 import { TtlCache } from "../ttl-cache";
 import {
   AutoReplyLimiter,
+  AutoReplyContentDeduper,
   MAX_QUEUE_WAIT_MS,
   OUTBOUND_BURST,
   OUTBOUND_PER_SEC,
@@ -397,6 +398,7 @@ export class WhatsAppSession implements DurableObject {
   // ── Anti-ban outbound guard (see session/outbound-guard.ts) ──
   private outboundBucket = new TokenBucket(OUTBOUND_BURST, OUTBOUND_PER_SEC);
   private autoReplyLimiter = new AutoReplyLimiter();
+  private autoReplyContentDeduper = new AutoReplyContentDeduper();
   private sessionCreatedAt: Date | null | undefined = undefined;
 
   /**
@@ -3162,6 +3164,7 @@ export class WhatsAppSession implements DurableObject {
                 log: this.log.bind(this),
                 broadcast: this.broadcast.bind(this),
                 allowAutoReply: this.allowAutoReply.bind(this),
+                allowAutoReplyContent: (jid, text) => this.autoReplyContentDeduper.allow(jid, text),
                 pauseAutoReply: this.pauseAutoReply.bind(this),
                 isAutoReplyPaused: this.isAutoReplyPaused.bind(this),
                 markBotReply: this.markBotReply.bind(this),
