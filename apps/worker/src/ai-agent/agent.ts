@@ -824,8 +824,15 @@ export function buildZelleTotalReply(catalogReply: string, conversationThread: s
  */
 export function buildStorePolicyOnlyReply(message: string): string | null {
   const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación|encargo|encargar|encargue|pedido|proceso|pasos|funciona)\b/.test(normalized);
+  const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación|encargo|encargar|encargue|pedido|proceso|pasos|funciona|vendo|vender|comprar|compra|cambio|cambiar|permuta|permuto|vuelto|tasar|tasacion)\b/.test(normalized);
   if (!asksConditions) return null;
+
+  if (/\b(te vendo|vendo|quiero vender|les vendo|puedo vender|me lo compras|me compran|compras productos)\b/.test(normalized)) {
+    return "Gracias por la oferta, pero la tienda no compra artículos a clientes. Solo comercializamos los productos publicados en nuestro catálogo.";
+  }
+  if (/\b(cambio|cambiar|permuta|permuto|vuelto|tasar|tasacion)\b/.test(normalized)) {
+    return "Gracias por tu propuesta, pero no realizamos permutas, cambios ni tasaciones de artículos usados o nuevos, ni aceptamos productos como parte de pago.";
+  }
 
   if (/\b(ecoflow|delta\s*\d|river\s*\d)\b/.test(normalized)) {
     if (/\b(garantia|garantía|prueba|falla|fallo|responsabilidad|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
