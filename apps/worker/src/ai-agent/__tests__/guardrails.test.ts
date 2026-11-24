@@ -72,8 +72,8 @@ describe("customer delivery address is not seller private location", () => {
 
 describe("privateLocationReply", () => {
   it("says there is no physical store", () => {
-    expect(privateLocationReply("¿Tienen tienda física?")).toContain("No disponemos de una tienda física");
-    expect(privateLocationReply("¿Dónde está el local?")).toContain("No disponemos de una tienda física");
+    expect(privateLocationReply("¿Tienen tienda física?")).toContain("No tenemos tienda física");
+    expect(privateLocationReply("¿Dónde está el local?")).toContain("No tenemos tienda física");
   });
   it("shares the visit address only when the customer asks how to visit or pick up", () => {
     const reply = privateLocationReply("¿Me das la dirección para ir a buscar el teléfono?");
