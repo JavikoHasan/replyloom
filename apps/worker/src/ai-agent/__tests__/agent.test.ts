@@ -164,16 +164,17 @@ describe("normalizeGeneratorResult", () => {
   });
 
   it("extracts OpenAI-compatible function calls and preserves their raw envelope", () => {
+    const args = JSON.stringify({ model: "F07" });
     const rawCall = {
       id: "call_123",
       type: "function",
-      function: { name: "lookup", arguments: "{\\"model\\":\\"F07\\"}" },
+      function: { name: "lookup", arguments: args },
     };
     expect(normalizeGeneratorResult({
       choices: [{ message: { role: "assistant", content: null, tool_calls: [rawCall] } }],
     })).toEqual({
       response: "",
-      toolCalls: [{ name: "lookup", arguments: "{\\"model\\":\\"F07\\"}", raw: rawCall }],
+      toolCalls: [{ name: "lookup", arguments: args, raw: rawCall }],
       format: "openai",
     });
   });
