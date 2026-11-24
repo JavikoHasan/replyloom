@@ -282,12 +282,14 @@ async function generateReply(
     try {
       result = await ctx.env.AI.run(ctx.config.models.generator, body, runOptions);
       if (ctx.config.businessName === "Cell Phone Store - Sagua la Grande") {
+        const normalized = normalizeGeneratorResult(result);
         console.info("[catalog-agent] generator-response", {
           turn,
-          responsePresent: Boolean(result?.response),
-          responseLength: typeof result?.response === "string" ? result.response.length : 0,
-          toolCallCount: Array.isArray(result?.tool_calls) ? result.tool_calls.length : 0,
+          responsePresent: Boolean(normalized.response),
+          responseLength: normalized.response.length,
+          toolCallCount: normalized.toolCalls.length,
           resultType: typeof result,
+          responseFormat: normalized.format,
         });
       }
     } catch (error) {
@@ -301,34 +303,88 @@ async function generateReply(
       }
       result = await ctx.env.AI.run(FALLBACK_GENERATOR, body, runOptions);
       if (ctx.config.businessName === "Cell Phone Store - Sagua la Grande") {
+        const normalized = normalizeGeneratorResult(result);
         console.info("[catalog-agent] generator-fallback-response", {
           turn,
-          responsePresent: Boolean(result?.response),
-          responseLength: typeof result?.response === "string" ? result.response.length : 0,
-          toolCallCount: Array.isArray(result?.tool_calls) ? result.tool_calls.length : 0,
+          responsePresent: Boolean(normalized.response),
+          responseLength: normalized.response.length,
+          toolCallCount: normalized.toolCalls.length,
           resultType: typeof result,
+          responseFormat: normalized.format,
         });
       }
     }
 
-    const toolCalls: any[] = result?.tool_calls ?? [];
-    if (toolCalls.length === 0) {
-      finalText = String(result?.response ?? "").trim();
+    const normalized = normalizeGeneratorResult(result);
+    if (normalized.toolCalls.length === 0) {
+      finalText = normalized.response;
       break;
     }
 
-    for (const call of toolCalls) {
-      const name = String(call?.name ?? "");
+    for (const call of normalized.toolCalls) {
+      const name = call.name;
       if (!name) continue;
-      const args = parseToolArgs(call?.arguments);
+      const args = parseToolArgs(call.arguments);
       const output = await executeTool(ctx.env, ctx.workspaceId, name, args, ctx, registry);
       usedTools.push(name);
-      chatMessages.push({ role: "assistant", content: null, tool_calls: [call] });
-      chatMessages.push({ role: "tool", name, content: output });
+      if (normalized.format === "openai") {
+        chatMessages.push({
+          role: "assistant",
+          content: null,
+          tool_calls: [call.raw],
+        });
+        chatMessages.push({
+          role: "tool",
+          tool_call_id: call.raw?.id,
+          content: output,
+        });
+      } else {
+        chatMessages.push({ role: "assistant", content: null, tool_calls: [call.raw] });
+        chatMessages.push({ role: "tool", name, content: output });
+      }
     }
   }
 
   return { text: finalText, usedTools };
+}
+
+/**
+ * Normalize the legacy Workers AI response and the OpenAI-compatible
+ * chat-completion response returned by newer models such as Gemma 4.
+ */
+export function normalizeGeneratorResult(result: any): {
+  response: string;
+  toolCalls: Array<{ name: string; arguments: any; raw: any }>;
+  format: "legacy" | "openai";
+} {
+  const message = result?.choices?.[0]?.message ?? result?.message;
+  const openAiToolCalls = Array.isArray(message?.tool_calls);
+  const rawToolCalls = Array.isArray(result?.tool_calls)
+    ? result.tool_calls
+    : openAiToolCalls
+      ? message.tool_calls
+      : [];
+  const content = message?.content;
+  const response = typeof result?.response === "string"
+    ? result.response
+    : typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content
+            .filter((part: any) => part && (part.type === "text" || typeof part.text === "string"))
+            .map((part: any) => String(part.text ?? ""))
+            .join("")
+        : "";
+
+  return {
+    response: response.trim(),
+    toolCalls: rawToolCalls.map((call: any) => ({
+      name: String(call?.name ?? call?.function?.name ?? ""),
+      arguments: call?.arguments ?? call?.function?.arguments,
+      raw: call,
+    })),
+    format: openAiToolCalls ? "openai" : "legacy",
+  };
 }
 
 /** Workers AI can hand tool arguments back as a string or an object. */
