@@ -38,7 +38,7 @@ export async function classifyIntent(
   // private/internal data. Route them to catalog retrieval with focused search terms.
   if (config.businessName === "Cell Phone Store - Sagua la Grande" && isPhoneTechnicalSupportQuestion(message)) {
     const modelIds = [...message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().matchAll(/\b[a-z]{1,6}\s*\d{1,4}[a-z0-9]*\b/g)]
-      .map((match) => match[0].replace(/\s+/g, ""));
+      .map((match) => match[0].replace(/\s+/g, ""))
       .filter((id) => !/^(?:4g|5g)$/.test(id));
     const modelHint = modelIds.length ? " modelo " + modelIds.join(" ") : "";
     return {
