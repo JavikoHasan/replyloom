@@ -562,7 +562,7 @@ async function loadConversationThread(
     if (parts.length === 0) return "";
 
     let text = `[Previous messages]\n${parts.join("\n")}`;
-    if (text.length > maxChars) text = `${text.slice(0, maxChars)}…`;
+    if (text.length > maxChars) text = `[Previous messages]\n…${text.slice(-maxChars)}`;
     return text;
   } catch {
     // Conversation read problems must never fail the whole agent pipeline.
