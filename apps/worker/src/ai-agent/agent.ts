@@ -729,8 +729,11 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
   if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
     return "Las motocicletas se anuncian por encargo y se gestionan a nombre del cliente. La modalidad, el costo y la fecha de entrega deben confirmarse directamente con el vendedor; no puedo prometer entrega a domicilio ni reservar una unidad desde este chat. Escríbele por WhatsApp: https://wa.me/5354590237.";
   }
-  if (/\b(ecoflow|delta\s*\d|river\s*\d|estacion(?:es)? de energia)\b/.test(normalized)) {
-    return "Las estaciones EcoFlow anunciadas tienen entrega a domicilio gratuita. La fecha y la hora se coordinan directamente con el vendedor según la disponibilidad y la carga del vehículo. Confirma el modelo y su publicación vigente antes de coordinar.";
+  if (/\b(ecoflow|delta\s*\d|river\s*\d)\b/.test(normalized)) {
+    return "La entrega a domicilio de las estaciones EcoFlow anunciadas es gratuita. La fecha y la hora se coordinan directamente con el vendedor según la disponibilidad y la carga del vehículo. Confirma el modelo y su publicación vigente antes de coordinar.";
+  }
+  if (/\b(estacion(?:es)? de energia|energia portatil)\b/.test(normalized)) {
+    return "La entrega gratuita está confirmada para las estaciones EcoFlow anunciadas. Para la Bluetti Elite 100 V2 no tengo una modalidad de entrega confirmada; el vendedor debe indicarte si hay entrega, su costo y la fecha posible.";
   }
   if (/\b(telefono|telefonos|celular|celulares|movil|moviles|smartphone)\b/.test(normalized)) {
     return "La entrega a domicilio de los teléfonos es gratuita en Sagua la Grande, Isabela de Sagua, Cifuentes y Quemado. Se realiza mediante motorina eléctrica; el horario depende de la carga disponible y se coordina directamente con el vendedor.";
