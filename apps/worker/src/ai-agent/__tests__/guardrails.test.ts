@@ -9,6 +9,14 @@ describe("shouldEscalateToHuman", () => {
 
   it("does not escalate ordinary unanswered support questions automatically", () => {
     expect(shouldEscalateToHuman("what are your opening hours?")).toBe(false);
+    expect(shouldEscalateToHuman("¿Cuánto cuesta el Samsung A17?")).toBe(false);
+  });
+
+  it("recognizes Spanish requests for the seller and customer frustration", () => {
+    expect(shouldEscalateToHuman("Quiero hablar con una persona")).toBe(true);
+    expect(shouldEscalateToHuman("¿Me puedes pasar con el vendedor?")).toBe(true);
+    expect(shouldEscalateToHuman("Necesito un agente")).toBe(true);
+    expect(shouldEscalateToHuman("Estoy muy molesto con esta situación")).toBe(true);
   });
 });
 
