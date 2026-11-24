@@ -8,6 +8,7 @@ import { cachePrefixes } from "./config";
 import { gatewayRunOptions, FALLBACK_GENERATOR } from "./gateway";
 import { executeTool, buildDefaultRegistry, listWorkspaceWebhookTools, workspaceToolToSchema } from "./tools";
 import { customerPhoneFromJid } from "./util";
+import { normalizeStoreCatalogQuery } from "./catalog-query-normalization";
 
 const registry = buildDefaultRegistry();
 const MAX_TURNS = 2; // generation loop depth, not conversation turns
@@ -648,6 +649,7 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
 
 /** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
+  message = normalizeStoreCatalogQuery(message);
   // A fresh inventory/category query must override an older product in the chat.
   // Otherwise "¿Tienes EcoFlow?" can inherit a previous F07 lookup.
   if (isCatalogLookupQuestion(message) || hasProductReference(message)) return message;
