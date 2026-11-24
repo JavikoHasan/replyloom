@@ -199,6 +199,12 @@ describe("contextual delivery intelligence", () => {
       .toBe("¿Tienen F07?");
   });
 
+  it("does not let an old phone model override a new EcoFlow category lookup", () => {
+    const previousPhone = "[Previous messages]\\nCustomer: ¿Tienes F07?\\nAgent: Sí, aparece en catálogo.";
+    expect(resolveRecentProductQuery("¿Tienes EcoFlow?", previousPhone)).toBe("¿Tienes EcoFlow?");
+    expect(resolveRecentProductQuery("¿Tienes estaciones de energía?", previousPhone)).toBe("¿Tienes estaciones de energía?");
+  });
+
   it("explains free delivery using the electric motorina and charging availability", () => {
     expect(buildCatalogDeliveryReply("F07", catalog, sync, now))
       .toContain("motorina eléctrica");
