@@ -1,4 +1,5 @@
 name: Capture Cell Phone Store catalog diagnostics
+# Corrected tail invocation: omit invalid sampling-rate argument.
 
 on:
   push:
