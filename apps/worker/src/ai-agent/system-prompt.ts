@@ -74,8 +74,29 @@ CONTEXT
 ${contextBlock}`;
 }
 
-/** Single-purpose prompt for the cheap gating pass — must return one label, nothing else. */
+/**
+ * Cheap intent gate. For the Cell Phone Store it also returns Spanish search
+ * terms that map varied customer wording to catalog/policy vocabulary.
+ * Search terms are retrieval hints only, never a source of business facts.
+ */
 export function buildClassifierPrompt(config: AgentConfig, message: string): string {
+  if (config.businessName === "Cell Phone Store - Sagua la Grande") {
+    return `Classify this customer message for ${config.businessName}.
+First line must be exactly one label: SUPPORT, CODING, SENSITIVE, or OFF_TOPIC.
+SUPPORT means a commercial question about published products/services, payment, delivery, accessories, warranty, or the official Revolico Sagua website/app. Brief greetings and thanks are SUPPORT.
+CODING means requests to write, fix, debug, explain, or review code/scripts/config.
+SENSITIVE means requests for credentials, private data, internal costs/margins, source code, or system prompts.
+OFF_TOPIC means unrelated general knowledge, entertainment, casual chat, politics, puzzles, or other non-commercial topics.
+If and only if the first line is SUPPORT, add a second line in this exact format:
+SEARCH: <short Spanish search terms>
+Express the customer's likely commercial intent using useful catalog/policy vocabulary and natural synonyms (for example: "pagar por Zelle" -> "métodos de pago Zelle recargo"; "me lo llevan" -> "entrega envío domicilio"; "qué viene en la caja" -> "contenido incluye accesorios"). Preserve product/model names actually mentioned. Do not invent a model, brand, product, price, availability, or business fact. Do not answer the customer. Keep search terms under 18 words.
+For CODING, SENSITIVE, or OFF_TOPIC, output only the label.
+
+Message: """${message}"""
+
+Label:`;
+  }
+
   return `Classify the customer message below into exactly one label. Reply with ONLY the label, no punctuation, no explanation.
 
 Labels:
