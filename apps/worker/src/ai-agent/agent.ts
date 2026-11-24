@@ -596,7 +596,7 @@ export function buildGeneralDeliveryPolicyReply(message: string): string | null 
   const asksToSendAddress = /\b(direccion|direcciones|mi casa|mi domicilio|esta direccion|a esta direccion)\b/.test(normalized)
     && /\b(traeme|traer|traiga|traigan|llevar|lleve|lleven|entrega|entregar|envio|enviar|mandar|manda|pasar|pasas|pasarle|coordinar|disponible|domicilio|reparto)\b/.test(normalized);
   if (asksToSendAddress) {
-    return "Por seguridad y para evitar comprometer una entrega que aún no está coordinada, no puedo recibir, guardar ni reenviar direcciones ni programar entregas. Primero consulta el anuncio y coordina directamente con el vendedor mediante el contacto publicado; él confirmará si puede realizar la entrega y cuándo.";
+    return "No envíes tu dirección a este asistente: no recibe, guarda ni reenvía direcciones. Para coordinar la entrega, escríbele directamente al vendedor por WhatsApp: https://wa.me/5354590237. Indícale el modelo o producto que deseas comprar, tu nombre, un número de teléfono para contactarte y, si necesitas que lleven cambio o vuelto, la cantidad exacta. Cuando el vendedor esté conectado, te atenderá y coordinará contigo los detalles.";
   }
   if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
     return "Las motocicletas anunciadas por encargo se solicitan a nombre del cliente y, una vez gestionadas, se entregan en la puerta de su domicilio. El vendedor debe confirmar el modelo, las condiciones del encargo y la fecha de entrega. No puedo confirmar pedidos, plazos ni horarios.";
