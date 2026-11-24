@@ -127,13 +127,13 @@ describe("grounded phone technical replies", () => {
     id: "a16",
     source: "revolico-sagua.pages.dev (catalog)",
     score: 1,
-    text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nPrecio publicado: 190 USD",
+    text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\nPrecio publicado: 190 USD",
   }];
   const a17 = [{
     id: "a17",
     source: "revolico-sagua.pages.dev (catalog)",
     score: 1,
-    text: "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM\\nPrecio publicado: 200 USD",
+    text: "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM\nPrecio publicado: 200 USD",
   }];
 
   it("answers broad properties questions with only RAM and storage actually listed", () => {
@@ -163,7 +163,7 @@ describe("grounded phone technical replies", () => {
   });
 
   it("keeps a 4G/5G follow-up attached to the last actual phone model", () => {
-    const thread = "[Previous messages]\\nCustomer: ¿Tienes A17?\\nAgent: Sí, aparece en catálogo.";
+    const thread = "[Previous messages]\nCustomer: ¿Tienes A17?\nAgent: Sí, aparece en catálogo.";
     expect(resolveRecentProductQuery("¿Y es 5G?", thread)).toBe("¿Tienes A17?");
   });
 });
