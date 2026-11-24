@@ -117,7 +117,7 @@ function createSqliteAuthState(storage: SqlStorage): AuthenticationState {
 // ── Durable Object ──────────────────────────────────────────────────────
 
 const MAX_RECONNECT_ATTEMPTS = 3;
-const HUMAN_AUTO_REPLY_PAUSE_MS = 30 * 60_000;
+const HUMAN_AUTO_REPLY_PAUSE_MS = 60_000;
 const BOT_REPLY_ECHO_MARKER_MS = 15_000;
 
 type ConnectionState = "idle" | "connecting" | "qr" | "authenticated" | "connected" | "disconnected";
@@ -436,13 +436,15 @@ export class WhatsAppSession implements DurableObject {
    * heuristic (30 minutes after the last human outbound message), not a
    * reliable signal that the owner's phone has lost Internet.
    */
-  private async pauseAutoReply(_jid: string): Promise<void> {
-    await this.state.storage.put("autoReplyPaused:global", Date.now() + HUMAN_AUTO_REPLY_PAUSE_MS);
+  private async pauseAutoReply(jid: string): Promise<void> {
+    // A seller taking over one conversation must not silence the assistant
+    // for every other customer. Keep the short handoff pause scoped to this chat.
+    await this.state.storage.put(`autoReplyPaused:${jid}`, Date.now() + HUMAN_AUTO_REPLY_PAUSE_MS);
   }
 
-  /** Global human-takeover pause; expires after 30 minutes without human activity. */
-  private async isAutoReplyPaused(_jid: string): Promise<boolean> {
-    const key = "autoReplyPaused:global";
+  /** Per-chat human-takeover pause; other customers continue receiving replies. */
+  private async isAutoReplyPaused(jid: string): Promise<boolean> {
+    const key = `autoReplyPaused:${jid}`;
     const until = await this.state.storage.get<number>(key);
     if (!until) return false;
     if (until > Date.now()) return true;
