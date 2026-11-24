@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, resolveRecentProductQuery, isDeliveryQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -289,6 +289,20 @@ describe("contextual delivery intelligence", () => {
     const previousPhone = "[Previous messages]\\nCustomer: ¿Tienes F07?\\nAgent: Sí, aparece en catálogo.";
     expect(resolveRecentProductQuery("¿Tienes EcoFlow?", previousPhone)).toBe("¿Tienes EcoFlow?");
     expect(resolveRecentProductQuery("¿Tienes estaciones de energía?", previousPhone)).toBe("¿Tienes estaciones de energía?");
+  });
+
+  it("uses the newest category lookup instead of reviving an older phone for delivery follow-ups", () => {
+    const thread = "[Previous messages]\\nCustomer: ¿Tienes F07?\\nAgent: Sí.\\nCustomer: ¿Tienen estaciones de energía?\\nAgent: Sí, aparece una EcoFlow.";
+    expect(resolveRecentProductQuery("¿Hacen domicilio?", thread)).toBe("¿Tienen estaciones de energía?");
+    expect(buildGeneralDeliveryPolicyReply("¿Hacen domicilio?", resolveRecentProductQuery("¿Hacen domicilio?", thread)))
+      .toContain("estaciones EcoFlow anunciadas");
+  });
+
+  it("recognizes same-day and next-day delivery requests without promising a booking", () => {
+    for (const question of ["Necesito uno mañana", "Quiero uno hoy", "Quiero uno para mañana", "¿Me lo pueden traer hoy?"]) {
+      expect(isDeliverySchedulingQuestion(question)).toBe(true);
+    }
+    expect(isDeliverySchedulingQuestion("¿Tienen servicio a domicilio?")).toBe(false);
   });
 
   it("explains free delivery using the electric motorina and charging availability", () => {
