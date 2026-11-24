@@ -113,4 +113,9 @@ describe("redactSensitive", () => {
     expect(out).not.toContain("revolico-sagua.pages.dev.evil.example");
     expect(out.match(/\[enlace externo omitido\]/g)).toHaveLength(2);
   });
+
+  it("allows only the store's direct WhatsApp contact link", () => {
+    expect(redactSensitive("Escríbele al vendedor: https://wa.me/5354590237", true)).toContain("https://wa.me/5354590237");
+    expect(redactSensitive("Otro enlace https://wa.me/5354590000", true)).not.toContain("https://wa.me/5354590000");
+  });
 });
