@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -157,6 +157,25 @@ describe("catalog price replies", () => {
   });
 });
 
+
+describe("payment policy routing", () => {
+  it("answers the exact WhatsApp wording before intent classification", async () => {
+    const config = {
+      workspaceId: "store-workspace",
+      enabled: true,
+      businessName: "Cell Phone Store - Sagua la Grande",
+      scopeDescription: "published store products and services",
+      replyInGroups: false,
+      models: { classifier: "classifier", generator: "generator", embedding: "embedding" },
+      maxContextChunks: 4,
+      similarityThreshold: 0.72,
+      cacheTtlSeconds: 3600,
+    };
+    const reply = await handleAgentMessage({} as any, config, { message: "Aceptan pago por Zelle" });
+    expect(reply.text).toContain("aceptamos Zelle");
+    expect(reply.text).toContain("10%");
+  });
+});
 
 describe("payment policy replies", () => {
   it("answers CUP payment questions without suggesting an exchange rate", () => {
