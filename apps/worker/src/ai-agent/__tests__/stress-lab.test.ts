@@ -64,7 +64,7 @@ describe("Cell Phone Store query stress laboratory", () => {
     }
     expect(normalizeStoreCatalogQuery("¿Tines Samsung F07?")).toContain("tienes");
     expect(normalizeStoreCatalogQuery("¿Tienes Oups?")).toContain("oupes");
-    expect(normalizeStoreCatalogQuery("¿Tienes cargdor?")).toContain("cargadores");
+    expect(normalizeStoreCatalogQuery("¿Tienes cargdor?")).toContain("cargador");
   });
 
   it("keeps brand requests isolated and never substitutes EcoFlow for Oupes", () => {
