@@ -34,6 +34,7 @@ describe("outbound guard", () => {
     const reply = "La entrega a domicilio es gratuita en Sagua la Grande.";
     expect(deduper.allow(jid, reply, t0)).toBe(true);
     expect(deduper.allow(jid, reply, t0 + 1_000)).toBe(false);
+    expect(deduper.allow(jid, "LA ENTREGA  a domicilio es gratuita en Saguá la Grande.", t0 + 1_500)).toBe(false);
     expect(deduper.allow(jid, "El precio publicado es 190 USD.", t0 + 2_000)).toBe(true);
     expect(deduper.allow("other@s.whatsapp.net", reply, t0 + 2_000)).toBe(true);
     expect(deduper.allow(jid, reply, t0 + 46_000)).toBe(true);
