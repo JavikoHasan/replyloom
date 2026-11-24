@@ -51,8 +51,6 @@ export function normalizeStoreCatalogQuery(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/([a-z])([0-9])/g, "$1 $2")
-    .replace(/([0-9])([a-z])/g, "$1 $2")
     .replace(/[a-z]+|[0-9]+|[^\s]/g, (token) => canonicalWord(token))
     .replace(/\s+/g, " ")
     .trim();
