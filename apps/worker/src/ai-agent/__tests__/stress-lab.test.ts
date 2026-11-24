@@ -112,6 +112,23 @@ describe("Cell Phone Store query stress laboratory", () => {
     expect(reply).not.toContain("ECOFLOW");
   });
 
+  it("does not claim covers or screen protectors are unavailable for separate sale", () => {
+    const question = "¿Vendes mica por separado?";
+    expect(isCatalogLookupQuestion(question)).toBe(true);
+    const reply = buildCatalogLookupReply(question, catalog, sync, now);
+    expect(reply).toContain("se incluyen con la compra de nuestros teléfonos");
+    expect(reply).toContain("No tengo confirmación de que se vendan por separado");
+    expect(reply).not.toContain("No vendemos cables ni cargadores por separado");
+  });
+
+  it("does not invent independent adapter inventory", () => {
+    const question = "¿Vendes adaptador por separado?";
+    expect(isCatalogLookupQuestion(question)).toBe(true);
+    const reply = buildCatalogLookupReply(question, catalog, sync, now);
+    expect(reply).toContain("No tengo un anuncio confirmado de adaptadores");
+    expect(reply).not.toContain("ECOFLOW");
+  });
+
   it("answers accessory questions with wattage or connector tokens without treating them as model IDs", () => {
     for (const question of ["¿Tienes cargador de 25W en venta?", "¿Venden cable USB-C 3A?"]) {
       expect(isCatalogLookupQuestion(question), question).toBe(true);
