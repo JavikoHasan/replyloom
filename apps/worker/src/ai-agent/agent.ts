@@ -748,16 +748,20 @@ export function buildCatalogLookupReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalized = normalizeStoreCatalogQuery(message);
-  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
-  const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendes|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
-  // Handle accessory policy before interpreting wattage or connector versions as model codes.
-  if (asksAccessoryCommerce && /\b(cables?|cargadores?)\b/.test(normalized)) {
+  const asksCableOrCharger = /\\b(cables?|cargadores?)\\b/.test(normalized)
+    && /\\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\\b/.test(normalized);
+  const asksCoverOrScreenProtector = /\\b(micas?|covers?|fundas?)\\b/.test(normalized)
+    && /\\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\\b/.test(normalized);
+  const asksAdapter = /\\badaptadores?\\b/.test(normalized)
+    && /\\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\\b/.test(normalized);
+  // Route accessory commerce before parsing wattage/current tokens as model identifiers.
+  if (asksCableOrCharger) {
     return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
   }
-  if (asksAccessoryCommerce && /\b(micas?|covers?|fundas?)\b/.test(normalized)) {
+  if (asksCoverOrScreenProtector) {
     return "El cover de fábrica y la mica protectora de cristal templado se incluyen con la compra de nuestros teléfonos. No tengo confirmación de que se vendan por separado; para evitar darte un dato incorrecto, consúltalo directamente con el vendedor.";
   }
-  if (asksAccessoryCommerce && /\badaptadores?\b/.test(normalized)) {
+  if (asksAdapter) {
     return "No tengo un anuncio confirmado de adaptadores disponibles por separado. Puedes consultar directamente con el vendedor para confirmar si tiene alguno.";
   }
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
