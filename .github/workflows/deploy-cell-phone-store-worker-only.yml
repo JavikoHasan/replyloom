@@ -108,7 +108,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const config = fs.readFileSync('apps/worker/wrangler.jsonc', 'utf8');
-          if (!/"name"\\s*:\\s*"cell-phone-store-whatsapp-ai"/.test(config)) {
+          if (!/"name"\s*:\s*"cell-phone-store-whatsapp-ai"/.test(config)) {
             throw new Error('Refusing deployment: Worker name is not cell-phone-store-whatsapp-ai.');
           }
           if (config.includes('REPLACE_WITH_')) {
