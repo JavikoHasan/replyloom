@@ -616,12 +616,12 @@ function normalizeBusinessText(value: string): string {
 
 /** Detect whether the customer is asking about delivery or home service. */
 export function isDeliveryQuestion(message: string): boolean {
-  return /\b(entrega|entregan|entregar|envio|envian|domicilio|direccion|direcciones|a casa|servicio a domicilio|reparto|llevarlo|llevarla|traeme|traerme|llevarme|mandame|enviame|cuando llega|cuando entregan|cuanto cuesta el domicilio|cuanto cobran por el domicilio)\b/.test(normalizeBusinessText(message));
+  return /\b(entrega|entregan|entregar|envio|envian|domicilio|direccion|direcciones|a casa|servicio a domicilio|reparto|llevarlo|llevarla|traeme|traerme|llevarme|mandame|enviame|cuando llega|cuando entregan|cuanto cuesta el domicilio|cuanto cobran por el domicilio)\b/.test(normalizeStoreCatalogQuery(message));
 }
 
 /** Detect explicit requests for delivery today/tomorrow; these must never be booked by the bot. */
 export function isDeliverySchedulingQuestion(message: string): boolean {
-  const normalized = normalizeBusinessText(message);
+  const normalized = normalizeStoreCatalogQuery(message);
   const asksForDelivery = /\b(necesito|quiero|quisiera|pueden traer|me pueden traer|traigan|lleven|entreguen|manden|envien|me lo traen|me lo llevan|me lo entregan)\b/.test(normalized);
   const namesTime = /\b(hoy|manana|pasado manana|esta tarde|esta noche)\b/.test(normalized);
   return asksForDelivery && namesTime;
@@ -629,7 +629,7 @@ export function isDeliverySchedulingQuestion(message: string): boolean {
 
 /** Safe category-level delivery guidance when the customer has not named a model. */
 export function buildGeneralDeliveryPolicyReply(message: string, contextualProductQuery = ""): string | null {
-  const normalized = normalizeBusinessText(message + " " + contextualProductQuery);
+  const normalized = normalizeStoreCatalogQuery(message + " " + contextualProductQuery);
   const asksToSendAddress = /\b(direccion|direcciones|mi casa|mi domicilio|esta direccion|a esta direccion)\b/.test(normalized)
     && /\b(traeme|traer|traiga|traigan|llevar|lleve|lleven|lleves|entrega|entregar|envio|enviar|mandar|manda|pasar|pasas|pasarle|coordinar|disponible|domicilio|reparto)\b/.test(normalized);
   if (asksToSendAddress) {
@@ -823,7 +823,7 @@ export function buildCatalogLookupReply(
  * Never estimates exchange rates or implies CUP payment is accepted for USD ads.
  */
 export function buildPaymentPolicyReply(message: string): string | null {
-  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalized = normalizeStoreCatalogQuery(message);
   const asksZelle = /\bzelle\b/.test(normalized);
   const asksCup = /\bcup\b|pesos? cubanos?|moneda nacional/.test(normalized);
   const asksDollarRate = /\b(dolar|dolares|cambio|tasa|cotizacion|cotizar|valoras|valoracion)\b/.test(normalized)
