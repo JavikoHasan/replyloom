@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -288,6 +288,27 @@ describe("payment policy routing", () => {
   });
 });
 
+describe("reservation policy replies", () => {
+  it("hands phone reservations to the seller without promising a hold", () => {
+    const reply = buildReservationPolicyReply("¿Cómo puedo reservar uno?", "¿Tienes A17?");
+    expect(reply).toContain("No puedo apartar ni garantizar una reserva");
+    expect(reply).toContain("existencia física");
+    expect(reply).toContain("https://wa.me/5354590237");
+  });
+
+  it("keeps motorcycle reservations as an order inquiry, not a confirmed booking", () => {
+    const reply = buildReservationPolicyReply("Quiero reservar una", "¿Cómo puedo encargar una moto?");
+    expect(reply).toContain("por encargo a nombre del cliente");
+    expect(reply).toContain("No puedo reservar ni formalizar el pedido");
+    expect(reply).not.toContain("entrega en la puerta");
+  });
+
+  it("does not assume a product when reservation context is missing", () => {
+    expect(buildReservationPolicyReply("Quiero reservar uno"))
+      .toContain("No puedo formalizar ni garantizar reservas");
+  });
+});
+
 describe("contextual delivery intelligence", () => {
   const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
   const now = Date.parse("2026-11-24T12:00:00Z");
@@ -477,16 +498,22 @@ describe("store policy-only replies", () => {
     expect(buildStorePolicyOnlyReply("¿Qué garantía tiene EcoFlow?")).toContain("no tienen garantía comercial");
   });
 
-  it("explains motorcycle order and international warranty limitations", () => {
+  it("does not invent motorcycle warranty coverage", () => {
     const reply = buildStorePolicyOnlyReply("¿Qué garantía tienen las motocicletas?");
-    expect(reply).toContain("corresponde al fabricante");
-    expect(reply).toContain("transporte podría correr por cuenta del cliente");
+    expect(reply).toContain("No tengo condiciones de garantía verificadas");
+    expect(reply).not.toContain("corresponde al fabricante");
   });
 
   it("explains the motorcycle order process without inventing deposits or dates", () => {
     const reply = buildStorePolicyOnlyReply("¿Cómo es el proceso de encargo de las motos?");
     expect(reply).toContain("a nombre del propio cliente");
-    expect(reply).toContain("No puedo confirmar un pedido, anticipo, plazo ni fecha de llegada");
+    expect(reply).toContain("No puedo confirmar ni formalizar una reserva, anticipo, plazo ni fecha de llegada");
+  });
+  it("does not promise motorcycle home delivery or an unverified warranty", () => {
+    expect(buildStorePolicyOnlyReply("¿Las motos las entregan en la casa?"))
+      .toContain("No tengo confirmada la modalidad de entrega");
+    expect(buildGeneralDeliveryPolicyReply("¿Cómo entregan las motos?"))
+      .toContain("no puedo prometer entrega a domicilio");
   });
   it("declines customer sales and swaps", () => {
     expect(buildStorePolicyOnlyReply("Te vendo este teléfono")).toContain("no compra artículos a clientes");
