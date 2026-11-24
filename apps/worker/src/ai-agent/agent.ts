@@ -351,6 +351,7 @@ async function generateReply(
 /**
  * Normalize the legacy Workers AI response and the OpenAI-compatible
  * chat-completion response returned by newer models such as Gemma 4.
+ * Tool-call envelopes are preserved so follow-up turns retain their native format.
  */
 export function normalizeGeneratorResult(result: any): {
   response: string;
