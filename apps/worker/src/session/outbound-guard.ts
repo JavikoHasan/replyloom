@@ -87,6 +87,42 @@ export class AutoReplyLimiter {
 }
 
 /**
+ * Suppresses identical automatic replies to the same chat during a short
+ * burst. Several rapid customer messages can otherwise race through separate
+ * AI tasks and send the same final answer multiple times.
+ */
+export class AutoReplyContentDeduper {
+  private recent = new Map<string, number>();
+
+  constructor(private readonly windowMs = 45_000) {}
+
+  allow(jid: string, text: string, now = Date.now()): boolean {
+    const normalized = text.normalize("NFD")
+      .replace(/[\\u0300-\\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\\s+/g, " ")
+      .trim();
+    // FNV-1a keeps storage in memory bounded without retaining customer text.
+    let hash = 2166136261;
+    for (let i = 0; i < normalized.length; i++) {
+      hash ^= normalized.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const key = jid + ":" + (hash >>> 0).toString(36);
+    const previous = this.recent.get(key);
+    if (previous !== undefined && now - previous < this.windowMs) return false;
+    this.recent.set(key, now);
+    if (this.recent.size > 2_000) {
+      for (const [entry, timestamp] of this.recent) {
+        if (now - timestamp >= this.windowMs) this.recent.delete(entry);
+      }
+      if (this.recent.size > 2_000) this.recent.clear();
+    }
+    return true;
+  }
+}
+
+/**
  * Daily cap on *new* chats: first messages to numbers that have never
  * written to this number. Scaled by the same warm-up tiers as broadcasts,
  * so a freshly linked number can't start messaging strangers at full rate.
