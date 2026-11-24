@@ -89,7 +89,7 @@ SENSITIVE means requests for credentials, private data, internal costs/margins, 
 OFF_TOPIC means unrelated general knowledge, entertainment, casual chat, politics, puzzles, or other non-commercial topics.
 If and only if the first line is SUPPORT, add a second line in this exact format:
 SEARCH: <short Spanish search terms>
-Express the customer's likely commercial intent using useful catalog/policy vocabulary and natural synonyms (for example: "pagar por Zelle" -> "métodos de pago Zelle recargo"; "me lo llevan" -> "entrega envío domicilio"; "qué viene en la caja" -> "contenido incluye accesorios"). Preserve product/model names actually mentioned. Do not invent a model, brand, product, price, availability, or business fact. Do not answer the customer. Keep search terms under 18 words.
+Express the customer's likely commercial intent using useful catalog/policy vocabulary and natural synonyms (for example: "pagar por Zelle" -> "métodos de pago Zelle recargo"; "me lo llevan" -> "entrega envío domicilio"; "qué viene en la caja" -> "contenido incluye accesorios"). Preserve product/model names actually mentioned. Do not invent a model, brand, product, price, availability, or business fact. Do not answer the customer. Keep search terms under 8 words.
 For CODING, SENSITIVE, or OFF_TOPIC, output only the label.
 
 Message: """${message}"""
