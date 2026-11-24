@@ -1,6 +1,7 @@
 import type { AgentConfig, AgentContext, AgentEnv, AgentInput, AgentReply, RetrievedChunk, ToolSchema } from "./types";
 import { classifyIntent, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "./guardrails";
 import { createDb, eq, desc, messages } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { retrieveContext, retrieveCatalogChunks } from "./rag";
 import { buildSystemPrompt } from "./system-prompt";
 import { STORE_POLICY } from "./store-policy";
@@ -575,7 +576,7 @@ async function loadConversationThread(
       .select({ direction: messages.direction, body: messages.body })
       .from(messages)
       .where(eq(messages.conversationId, input.conversationId))
-      .orderBy(desc(messages.createdAt))
+      .orderBy(desc(messages.createdAt), desc(sql`rowid`))
       .limit(limit)
       .all();
 
