@@ -195,7 +195,7 @@ describe("contextual delivery intelligence", () => {
 
   it("recognizes delivery questions and carries the last product into a short follow-up", () => {
     expect(isDeliveryQuestion("¿Tienen servicio a domicilio?")).toBe(true);
-    expect(resolveRecentProductQuery("¿Y la entrega?", "[Previous messages]\\nCustomer: ¿Tienen F07?\\nAgent: Sí, el F07 está publicado."))
+    expect(resolveRecentProductQuery("¿Y la entrega?", "[Previous messages]\nCustomer: ¿Tienen F07?\nAgent: Sí, el F07 está publicado."))
       .toBe("¿Tienen F07?");
   });
 
@@ -227,13 +227,13 @@ describe("Zelle product follow-up totals", () => {
   });
 
   it("calculates the total when the current message explicitly asks for Zelle and names the product", () => {
-    expect(buildZelleTotalReply(catalogReply, "[Previous messages]\\nCustomer: F07", true))
+    expect(buildZelleTotalReply(catalogReply, "[Previous messages]\nCustomer: F07", true))
       .toContain("el total es 165 USD");
   });
 
   it("does not add a Zelle total without a prior Zelle payment exchange", () => {
-    expect(buildZelleTotalReply(catalogReply, "[Previous messages]\\nCustomer: F07")).toBeNull();
-    expect(buildZelleTotalReply(catalogReply, "Customer: ¿Aceptan Zelle?\\nAgent: No tengo esa información")).toBeNull();
+    expect(buildZelleTotalReply(catalogReply, "[Previous messages]\nCustomer: F07")).toBeNull();
+    expect(buildZelleTotalReply(catalogReply, "Customer: ¿Aceptan Zelle?\nAgent: No tengo esa información")).toBeNull();
   });
 
   it("does not calculate when the catalog reply has no verified USD price", () => {
