@@ -275,8 +275,8 @@ export async function handleAgentMessage(
     return { text, usedTools: [], usedContext: [], blocked: true, blockReason: gate.label, cached: false };
   }
 
-  // Answer technical phone questions only from fields explicitly present in
-  // the exact, freshly synchronized listing. Missing specifications stay unknown.
+  // Deterministic technical replies precede generation so verified listing
+  // fields are returned consistently; missing specifications stay unknown.
   if (catalogOnlyBusiness) {
     const syncStatus = await env.REPLY_CACHE
       .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
