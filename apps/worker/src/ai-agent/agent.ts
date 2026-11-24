@@ -146,6 +146,14 @@ export async function handleAgentMessage(
     }
   }
 
+  // Payment terms are fixed business policy and bypass the probabilistic classifier.
+  if (catalogOnlyBusiness) {
+    const paymentReply = buildPaymentPolicyReply(message);
+    if (paymentReply) {
+      return { text: paymentReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   // ── 1b) Conversation thread — gives the model continuity for follow-ups
   // like "and shipping?" without a full message-history tool call, and
   // grounds the RAG query in what the customer was actually asking about. ──
@@ -487,7 +495,7 @@ export function isCatalogLookupQuestion(message: string): boolean {
   const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const hasModelCode = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(normalized)
     && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(normalized);
-  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estaciones? de energia|productos?|equipos?|catalogo|que venden|que tienen|a la venta)\b/.test(normalized);
+  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estaciones? de energia|productos?|equipos?|catalogo|que venden|que vendes|que cosas venden|que cosas vendes|que tienen|que cosas tienen|que ofrecen|a la venta)\b/.test(normalized);
   const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\b/.test(normalized);
   const bareModel = /^(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
   return asksInventory || (hasModelCode && (asksAvailability || bareModel));
@@ -560,6 +568,28 @@ export function buildCatalogLookupReply(
   });
   const introduction = isEcoFlowQuery ? "Estas son las " : "Estos son los ";
   return introduction + label + " que aparecen en nuestro catálogo publicado:\n" + lines.join("\n") + "\n\nLa disponibilidad física debe confirmarse directamente con el vendedor.";
+}
+
+/**
+ * Answers payment questions directly from the approved store policy.
+ * Never estimates exchange rates or implies CUP payment is accepted for USD ads.
+ */
+export function buildPaymentPolicyReply(message: string): string | null {
+  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const asksZelle = /\bzelle\b/.test(normalized);
+  const asksCup = /\bcup\b|pesos? cubanos?|moneda nacional/.test(normalized);
+  const asksPayment = /\b(pago|pagar|aceptan|aceptas|metodo de pago|forma de pago|moneda)\b/.test(normalized);
+
+  if (asksZelle) {
+    return "Sí, aceptamos Zelle para los anuncios publicados en USD. Se aplica un recargo del 10% sobre el precio publicado. Si me dices qué producto te interesa, puedo indicarte el total exacto por Zelle.";
+  }
+  if (asksCup) {
+    return "No aceptamos efectivo en CUP ni transferencias en CUP para los anuncios publicados en USD. Los precios se mantienen en la moneda indicada en cada anuncio.";
+  }
+  if (asksPayment) {
+    return "Los precios se respetan en la moneda indicada en cada anuncio. Para publicaciones en USD, aceptamos Zelle con un recargo del 10%. No aceptamos efectivo ni transferencias en CUP para esos anuncios.";
+  }
+  return null;
 }
 
 /**
