@@ -748,7 +748,7 @@ export function buildCatalogLookupReply(
   const ageMs = now - syncedAt;
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
-  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalized = normalizeStoreCatalogQuery(message);
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const byTitle = new Map<string, { title: string; category: string; price: string; availability: string }>();
   for (const block of blocks) {
