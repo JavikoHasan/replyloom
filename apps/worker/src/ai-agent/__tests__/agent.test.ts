@@ -406,7 +406,7 @@ describe("category-level delivery replies", () => {
   it("answers delivery questions without inventing a fee", () => {
     expect(buildGeneralDeliveryPolicyReply("¿Cuánto cuesta el domicilio de los teléfonos?")).toContain("es gratuita");
     expect(buildGeneralDeliveryPolicyReply("¿Cómo es el domicilio de las EcoFlow?")).toContain("gratuita");
-    expect(buildGeneralDeliveryPolicyReply("¿Cuánto cuesta el domicilio?")).toContain("dependen del producto");
+    expect(buildGeneralDeliveryPolicyReply("¿Cuánto cuesta el domicilio?")).toContain("deben confirmarse en su anuncio o directamente con el vendedor");
   });
 });
 
