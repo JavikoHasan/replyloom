@@ -581,19 +581,19 @@ function cache(env: AgentEnv, config: AgentConfig, key: string, value: string, t
 
 /** Normalize user-facing business text without changing product identifiers. */
 function normalizeBusinessText(value: string): string {
-  return value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 /** Detect whether the customer is asking about delivery or home service. */
 export function isDeliveryQuestion(message: string): boolean {
-  return /\\b(entrega|entregan|entregar|envio|envian|domicilio|a casa|servicio a domicilio|reparto|llevarlo|llevarla)\\b/.test(normalizeBusinessText(message));
+  return /\b(entrega|entregan|entregar|envio|envian|domicilio|a casa|servicio a domicilio|reparto|llevarlo|llevarla)\b/.test(normalizeBusinessText(message));
 }
 
 /** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
   if (hasProductReference(message)) return message;
   if (!conversationThread) return message;
-  const customerMessages = [...conversationThread.matchAll(/Customer:\\s*([^\\n]+)/g)].map((match) => match[1]);
+  const customerMessages = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]);
   for (const previous of customerMessages.reverse()) {
     if (hasProductReference(previous)) return previous;
   }
@@ -601,8 +601,8 @@ export function resolveRecentProductQuery(message: string, conversationThread: s
 }
 
 export function hasProductReference(message: string): boolean {
-  return /\\b(?:[a-z]{1,8}\\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})\\b/i.test(message)
-    && !/\\b\\d+(?:gb|mb|ram|rom)\\b/i.test(message);
+  return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(message)
+    && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(message);
 }
 
 /** Answer delivery only from the exact product's published delivery field. */
@@ -618,41 +618,41 @@ export function buildCatalogDeliveryReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalized = normalizeBusinessText(message);
-  const modelIds = [...normalized.matchAll(/\\b([a-z]{1,8}\\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})\\b/g)]
+  const modelIds = [...normalized.matchAll(/\b([a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/g)]
     .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
-    .filter((key) => !/^\\d+(?:gb|mb|ram|rom)$/.test(key));
+    .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/.test(key));
   if (modelIds.length === 0) return null;
 
-  const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\\s*)/));
+  const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = blocks.filter((block) => {
-    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
     const compactTitle = normalizeBusinessText(title).replace(/[^a-z0-9]/g, "");
     return modelIds.some((id) => compactTitle.includes(id));
   });
   const unique = new Map<string, string>();
   for (const block of matches) {
-    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
     if (title) unique.set(normalizeBusinessText(title), block);
   }
   if (unique.size !== 1) return null;
 
   const block = [...unique.values()][0];
-  const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
-  const delivery = block.match(/^Entrega publicada:\\s*(.+)$/im)?.[1]?.trim();
+  const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+  const delivery = block.match(/^Entrega publicada:\s*(.+)$/im)?.[1]?.trim();
   if (!title || !delivery || /no especificada/i.test(delivery)) {
     return "La ficha vigente de ese producto no especifica claramente el servicio a domicilio. Para no darte una información incorrecta, debes confirmarlo con el vendedor.";
   }
   const value = normalizeBusinessText(delivery);
-  if (/\\b(gratis|gratuita|gratuito|sin costo|sin recargo)\\b/.test(value)) {
-    if (/\\b(moto|motocicleta)\\b/.test(normalizeBusinessText(title))) {
+  if (/\b(gratis|gratuita|gratuito|sin costo|sin recargo)\b/.test(value)) {
+    if (/\b(moto|motocicleta)\b/.test(normalizeBusinessText(title))) {
       return "La ficha de " + title + " indica entrega a domicilio sin costo adicional. Al ser un producto por encargo, la entrega en la puerta del domicilio se coordina directamente con el vendedor; no puedo confirmar fecha ni hora.";
     }
     return "La ficha de " + title + " indica entrega a domicilio gratuita. Se realiza mediante motorina eléctrica, sin costo adicional. El horario depende de la disponibilidad de carga y debe coordinarse previamente con el vendedor.";
   }
-  if (/\\b(costo adicional|costo extra|con costo|no gratuita|no gratis)\\b/.test(value)) {
+  if (/\b(costo adicional|costo extra|con costo|no gratuita|no gratis)\b/.test(value)) {
     return "La ficha de " + title + " indica entrega a domicilio con costo adicional. El importe y la disponibilidad deben confirmarse directamente con el vendedor; no tengo un costo de entrega confirmado en el anuncio.";
   }
-  if (/\\b(no ofrece|sin servicio|no dispone|no cuenta con|no hay servicio)\\b/.test(value)) {
+  if (/\b(no ofrece|sin servicio|no dispone|no cuenta con|no hay servicio)\b/.test(value)) {
     return "La ficha de " + title + " indica que no ofrece servicio a domicilio.";
   }
   return "La ficha de " + title + " indica esta condición de entrega: " + delivery + ". Para confirmar cómo se realiza y su disponibilidad, debes coordinarlo directamente con el vendedor.";
