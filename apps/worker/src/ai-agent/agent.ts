@@ -129,7 +129,7 @@ export async function handleAgentMessage(
   // Explicit requests for a same-day/next-day delivery need a safe, deterministic
   // handoff. Never let the language model imply that a slot has been booked.
   if (catalogOnlyBusiness && isDeliverySchedulingQuestion(message)) {
-    const deliverySubject = /\b(ecoflow|estaciones? de energia|delta|river)\b/i.test(contextualProductQuery)
+    const deliverySubject = /\b(ecoflow|estacion(?:es)? de energia|delta|river)\b/i.test(contextualProductQuery)
       ? " de las estaciones de energía anunciadas"
       : /\b(telefono|telefonos|celular|celulares|samsung|galaxy|redmi|iphone|f07|a16|a17)\b/i.test(contextualProductQuery)
         ? " del teléfono que te interesa"
@@ -649,7 +649,6 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
 
 /** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
-  message = normalizeStoreCatalogQuery(message);
   // A fresh inventory/category query must override an older product in the chat.
   // Otherwise "¿Tienes EcoFlow?" can inherit a previous F07 lookup.
   if (isCatalogLookupQuestion(message) || hasProductReference(message)) return message;
@@ -727,10 +726,10 @@ export function isCatalogLookupQuestion(message: string): boolean {
   const normalized = normalizeStoreCatalogQuery(message);
   const hasModelCode = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(normalized)
     && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(normalized);
-  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estaciones? de energia|productos?|equipos?|catalogo|que venden|que vendes|que cosas venden|que cosas vendes|que tienen|que cosas tienen|que ofrecen|a la venta)\b/.test(normalized);
+  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estacion(?:es)? de energia|productos?|equipos?|catalogo|que venden|que vendes|que cosas venden|que cosas vendes|que tienen|que cosas tienen|que ofrecen|a la venta)\b/.test(normalized);
   const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\b/.test(normalized);
   const asksKnownBrand = /\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/.test(normalized);
-  const asksAccessory = /\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\b/.test(normalized);
+  const asksAccessory = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const asksAccessoryCommerce = asksAccessory && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   const bareModel = /^(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
   return asksInventory || (asksAvailability && asksKnownBrand) || asksAccessoryCommerce || (hasModelCode && (asksAvailability || bareModel));
@@ -782,10 +781,10 @@ export function buildCatalogLookupReply(
   }
 
   const isPhoneQuery = /\b(telefonos?|celulares?|moviles?|smartphones?)\b/.test(normalized);
-  const isEnergyQuery = /\bestaciones? de energia\b|\benergia portatil\b/.test(normalized);
+  const isEnergyQuery = /\bestacion(?:es)? de energia\b|\benergia portatil\b/.test(normalized);
   const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
-  const isAccessoryQuery = /\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\b/.test(normalized);
+  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   let filtered = products;
   if (isPhoneQuery) {
@@ -798,7 +797,7 @@ export function buildCatalogLookupReply(
     filtered = products.filter((product) => (product.title + " " + product.category)
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(brand));
   } else if (isEnergyQuery) {
-    filtered = products.filter((product) => /\bestaciones? de energia\b|\benergia\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
+    filtered = products.filter((product) => /\bestacion(?:es)? de energia\b|\benergia\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
   } else if (isAccessoryQuery) {
     return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
   }
