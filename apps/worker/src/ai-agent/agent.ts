@@ -152,6 +152,37 @@ export async function handleAgentMessage(
     }
   }
 
+  // Clear purchase interest must continue the last exact product lookup instead of
+  // falling through to the generic no-information response.
+  if (catalogOnlyBusiness && isPurchaseInterestMessage(message) && hasProductReference(contextualProductQuery)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const catalogReply = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      const purchaseReply = buildPurchaseInterestReply(contextualProductQuery, catalogReply);
+      if (purchaseReply) {
+        return { text: purchaseReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
+      }
+    } catch (error) {
+      console.warn("[catalog-agent] purchase-interest-lookup-error", { errorType: error instanceof Error ? error.name : typeof error });
+    }
+  }
+
+  // A short functionality follow-up such as "¿sí funciona?" refers to the
+  // last phone discussed. State only the store's verified new/sealed status
+  // and 15-day warranty; never claim to have tested a particular unit.
+  if (catalogOnlyBusiness && isPhoneFunctionalityQuestion(message, contextualProductQuery)) {
+    return {
+      text: "El teléfono que consultaste se vende nuevo, sellado y original. La compra incluye 15 días de garantía. No puedo probar una unidad concreta desde este chat; para confirmar cualquier detalle antes de comprar, puedes escribir directamente al vendedor: https://wa.me/5354590237.",
+      usedTools: [],
+      usedContext: [],
+      blocked: false,
+      cached: false,
+    };
+  }
+
   // Delivery questions are answered from the delivery field of the exact live
   // listing. Category defaults are never used to override a listing's explicit
   // delivery option.
@@ -634,6 +665,31 @@ export function isDeliverySchedulingQuestion(message: string): boolean {
   const asksForDelivery = /\b(necesito|quiero|quisiera|pueden traer|me pueden traer|traigan|lleven|entreguen|manden|envien|me lo traen|me lo llevan|me lo entregan)\b/.test(normalized);
   const namesTime = /\b(hoy|manana|pasado manana|esta tarde|esta noche)\b/.test(normalized);
   return asksForDelivery && namesTime;
+}
+
+/** Detect clear purchase-interest phrases; a bare "sí" is intentionally ambiguous. */
+export function isPurchaseInterestMessage(message: string): boolean {
+  const normalized = normalizeStoreCatalogQuery(message);
+  return /\\b(me interesa|estoy interesado|estoy interesada|lo quiero|la quiero|quiero comprarlo|quiero comprarla|quiero ese|quiero esa|me lo llevo|me la llevo)\\b/.test(normalized);
+}
+
+/** Continue an exact catalog lookup without inventing stock or a reservation. */
+export function buildPurchaseInterestReply(productQuery: string, catalogReply: string | null): string | null {
+  if (!hasProductReference(productQuery)) return null;
+  if (!catalogReply || /no encuentro un anuncio vigente|no aparece en nuestro catalogo/i.test(catalogReply)) {
+    return "¡Entendido! Para evitar darte información incorrecta, el vendedor debe confirmar que el producto que consultaste siga anunciado y físicamente disponible. Puedes escribirle directamente por WhatsApp: https://wa.me/5354590237.";
+  }
+  if (!/aparece en nuestro catalogo/i.test(normalizeBusinessText(catalogReply))) return null;
+  return "¡Perfecto! " + catalogReply + " Si deseas continuar con la compra, escribe al vendedor por WhatsApp: https://wa.me/5354590237. Indícale que te interesa este modelo para que confirme la existencia física y coordine contigo.";
+}
+
+/** Recognize a phone-functionality follow-up only when the previous turn named a phone. */
+export function isPhoneFunctionalityQuestion(message: string, productQuery: string): boolean {
+  const normalizedMessage = normalizeStoreCatalogQuery(message);
+  const normalizedQuery = normalizeStoreCatalogQuery(productQuery);
+  const asksFunctionality = /\\b(funciona|funcionamiento|sirve|funcionar)\\b/.test(normalizedMessage);
+  const namesPhone = /\\b(telefono|telefonos|celular|celulares|samsung|galaxy|redmi|iphone|f07|a16|a17|a56)\\b/.test(normalizedQuery);
+  return asksFunctionality && namesPhone;
 }
 
 /** Deterministic reservation guidance; never claims a hold or booking exists. */
