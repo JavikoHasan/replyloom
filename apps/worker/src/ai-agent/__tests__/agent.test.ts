@@ -512,6 +512,8 @@ describe("store policy-only replies", () => {
   it("does not promise motorcycle home delivery or an unverified warranty", () => {
     expect(buildStorePolicyOnlyReply("¿Las motos las entregan en la casa?"))
       .toContain("No tengo confirmada la modalidad de entrega");
+    expect(buildStorePolicyOnlyReply("¿Cómo entregan las motocicletas?"))
+      .toContain("debe confirmar si existe entrega a domicilio");
     expect(buildGeneralDeliveryPolicyReply("¿Cómo entregan las motos?"))
       .toContain("no puedo prometer entrega a domicilio");
   });
