@@ -660,6 +660,7 @@ export function buildCatalogDeliveryReply(
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = blocks.filter((block) => {
     const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
+    // Match the complete model token: A1 must never resolve to A16 or A160.
     const normalizedTitle = normalizeBusinessText(title);
     return modelIds.some((id) => new RegExp("(^|[^a-z0-9])" + id + "([^a-z0-9]|$)").test(normalizedTitle));
   });
