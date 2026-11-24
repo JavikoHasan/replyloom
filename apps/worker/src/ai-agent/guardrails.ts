@@ -149,7 +149,7 @@ export function privateLocationReply(message: string): string | null {
   if (/\b(tienda fisica|local fisico|establecimiento fisico|sucursal|showroom)\b/.test(m) ||
       ( /\b(tienda|local|establecimiento|negocio|radican|radicados)\b/.test(m) &&
         /\b(hay|tienen|tiene|donde|ubicacion|direccion|visitar|ir|abierta|abierto|fisica|fisico)\b/.test(m))) {
-    return "No tenemos tienda física. Somos un negocio que atiende por WhatsApp y mediante nuestros anuncios publicados. Si deseas visitarnos o coordinar una compra, puedes ponerte de acuerdo directamente con el vendedor: https://wa.me/5354590237.";
+    return "Radicamos en Sagua la Grande, Villa Clara. No tenemos tienda física; atendemos por WhatsApp y mediante nuestros anuncios publicados. Si deseas visitarnos o coordinar una compra, ponte de acuerdo primero con el vendedor: https://wa.me/5354590237.";
   }
   if (/\b(donde vives|donde vive|donde viven|direccion personal|direccion del dueno|direccion del vendedor|domicilio del dueno|domicilio del vendedor|residencia|casa del dueno|casa del vendedor|donde esta tu casa|donde queda tu casa|ubicacion personal|ubicacion del dueno|ubicacion del vendedor|localizar al dueno)\b/.test(m)) {
     return "Si deseas visitarnos para coordinar una compra, primero ponte de acuerdo directamente con el vendedor por WhatsApp: https://wa.me/5354590237.";
