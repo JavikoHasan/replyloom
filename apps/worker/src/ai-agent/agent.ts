@@ -999,6 +999,12 @@ export function buildStorePolicyOnlyReply(message: string, productQuery = ""): s
     return "Gracias por tu propuesta, pero no realizamos permutas, cambios ni tasaciones de artículos usados o nuevos, ni aceptamos productos como parte de pago.";
   }
 
+  const asksWarranty = /\b(garantia|garantía|prueba|falla|fallo|responsabilidad|devolucion|devolución|reparacion|reparación)\b/.test(normalized);
+  const asksEnergyCategory = /\b(estacion(?:es)? de energia|energia portatil)\b/.test(normalized);
+  if (asksEnergyCategory && asksWarranty) {
+    return "Las condiciones dependen del modelo. Las estaciones EcoFlow anunciadas por el negocio no tienen garantía comercial del vendedor y se prueban antes de la compra en presencia del comprador. Para la Bluetti Elite 100 V2, no tengo condiciones de garantía verificadas; pide al vendedor que confirme por escrito la cobertura y duración antes de comprar.";
+  }
+
   if (/\b(ecoflow|delta\s*\d|river\s*\d)\b/.test(normalized)) {
     if (/\b(garantia|garantía|prueba|falla|fallo|responsabilidad|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
       return "Las estaciones EcoFlow anunciadas por el negocio no tienen garantía comercial del vendedor. Antes de la compra, el equipo se prueba durante tiempo suficiente en presencia del comprador. Después de la entrega, el negocio no se responsabiliza por daños derivados de uso inadecuado o manipulación incorrecta. Para confirmar las condiciones del modelo concreto, consulta su anuncio o al vendedor.";
