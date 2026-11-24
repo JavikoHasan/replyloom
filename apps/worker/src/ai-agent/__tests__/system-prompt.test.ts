@@ -39,7 +39,7 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("PERMANENT STORE POLICY — ALWAYS APPLY");
     expect(prompt).toContain("cover de fábrica, cable, cargador original y mica protectora de cristal templado");
     expect(prompt).toContain("15 días de garantía");
-    expect(prompt).toContain("El negocio no acepta teléfonos nuevos o usados como pago");
+    expect(prompt).toContain("no compra artículos ofrecidos por clientes ni acepta productos como parte de pago o permuta");
     expect(prompt).toContain("No importes contactos, chats previos");
   });
 
