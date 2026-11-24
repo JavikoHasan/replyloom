@@ -610,7 +610,7 @@ export function buildPaymentPolicyReply(message: string): string | null {
   const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const asksZelle = /\bzelle\b/.test(normalized);
   const asksCup = /\bcup\b|pesos? cubanos?|moneda nacional/.test(normalized);
-  const asksPayment = /\b(pago|pagar|aceptan|aceptas|metodo de pago|forma de pago|moneda)\b/.test(normalized);
+  const asksPayment = /\b(pago|pagar|pagarte|pagarles|aceptan|aceptas|reciben|recibir|cobran|metodo|forma|moneda|transferencia|efectivo|cash|tarjeta)\b/.test(normalized);
 
   if (asksZelle) {
     return "Sí, aceptamos Zelle para los anuncios publicados en USD. Se aplica un recargo del 10% sobre el precio publicado. Si me dices qué producto te interesa, puedo indicarte el total exacto por Zelle.";
