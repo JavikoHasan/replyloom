@@ -78,6 +78,27 @@ export async function handleAgentMessage(
     isGroup: input.isGroup ?? false,
   };
 
+  // Record a human handoff before retrieval/generation, even when the catalog
+  // contains a matching product. The seller must be able to take over a chat
+  // whenever a customer explicitly asks for a person or is clearly upset.
+  if (catalogOnlyBusiness && shouldEscalateToHuman(message)) {
+    const result = await registry.run(
+      "escalate_to_human",
+      { reason: `Customer requested the seller or expressed frustration: ${message}` },
+      ctx,
+    );
+    if (result.startsWith("Escalated to a human agent")) {
+      return {
+        text: "He registrado tu solicitud para que el vendedor pueda revisarla cuando esté disponible.",
+        usedTools: ["escalate_to_human"],
+        usedContext: [],
+        blocked: false,
+        cached: false,
+      };
+    }
+    return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+  }
+
   // ── 1) Cheap exact-match cache — zero model spend on repeat FAQs ──
   const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v3:" : ""}${normalize(message)}`;
   if (replyCacheTtlSeconds > 0) {
