@@ -730,7 +730,7 @@ export function isCatalogLookupQuestion(message: string): boolean {
   const asksKnownBrand = /\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/.test(normalized);
   const asksAccessory = /\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\b/.test(normalized);
   const bareModel = /^(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
-  return asksInventory || (asksAvailability && (asksKnownBrand || asksAccessory)) || (hasModelCode && (asksAvailability || bareModel));
+  return asksInventory || (asksAvailability && asksKnownBrand) || asksAccessoryCommerce || (hasModelCode && (asksAvailability || bareModel));
 }
 
 /** Deterministic answers for current catalog inventory and exact-model lookups. */
@@ -783,6 +783,7 @@ export function buildCatalogLookupReply(
   const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
   const isAccessoryQuery = /\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\b/.test(normalized);
+  const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   let filtered = products;
   if (isPhoneQuery) {
     filtered = products.filter((product) => {
@@ -796,12 +797,9 @@ export function buildCatalogLookupReply(
   } else if (isEnergyQuery) {
     filtered = products.filter((product) => /\bestaciones? de energia\b|\benergia\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
   } else if (isAccessoryQuery) {
-    filtered = products.filter((product) => /\b(cable|cargador|adaptador|mica|cover|funda)\b/i.test(product.title + " " + product.category));
+    return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
   }
   if (filtered.length === 0) {
-    if (isAccessoryQuery) {
-      return "Ahora mismo no aparecen anuncios independientes de cables o cargadores en nuestro catálogo. Si compras uno de los teléfonos anunciados, la compra incluye cable USB y cargador original, además de cover, mica protectora y 15 días de garantía.";
-    }
     const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : "productos";
     return "Ahora mismo no encuentro anuncios vigentes de " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
   }
