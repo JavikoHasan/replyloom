@@ -543,7 +543,9 @@ export function buildCatalogPriceReply(
   if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
   const syncedAt = Date.parse(syncStatus.updatedAt);
   const ageMs = now - syncedAt;
-  if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 30 * 60_000) return null;
+  // Catalog sync is intentionally throttled to six hours; allow one hour of cron/scheduling slack.
+  // A 30-minute freshness gate made valid, completed catalog data unusable for most of that interval.
+  if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (!/\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\b/.test(normalizedQuestion)) return null;
