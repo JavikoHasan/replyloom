@@ -123,7 +123,7 @@ export async function handleAgentMessage(
   const contextualProductQuery = catalogOnlyBusiness
     ? resolveRecentProductQuery(message, recentThread)
     : message;
-  const asksZelleNow = /\\bzelle\\b/i.test(normalizeBusinessText(message));
+  const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
   // Delivery questions are answered from the delivery field of the exact live
   // listing. Category defaults are never used to override a listing's explicit
@@ -156,7 +156,7 @@ export async function handleAgentMessage(
       const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
       const catalogReply = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
       if (catalogReply) {
-        const zelleReply = buildZelleTotalReply(catalogReply, recentThread + "\\nCustomer: " + message, true);
+        const zelleReply = buildZelleTotalReply(catalogReply, recentThread + "\nCustomer: " + message, true);
         if (zelleReply) {
           console.info("[catalog-agent] deterministic-zelle-product-total", { responsePresent: true });
           return { text: zelleReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
