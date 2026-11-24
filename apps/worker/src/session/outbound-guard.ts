@@ -123,6 +123,31 @@ export class AutoReplyContentDeduper {
 }
 
 /**
+ * Prevents one inbound WhatsApp message from triggering more than one AI reply
+ * when Baileys delivers the same message through overlapping notify/append events.
+ */
+export class AutoReplyMessageDeduper {
+  private recent = new Map<string, number>();
+
+  constructor(private readonly windowMs = 10 * 60_000) {}
+
+  allow(jid: string, messageId: string, now = Date.now()): boolean {
+    if (!messageId) return true;
+    const key = jid + ":" + messageId;
+    const previous = this.recent.get(key);
+    if (previous !== undefined && now - previous < this.windowMs) return false;
+    this.recent.set(key, now);
+    if (this.recent.size > 5_000) {
+      for (const [entry, timestamp] of this.recent) {
+        if (now - timestamp >= this.windowMs) this.recent.delete(entry);
+      }
+      if (this.recent.size > 5_000) this.recent.clear();
+    }
+    return true;
+  }
+}
+
+/**
  * Daily cap on *new* chats: first messages to numbers that have never
  * written to this number. Scaled by the same warm-up tiers as broadcasts,
  * so a freshly linked number can't start messaging strangers at full rate.
