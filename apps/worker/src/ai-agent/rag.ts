@@ -55,7 +55,10 @@ export async function retrieveContext(
   includeDocIds: string[] = [],
 ): Promise<RetrievedChunk[]> {
   const terms = queryTerms(query);
-  if (terms.length === 0) return [];
+  if (terms.length === 0) {
+    if (sourcePrefix) console.info("[catalog-rag] retrieval", { stage: "empty-query-terms", termCount: 0 });
+    return [];
+  }
 
   const normalizedTextSql = `replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(lower(text), 'á','a'), 'Á','a'), 'é','e'), 'É','e'), 'í','i'), 'Í','i'), 'ó','o'), 'Ó','o'), 'ú','u'), 'Ú','u'), 'ü','u'), 'Ü','u'), 'ñ','n'), 'Ñ','n')`;
   const predicates = terms.map(() => `instr(${normalizedTextSql}, ?) > 0`).join(" OR ");
@@ -101,6 +104,16 @@ export async function retrieveContext(
   const matchingCatalogRows = sourcePrefix
     ? result.results.filter((row) => row.source.startsWith(sourcePrefix))
     : [];
+
+  if (sourcePrefix) {
+    console.info("[catalog-rag] retrieval", {
+      stage: "database-query",
+      termCount: terms.length,
+      modelKeys: uniqueModelKeys,
+      rowsReturned: result.results.length,
+      catalogRowsReturned: matchingCatalogRows.length,
+    });
+  }
   if (shouldFallbackToCatalog(sourcePrefix, uniqueModelKeys, matchingCatalogRows.length)) {
     const fallback = await env.DB.prepare(
       `SELECT id, text, source, doc_id FROM doc_chunks
@@ -120,7 +133,18 @@ export async function retrieveContext(
         return uniqueModelKeys.some((key) => compactHeading.includes(key));
       }),
     );
-    if (exactProductRows.length === 0) return [];
+    if (exactProductRows.length === 0) {
+      console.warn("[catalog-rag] exact-product-miss", {
+        modelKeys: uniqueModelKeys,
+        rowsReturned: result.results.length,
+        catalogRowsReturned: matchingCatalogRows.length,
+      });
+      return [];
+    }
+    console.info("[catalog-rag] exact-product-match", {
+      modelKeys: uniqueModelKeys,
+      exactProductRows: exactProductRows.length,
+    });
     const pinnedRows = result.results.filter((row) => row.doc_id && includeDocIds.includes(row.doc_id));
     candidateRows = [...exactProductRows, ...pinnedRows.filter((row) => !exactProductRows.some((match) => match.id === row.id))];
   }
@@ -143,7 +167,15 @@ export async function retrieveContext(
   // Store catalog lookups can safely use the full supported context window;
   // the exact-model filter above keeps it focused instead of adding noise.
   const contextLimit = sourcePrefix ? 8 : config.maxContextChunks;
-  return ranked.slice(0, Math.max(1, Math.min(contextLimit, 8)));
+  const context = ranked.slice(0, Math.max(1, Math.min(contextLimit, 8)));
+  if (sourcePrefix) {
+    console.info("[catalog-rag] retrieval-complete", {
+      candidateRows: candidateRows.length,
+      rankedRows: ranked.length,
+      contextRows: context.length,
+    });
+  }
+  return context;
 }
 
 /**
