@@ -771,11 +771,11 @@ export function buildCatalogLookupReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalized = normalizeStoreCatalogQuery(message);
-  const isAccessoryQuery = /\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\b/.test(normalized);
+  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const commerceIntent = /\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
-  const asksCableOrCharger = /\b(cables?|cargadores?)\b/.test(normalized) && commerceIntent;
+  const asksCableOrCharger = /\b(cables?|cargador(?:es)?)\b/.test(normalized) && commerceIntent;
   const asksCoverOrScreenProtector = /\b(micas?|covers?|fundas?)\b/.test(normalized) && commerceIntent;
-  const asksAdapter = /\badaptadores?\b/.test(normalized) && commerceIntent;
+  const asksAdapter = /\badaptador(?:es)?\b/.test(normalized) && commerceIntent;
   // Route accessory commerce before parsing wattage/current tokens as model identifiers.
   if (asksCableOrCharger) {
     return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
@@ -918,7 +918,7 @@ export function buildZelleTotalReply(catalogReply: string, conversationThread: s
  */
 export function buildStorePolicyOnlyReply(message: string): string | null {
   const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación|encargo|encargar|encargue|pedido|proceso|pasos|funciona|vendo|vender|comprar|compra|cambio|cambiar|permuta|permuto|vuelto|tasar|tasacion)\b/.test(normalized);
+  const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|entregan|entregar|entregado|entregada|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación|encargo|encargar|encargue|pedido|proceso|pasos|funciona|vendo|vender|comprar|compra|cambio|cambiar|permuta|permuto|vuelto|tasar|tasacion)\b/.test(normalized);
   if (!asksConditions) return null;
 
   if (/\b(te vendo|vendo|quiero vender|les vendo|puedo vender|me lo compras|me compran|compras productos)\b/.test(normalized)) {
@@ -932,7 +932,7 @@ export function buildStorePolicyOnlyReply(message: string): string | null {
     if (/\b(garantia|garantía|prueba|falla|fallo|responsabilidad|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
       return "Las estaciones EcoFlow anunciadas por el negocio no tienen garantía comercial del vendedor. Antes de la compra, el equipo se prueba durante tiempo suficiente en presencia del comprador. Después de la entrega, el negocio no se responsabiliza por daños derivados de uso inadecuado o manipulación incorrecta. Para confirmar las condiciones del modelo concreto, consulta su anuncio o al vendedor.";
     }
-    if (/\b(entrega|envio|envío|domicilio)\b/.test(normalized)) {
+    if (/\b(entrega|entregan|entregar|entregado|entregada|envio|envío|domicilio)\b/.test(normalized)) {
       return "La entrega a domicilio de las estaciones EcoFlow anunciadas es gratuita. La fecha y la hora se coordinan directamente con el vendedor según la disponibilidad y la carga del vehículo. La publicación vigente debe confirmar el modelo y su modalidad de venta.";
     }
     if (/\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|bateria|batería|baterias|baterías)\b/.test(normalized)) {
@@ -944,7 +944,7 @@ export function buildStorePolicyOnlyReply(message: string): string | null {
     if (/\b(garantia|garantía|devolucion|devolución|reparacion|reparación)\b/.test(normalized)) {
       return "No tengo condiciones de garantía verificadas para las motocicletas anunciadas. Antes de encargar, pide al vendedor que confirme por escrito la cobertura, duración y procedimiento aplicables al modelo concreto.";
     }
-    if (/\b(entrega|envio|envío|domicilio)\b/.test(normalized)) {
+    if (/\b(entrega|entregan|entregar|entregado|entregada|envio|envío|domicilio)\b/.test(normalized)) {
       return "No tengo confirmada la modalidad de entrega de las motocicletas anunciadas por encargo. El vendedor debe confirmar si existe entrega a domicilio, su costo y la fecha posible antes de formalizar el pedido.";
     }
     if (/\b(por encargo|encargar|encargo|pedido|proceso|pasos|incluye|incluyen|nueva|nuevo|como funciona|cómo funciona)\b/.test(normalized)) {
