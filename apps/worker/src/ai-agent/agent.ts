@@ -135,7 +135,7 @@ export async function handleAgentMessage(
         .catch(() => null);
       const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
       const deliveryReply = buildCatalogDeliveryReply(contextualProductQuery, allCatalogChunks, syncStatus)
-        ?? buildGeneralDeliveryPolicyReply(message);
+        ?? buildGeneralDeliveryPolicyReply(message, contextualProductQuery);
       if (deliveryReply) {
         console.info("[catalog-agent] deterministic-delivery-policy", { responsePresent: true, contextRows: allCatalogChunks.length });
         return { text: deliveryReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
@@ -149,7 +149,7 @@ export async function handleAgentMessage(
   // If Zelle is mentioned together with a product, or the product is clear
   // from the recent thread, resolve its exact current listing and calculate
   // the total before returning the generic payment-policy explanation.
-  if (catalogOnlyBusiness && asksZelleNow && hasProductReference(contextualProductQuery)) {
+  if (catalogOnlyBusiness && asksZelleNow && hasProductReference(contextualProductQuery) && (hasProductReference(message) || asksForZelleTotal(message))) {
     try {
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
@@ -602,8 +602,8 @@ export function isDeliveryQuestion(message: string): boolean {
 }
 
 /** Safe category-level delivery guidance when the customer has not named a model. */
-export function buildGeneralDeliveryPolicyReply(message: string): string | null {
-  const normalized = normalizeBusinessText(message);
+export function buildGeneralDeliveryPolicyReply(message: string, contextualProductQuery = ""): string | null {
+  const normalized = normalizeBusinessText(message + " " + contextualProductQuery);
   const asksToSendAddress = /\b(direccion|direcciones|mi casa|mi domicilio|esta direccion|a esta direccion)\b/.test(normalized)
     && /\b(traeme|traer|traiga|traigan|llevar|lleve|lleven|lleves|entrega|entregar|envio|enviar|mandar|manda|pasar|pasas|pasarle|coordinar|disponible|domicilio|reparto)\b/.test(normalized);
   if (asksToSendAddress) {
@@ -809,6 +809,11 @@ export function buildPaymentPolicyReply(message: string): string | null {
     return "Los precios se respetan en la moneda indicada en cada anuncio. Para publicaciones en USD, el método confirmado es Zelle con un recargo del 10%. No aceptamos efectivo ni transferencias en CUP para esos anuncios. Otras modalidades en USD deben confirmarse con el vendedor.";
   }
   return null;
+}
+
+function asksForZelleTotal(message: string): boolean {
+  const normalized = normalizeBusinessText(message);
+  return /\b(cuanto|cu[aá]l es el total|total|importe|monto|precio final|cuanto seria|cuanto queda|cuanto pago)\b/.test(normalized);
 }
 
 /**
