@@ -98,9 +98,9 @@ export class AutoReplyContentDeduper {
 
   allow(jid: string, text: string, now = Date.now()): boolean {
     const normalized = text.normalize("NFD")
-      .replace(/[\\u0300-\\u036f]/g, "")
+      .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
     // FNV-1a keeps storage in memory bounded without retaining customer text.
     let hash = 2166136261;
