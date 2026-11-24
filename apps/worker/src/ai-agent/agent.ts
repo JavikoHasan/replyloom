@@ -128,8 +128,13 @@ export async function handleAgentMessage(
   // Explicit requests for a same-day/next-day delivery need a safe, deterministic
   // handoff. Never let the language model imply that a slot has been booked.
   if (catalogOnlyBusiness && isDeliverySchedulingQuestion(message)) {
+    const deliverySubject = /\\b(ecoflow|estaciones? de energia|delta|river)\\b/i.test(contextualProductQuery)
+      ? " de las estaciones de energía anunciadas"
+      : /\\b(telefono|telefonos|celular|celulares|samsung|galaxy|redmi|iphone|f07|a16|a17)\\b/i.test(contextualProductQuery)
+        ? " del teléfono que te interesa"
+        : "";
     return {
-      text: "No puedo confirmar ni programar una entrega para hoy o mañana. El vendedor debe confirmar la disponibilidad del producto, la carga del vehículo y el horario. Escríbele directamente por WhatsApp para coordinarlo: https://wa.me/5354590237.",
+      text: "No puedo confirmar ni programar una entrega" + deliverySubject + " para hoy o mañana. El vendedor debe confirmar la disponibilidad del producto, la carga del vehículo y el horario. Escríbele directamente por WhatsApp para coordinarlo: https://wa.me/5354590237.",
       usedTools: [],
       usedContext: [],
       blocked: false,
@@ -717,13 +722,15 @@ export function buildCatalogDeliveryReply(
 
 /** Detect a catalog lookup that can be answered without generative guessing. */
 export function isCatalogLookupQuestion(message: string): boolean {
-  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const hasModelCode = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(normalized)
-    && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(normalized);
-  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estaciones? de energia|productos?|equipos?|catalogo|que venden|que vendes|que cosas venden|que cosas vendes|que tienen|que cosas tienen|que ofrecen|a la venta)\b/.test(normalized);
-  const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\b/.test(normalized);
-  const bareModel = /^(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
-  return asksInventory || (hasModelCode && (asksAvailability || bareModel));
+  const normalized = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  const hasModelCode = /\\b(?:[a-z]{1,8}\\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})\\b/i.test(normalized)
+    && !/\\b\\d+(?:gb|mb|ram|rom)\\b/i.test(normalized);
+  const asksInventory = /\\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estaciones? de energia|productos?|equipos?|catalogo|que venden|que vendes|que cosas venden|que cosas vendes|que tienen|que cosas tienen|que ofrecen|a la venta)\\b/.test(normalized);
+  const asksAvailability = /\\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\\b/.test(normalized);
+  const asksKnownBrand = /\\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\\b/.test(normalized);
+  const asksAccessory = /\\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\\b/.test(normalized);
+  const bareModel = /^(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\\s+)*(?:[a-z]{1,8}\\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})[\\s?!.]*$/i.test(normalized.trim());
+  return asksInventory || (asksAvailability && (asksKnownBrand || asksAccessory)) || (hasModelCode && (asksAvailability || bareModel));
 }
 
 /** Deterministic answers for current catalog inventory and exact-model lookups. */
@@ -771,22 +778,34 @@ export function buildCatalogLookupReply(
     return "Sí, " + product.title + " aparece en nuestro catálogo." + price + status + " La existencia física debe confirmarse directamente con el vendedor.";
   }
 
-  const isPhoneQuery = /\b(telefonos?|celulares?|moviles?|smartphones?)\b/.test(normalized);
-  const isEcoFlowQuery = /\b(ecoflow|estaciones? de energia)\b/.test(normalized);
+  const isPhoneQuery = /\\b(telefonos?|celulares?|moviles?|smartphones?)\\b/.test(normalized);
+  const isEnergyQuery = /\\bestaciones? de energia\\b|\\benergia portatil\\b/.test(normalized);
+  const brandMatch = normalized.match(/\\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\\b/);
+  const requestedBrand = brandMatch?.[1] ?? "";
+  const isAccessoryQuery = /\\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\\b/.test(normalized);
   let filtered = products;
   if (isPhoneQuery) {
     filtered = products.filter((product) => {
-      const value = (product.title + " " + product.category).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      return /\b(telefonia|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(value);
+      const value = (product.title + " " + product.category).normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+      return /\\b(telefonia|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\\b/.test(value);
     });
-  } else if (isEcoFlowQuery) {
-    filtered = products.filter((product) => /\b(ecoflow|delta|river)\b/i.test(product.title));
+  } else if (requestedBrand) {
+    const brand = requestedBrand.toLowerCase();
+    filtered = products.filter((product) => (product.title + " " + product.category)
+      .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().includes(brand));
+  } else if (isEnergyQuery) {
+    filtered = products.filter((product) => /\\bestaciones? de energia\\b|\\benergia\\b/i.test(product.category + " " + product.title));
+  } else if (isAccessoryQuery) {
+    filtered = products.filter((product) => /\\b(cable|cargador|adaptador|mica|cover|funda)\\b/i.test(product.title + " " + product.category));
   }
   if (filtered.length === 0) {
-    const label = isPhoneQuery ? "teléfonos" : isEcoFlowQuery ? "estaciones de energía EcoFlow" : "productos";
+    if (isAccessoryQuery) {
+      return "Ahora mismo no aparecen anuncios independientes de cables o cargadores en nuestro catálogo. Si compras uno de los teléfonos anunciados, la compra incluye cable USB y cargador original, además de cover, mica protectora y 15 días de garantía.";
+    }
+    const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : "productos";
     return "Ahora mismo no encuentro anuncios vigentes de " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
   }
-  const label = isPhoneQuery ? "teléfonos" : isEcoFlowQuery ? "estaciones de energía EcoFlow" : "productos";
+  const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isAccessoryQuery ? "accesorios" : "productos";
   const lines = filtered.slice(0, 20).map((product) => {
     const details = [product.price, product.availability].filter(Boolean).join(" · ");
     return "• " + product.title + (details ? " — " + details : "");
