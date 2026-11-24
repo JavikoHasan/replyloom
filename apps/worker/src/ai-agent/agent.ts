@@ -182,7 +182,7 @@ export async function handleAgentMessage(
       const semanticContext = await retrieveContext(
         env,
         config,
-        `${query}\n${gate.searchQuery}`,
+        `${gate.searchQuery}\n${query}`,
         "revolico-sagua.pages.dev",
         ["condiciones-venta-telefonos"],
       );
