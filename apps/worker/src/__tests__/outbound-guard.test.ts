@@ -11,18 +11,19 @@ describe("outbound guard", () => {
     expect(b.take(t0 + wait)).toBe(0);
   });
 
-  it("allows normal product follow-ups while retaining anti-loop limits", () => {
+  it("allows quick product follow-ups while retaining hourly anti-loop limits", () => {
     const l = new AutoReplyLimiter();
     const t0 = 5_000_000;
     expect(l.allow("customer@s.whatsapp.net", t0)).toBe(true);
-    expect(l.allow("customer@s.whatsapp.net", t0 + 5_000)).toBe(false); // brief anti-loop cooldown
-    expect(l.allow("customer@s.whatsapp.net", t0 + 10_000)).toBe(true); // follow-up after 10 seconds
+    expect(l.allow("customer@s.whatsapp.net", t0 + 5_000)).toBe(true);
+    expect(l.allow("customer@s.whatsapp.net", t0 + 10_000)).toBe(true);
 
-    let allowed = 2;
-    for (let i = 2; i <= 25; i++) {
+    let allowed = 3;
+    for (let i = 3; i < 120; i++) {
       if (l.allow("customer@s.whatsapp.net", t0 + i * 10_000)) allowed++;
     }
-    expect(allowed).toBe(20); // max 20 per hour per contact
+    expect(allowed).toBe(120); // high ceiling allows ordinary multi-question buying conversations
+    expect(l.allow("customer@s.whatsapp.net", t0 + 120 * 10_000)).toBe(false); // hourly loop breaker
     expect(l.allow("another-customer@s.whatsapp.net", t0 + 5_000)).toBe(true); // other contacts unaffected
   });
 
