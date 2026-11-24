@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AutoReplyContentDeduper, AutoReplyLimiter, TokenBucket, newChatDailyCap, parseSendKind } from "../session/outbound-guard";
+import { AutoReplyContentDeduper, AutoReplyMessageDeduper, AutoReplyLimiter, TokenBucket, newChatDailyCap, parseSendKind } from "../session/outbound-guard";
 
 describe("outbound guard", () => {
   it("token bucket allows a burst, then paces", () => {
@@ -38,6 +38,17 @@ describe("outbound guard", () => {
     expect(deduper.allow(jid, "El precio publicado es 190 USD.", t0 + 2_000)).toBe(true);
     expect(deduper.allow("other@s.whatsapp.net", reply, t0 + 2_000)).toBe(true);
     expect(deduper.allow(jid, reply, t0 + 3_000)).toBe(true);
+  });
+
+  it("suppresses duplicate notify/append events for the same inbound message ID", () => {
+    const deduper = new AutoReplyMessageDeduper();
+    const t0 = 9_000_000;
+    const jid = "customer@s.whatsapp.net";
+    expect(deduper.allow(jid, "wamid-123", t0)).toBe(true);
+    expect(deduper.allow(jid, "wamid-123", t0 + 1_000)).toBe(false);
+    expect(deduper.allow(jid, "wamid-456", t0 + 1_000)).toBe(true);
+    expect(deduper.allow("other@s.whatsapp.net", "wamid-123", t0 + 1_000)).toBe(true);
+    expect(deduper.allow(jid, "wamid-123", t0 + 10 * 60_000 + 1)).toBe(true);
   });
 
   it("new-chat cap follows warm-up tiers", () => {
