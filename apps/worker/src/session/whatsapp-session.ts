@@ -34,6 +34,7 @@ import { TtlCache } from "../ttl-cache";
 import {
   AutoReplyLimiter,
   AutoReplyContentDeduper,
+  AutoReplyMessageDeduper,
   MAX_QUEUE_WAIT_MS,
   OUTBOUND_BURST,
   OUTBOUND_PER_SEC,
@@ -399,6 +400,7 @@ export class WhatsAppSession implements DurableObject {
   private outboundBucket = new TokenBucket(OUTBOUND_BURST, OUTBOUND_PER_SEC);
   private autoReplyLimiter = new AutoReplyLimiter();
   private autoReplyContentDeduper = new AutoReplyContentDeduper();
+  private autoReplyMessageDeduper = new AutoReplyMessageDeduper();
   // Serialize inbound processing per private chat. Separate Baileys upsert events
   // can overlap; without this queue, an older AI task may read a newer/older
   // conversation snapshot and send a reply for the wrong customer question.
@@ -3174,6 +3176,7 @@ export class WhatsAppSession implements DurableObject {
                   broadcast: this.broadcast.bind(this),
                   allowAutoReply: this.allowAutoReply.bind(this),
                   allowAutoReplyContent: (chatJid, text) => this.autoReplyContentDeduper.allow(chatJid, text),
+                  allowAutoReplyMessage: (chatJid, messageId) => this.autoReplyMessageDeduper.allow(chatJid, messageId),
                   pauseAutoReply: this.pauseAutoReply.bind(this),
                   isAutoReplyPaused: this.isAutoReplyPaused.bind(this),
                   markBotReply: this.markBotReply.bind(this),
