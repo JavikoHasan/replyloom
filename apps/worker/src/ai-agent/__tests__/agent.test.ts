@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, isSimpleGreeting, parseToolArgs } from "../agent";
+import { buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -141,5 +141,53 @@ describe("catalog fallback for natural-language wording", () => {
 
   it("does not need fallback when matching catalog rows already exist", () => {
     expect(shouldFallbackToCatalog("revolico-sagua.pages.dev", [], 2)).toBe(false);
+  });
+});
+
+describe("normalizeGeneratorResult", () => {
+  it("reads the legacy Workers AI response shape", () => {
+    expect(normalizeGeneratorResult({ response: "  Hola  " })).toEqual({
+      response: "Hola",
+      toolCalls: [],
+      format: "legacy",
+    });
+  });
+
+  it("reads Gemma 4 OpenAI-compatible message content", () => {
+    expect(normalizeGeneratorResult({
+      choices: [{ message: { role: "assistant", content: "  El F07 cuesta 150 USD.  " } }],
+    })).toEqual({
+      response: "El F07 cuesta 150 USD.",
+      toolCalls: [],
+      format: "legacy",
+    });
+  });
+
+  it("extracts OpenAI-compatible function calls and preserves their raw envelope", () => {
+    const rawCall = {
+      id: "call_123",
+      type: "function",
+      function: { name: "lookup", arguments: "{\\"model\\":\\"F07\\"}" },
+    };
+    expect(normalizeGeneratorResult({
+      choices: [{ message: { role: "assistant", content: null, tool_calls: [rawCall] } }],
+    })).toEqual({
+      response: "",
+      toolCalls: [{ name: "lookup", arguments: "{\\"model\\":\\"F07\\"}", raw: rawCall }],
+      format: "openai",
+    });
+  });
+
+  it("keeps the legacy top-level tool-call shape", () => {
+    const rawCall = { name: "lookup", arguments: { model: "F07" } };
+    expect(normalizeGeneratorResult({ tool_calls: [rawCall] }).toolCalls).toEqual([
+      { name: "lookup", arguments: { model: "F07" }, raw: rawCall },
+    ]);
+  });
+
+  it("joins text blocks from structured message content", () => {
+    expect(normalizeGeneratorResult({
+      choices: [{ message: { content: [{ type: "text", text: "Hola" }, { type: "text", text: " mundo" }] } }],
+    }).response).toBe("Hola mundo");
   });
 });
