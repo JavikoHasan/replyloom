@@ -51,6 +51,12 @@ export async function classifyIntent(
   if (config.businessName === "Cell Phone Store - Sagua la Grande" && isPhoneBundleSupportQuestion(message)) {
     return { allowed: true, label: "SUPPORT" };
   }
+
+  // Motorcycle listings and their commercial terms are part of this store's catalog.
+  // Keep the exception narrow: only inventory, price, order, delivery and warranty questions pass.
+  if (config.businessName === "Cell Phone Store - Sagua la Grande" && isMotorcycleStoreQuestion(message)) {
+    return { allowed: true, label: "SUPPORT", searchQuery: "motocicletas anuncios publicados modelos precio encargo entrega garantia" };
+  }
   const keywordLabel = keywordPrecheck(message);
   if (keywordLabel) return toResult(keywordLabel, config.businessName);
 
@@ -80,6 +86,14 @@ export async function classifyIntent(
     // question or leaving the business-only scope. The customer can retry.
     return { allowed: false, label: "OFF_TOPIC", cannedReply: CANNED.OFF_TOPIC(config.businessName) };
   }
+}
+
+/** Commercial questions about the store's listed motorcycles; unrelated bike chat stays blocked. */
+export function isMotorcycleStoreQuestion(message: string): boolean {
+  const m = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  const mentionsMotorcycle = /\\b(moto|motos|motocicleta|motocicletas|izuki|xmx|huracan)\\b/.test(m);
+  const asksCommercial = /\\b(tienes|tienen|hay|venden|venta|precio|cuesta|cuanto|disponible|disponibilidad|catalogo|modelo|modelos|encargo|encargar|pedido|comprar|compra|entrega|entregan|entregar|domicilio|garantia|garantias|reservar|reserva)\\b/.test(m);
+  return mentionsMotorcycle && asksCommercial;
 }
 
 /**
