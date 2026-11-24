@@ -296,8 +296,11 @@ describe("additional payment language", () => {
 describe("category-level delivery replies", () => {
   it("recognizes requests to bring a product to the customer's address", () => {
     expect(isDeliveryQuestion("Tráeme un teléfono a esta dirección")).toBe(true);
-    expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("no puedo recibir, guardar ni reenviar direcciones");
-    expect(buildGeneralDeliveryPolicyReply("Te puedo dejar mi dirección y se la pasas al dueño para que cuando esté disponible me traiga el teléfono?")).toContain("no puedo recibir, guardar ni reenviar direcciones");
+    expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("No envíes tu dirección a este asistente");
+    expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("https://wa.me/5354590237");
+    expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("modelo o producto");
+    expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("cantidad exacta");
+    expect(buildGeneralDeliveryPolicyReply("Te puedo dejar mi dirección y se la pasas al dueño para que cuando esté disponible me traiga el teléfono?")).toContain("No envíes tu dirección a este asistente");
   });
   it("answers delivery questions without inventing a fee", () => {
     expect(buildGeneralDeliveryPolicyReply("¿Cuánto cuesta el domicilio de los teléfonos?")).toContain("es gratuita");
