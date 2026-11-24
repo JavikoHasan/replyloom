@@ -11,6 +11,12 @@ const VOCABULARY = [
   "cable", "cables", "cargador", "cargadores", "adaptador", "adaptadores", "mica", "micas", "cover", "covers", "funda", "fundas",
   "separado", "sueltos", "sueltas", "oupes", "ecoflow", "bluetti",
   "anker", "jackery", "allpowers", "goal", "zero",
+  "aceptan", "aceptas", "aceptamos", "pago", "pagos", "pagar", "pagarte",
+  "transferencia", "transferencias", "transferir", "efectivo", "dolar", "dolares",
+  "cambio", "tasa", "cotizacion", "cup", "usd", "moneda",
+  "domicilio", "domicilios", "entrega", "entregan", "entregar", "envio", "envian",
+  "direccion", "direcciones", "costo", "cuesta", "gratis", "hoy", "manana",
+  "quiero", "pueden", "traer", "mandar", "coordinar", "reciben", "recibir",
 ] as const;
 
 function distanceAtMostTwo(a: string, b: string, limit: number): boolean {
