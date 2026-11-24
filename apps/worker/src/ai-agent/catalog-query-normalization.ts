@@ -6,9 +6,9 @@
  */
 const VOCABULARY = [
   "tienes", "tienen", "hay", "venden", "vendemos", "venta", "disponible",
-  "precio", "cuanto", "cuesta", "vale", "telefonos", "celulares", "moviles",
-  "smartphones", "estaciones", "energia", "productos", "equipos", "catalogo",
-  "cables", "cargadores", "adaptadores", "micas", "covers", "fundas",
+  "precio", "cuanto", "cuesta", "vale", "telefono", "telefonos", "celular", "celulares", "movil", "moviles",
+  "smartphones", "estacion", "estaciones", "energia", "producto", "productos", "equipo", "equipos", "catalogo",
+  "cable", "cables", "cargador", "cargadores", "adaptador", "adaptadores", "mica", "micas", "cover", "covers", "funda", "fundas",
   "separado", "sueltos", "sueltas", "oupes", "ecoflow", "bluetti",
   "anker", "jackery", "allpowers", "goal", "zero",
 ] as const;
