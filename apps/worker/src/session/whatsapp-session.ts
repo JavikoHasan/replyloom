@@ -431,10 +431,9 @@ export class WhatsAppSession implements DurableObject {
   }
 
   /**
-   * A human taking over ANY customer chat pauses the assistant for the
-   * entire store, not just that one conversation. This is an inactivity
-   * heuristic (30 minutes after the last human outbound message), not a
-   * reliable signal that the owner's phone has lost Internet.
+   * A human taking over a customer chat pauses the assistant only for that
+   * conversation. This one-minute inactivity heuristic is not a reliable
+   * signal that the owner's phone has lost Internet.
    */
   private async pauseAutoReply(jid: string): Promise<void> {
     // A seller taking over one conversation must not silence the assistant
