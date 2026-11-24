@@ -594,7 +594,7 @@ export function isDeliveryQuestion(message: string): boolean {
 export function buildGeneralDeliveryPolicyReply(message: string): string | null {
   const normalized = normalizeBusinessText(message);
   const asksToSendAddress = /\b(direccion|direcciones|mi casa|mi domicilio|esta direccion|a esta direccion)\b/.test(normalized)
-    && /\b(traeme|traer|llevar|entregar|envio|enviar|mandar|domicilio|reparto)\b/.test(normalized);
+    && /\b(traeme|traer|traiga|traigan|llevar|lleve|lleven|entrega|entregar|envio|enviar|mandar|manda|pasar|pasas|pasarle|coordinar|disponible|domicilio|reparto)\b/.test(normalized);
   if (asksToSendAddress) {
     return "Por seguridad y para evitar comprometer una entrega que aún no está coordinada, no puedo recibir, guardar ni reenviar direcciones ni programar entregas. Primero consulta el anuncio y coordina directamente con el vendedor mediante el contacto publicado; él confirmará si puede realizar la entrega y cuándo.";
   }
