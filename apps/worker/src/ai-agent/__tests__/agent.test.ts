@@ -299,7 +299,7 @@ describe("contextual delivery intelligence", () => {
   });
 
   it("recognizes same-day and next-day delivery requests without promising a booking", () => {
-    for (const question of ["Necesito uno mañana", "Quiero uno hoy", "Quiero uno para mañana", "¿Me lo pueden traer hoy?"]) {
+    for (const question of ["Necesito uno mañana", "Quiero uno hoy", "Quiero uno para mañana", "¿Me lo pueden traer hoy?", "Quisiera que me traigan uno pasado mañana"]) {
       expect(isDeliverySchedulingQuestion(question)).toBe(true);
     }
     expect(isDeliverySchedulingQuestion("¿Tienen servicio a domicilio?")).toBe(false);
