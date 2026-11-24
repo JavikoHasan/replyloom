@@ -153,7 +153,7 @@ export async function handleAgentMessage(
   }
 
   // Clear purchase interest must continue the last exact product lookup instead of
-  // falling through to the generic no-information response.
+  // falling through to the generic no-information response; a bare yes is ambiguous.
   if (catalogOnlyBusiness && isPurchaseInterestMessage(message) && hasProductReference(contextualProductQuery)) {
     try {
       const syncStatus = await env.REPLY_CACHE
