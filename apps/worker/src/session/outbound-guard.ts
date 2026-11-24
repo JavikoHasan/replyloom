@@ -63,8 +63,10 @@ export class AutoReplyLimiter {
   private session: number[] = [];
 
   constructor(
-    private readonly perContactMinGapMs = 60_000,
-    private readonly perContactPerHour = 5,
+    // Customers often ask several product questions in quick succession.
+    // Keep a short anti-loop cooldown without suppressing normal follow-ups.
+    private readonly perContactMinGapMs = 10_000,
+    private readonly perContactPerHour = 20,
     private readonly sessionPerHour = 120
   ) {}
 
