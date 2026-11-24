@@ -38,7 +38,8 @@ function canonicalWord(word: string): string {
   if (!/^[a-z]+$/.test(word)) return word;
   if ((VOCABULARY as readonly string[]).includes(word)) return word;
   const candidates = VOCABULARY.filter((candidate) => {
-    const limit = Math.min(2, Math.floor(Math.max(word.length, candidate.length) / 5));
+    const length = Math.max(word.length, candidate.length);
+    const limit = length >= 9 ? 2 : length >= 4 ? 1 : 0;
     return limit > 0 && distanceAtMostTwo(word, candidate, limit);
   });
   if (candidates.length !== 1) return word;
