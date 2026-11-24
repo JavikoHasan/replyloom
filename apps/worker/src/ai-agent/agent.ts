@@ -731,7 +731,7 @@ export function buildCatalogDeliveryReply(
   const value = normalizeBusinessText(delivery);
   if (/\b(gratis|gratuita|gratuito|sin costo|sin recargo)\b/.test(value)) {
     if (/\b(moto|motocicleta)\b/.test(normalizeBusinessText(title))) {
-      return "La ficha de " + title + " indica entrega a domicilio sin costo adicional. Al ser un producto por encargo, la entrega en la puerta del domicilio se coordina directamente con el vendedor; no puedo confirmar fecha ni hora.";
+      return "La ficha de " + title + " indica entrega sin costo adicional. La modalidad, el lugar y la fecha de entrega deben confirmarse directamente con el vendedor antes de formalizar el encargo.";
     }
     return "La ficha de " + title + " indica entrega a domicilio gratuita. Se realiza mediante motorina eléctrica, sin costo adicional. El horario depende de la disponibilidad de carga y debe coordinarse previamente con el vendedor.";
   }
