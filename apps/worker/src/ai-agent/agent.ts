@@ -383,7 +383,7 @@ export function normalizeGeneratorResult(result: any): {
       arguments: call?.arguments ?? call?.function?.arguments,
       raw: call,
     })),
-    format: openAiToolCalls ? "openai" : "legacy",
+    format: (Array.isArray(result?.choices) || openAiToolCalls) ? "openai" : "legacy",
   };
 }
 
