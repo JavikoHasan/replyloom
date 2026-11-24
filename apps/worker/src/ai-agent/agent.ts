@@ -618,7 +618,7 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
   if (/\b(telefono|telefonos|celular|celulares|movil|moviles|smartphone)\b/.test(normalized)) {
     return "La entrega a domicilio de los teléfonos es gratuita en Sagua la Grande, Isabela de Sagua, Cifuentes y Quemado. Se realiza mediante motorina eléctrica; el horario depende de la carga disponible y se coordina directamente con el vendedor.";
   }
-  return "El costo y la modalidad de entrega dependen del producto y de lo que indique su anuncio. La entrega de teléfonos en las zonas atendidas y la de estaciones EcoFlow anunciadas es gratuita. Para otros productos, el costo debe confirmarse en la ficha o directamente con el vendedor; no puedo fijar fechas ni horarios.";
+  return "Si se trata de un teléfono, la entrega a domicilio es gratuita en Sagua la Grande, Isabela de Sagua, Cifuentes y Quemado. Se realiza mediante motorina eléctrica, según la carga disponible y previa coordinación con el vendedor. Las estaciones EcoFlow anunciadas también tienen entrega gratuita. Para otros productos, el costo y la modalidad deben confirmarse en su anuncio o directamente con el vendedor; no puedo fijar fechas ni horarios.";
 }
 
 /** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
