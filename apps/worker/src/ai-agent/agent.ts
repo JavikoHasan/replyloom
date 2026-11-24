@@ -217,8 +217,7 @@ export async function handleAgentMessage(
   // ── 1b) Conversation thread — gives the model continuity for follow-ups
   // like "and shipping?" without a full message-history tool call, and
   // grounds the RAG query in what the customer was actually asking about. ──
-  const currentMessageHasModel = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(message)
-    && !/\b(?:\d+(?:gb|mb|ram|rom)|4g|5g)\b/i.test(message);
+  const currentMessageHasModel = hasProductReference(message);
   const thread = input.conversationId && (!catalogOnlyBusiness || !currentMessageHasModel)
     ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT)
     : "";
@@ -636,8 +635,8 @@ export function resolveRecentProductQuery(message: string, conversationThread: s
 }
 
 export function hasProductReference(message: string): boolean {
-  return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(message)
-    && !/\b(?:\d+(?:gb|mb|ram|rom)|4g|5g)\b/i.test(message);
+  const candidate = message.replace(/\b(?:4g|5g|\d+(?:gb|mb|ram|rom))\b/gi, " ");
+  return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(candidate);
 }
 
 /** Answer delivery only from the exact product's published delivery field. */
