@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, buildPurchaseInterestReply, isPurchaseInterestMessage, isPhoneFunctionalityQuestion, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -285,6 +285,35 @@ describe("payment policy routing", () => {
     const reply = await handleAgentMessage({} as any, config, { message: "Aceptan pago por Zelle" });
     expect(reply.text).toContain("aceptamos Zelle");
     expect(reply.text).toContain("10%");
+  });
+});
+
+describe("purchase-interest follow-ups", () => {
+  it("recognizes clear interest phrases but not an ambiguous standalone yes", () => {
+    expect(isPurchaseInterestMessage("Me interesa")).toBe(true);
+    expect(isPurchaseInterestMessage("Estoy interesado")).toBe(true);
+    expect(isPurchaseInterestMessage("Lo quiero")).toBe(true);
+    expect(isPurchaseInterestMessage("Sí")).toBe(false);
+  });
+
+  it("continues the last exact A17 lookup with its published price and a safe seller handoff", () => {
+    const query = "Quedan Galaxy A17";
+    const catalogReply = "Sí, SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM aparece en nuestro catálogo. El precio publicado es 200 USD. El anuncio indica: Disponible. La existencia física debe confirmarse directamente con el vendedor.";
+    const reply = buildPurchaseInterestReply(query, catalogReply);
+    expect(reply).toContain("200 USD");
+    expect(reply).toContain("existencia física");
+    expect(reply).toContain("https://wa.me/5354590237");
+  });
+
+  it("does not claim a product is listed when the fresh catalog lookup found no listing", () => {
+    const reply = buildPurchaseInterestReply("Quedan Galaxy A17", "No encuentro un anuncio vigente para A17.");
+    expect(reply).toContain("debe confirmar");
+    expect(reply).not.toContain("200 USD");
+  });
+
+  it("recognizes a functionality question only when a phone was discussed", () => {
+    expect(isPhoneFunctionalityQuestion("Si funciona", "Quedan Galaxy A17")).toBe(true);
+    expect(isPhoneFunctionalityQuestion("¿Funciona?", "¿Tienen EcoFlow?")).toBe(false);
   });
 });
 
