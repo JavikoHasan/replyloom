@@ -28,7 +28,7 @@ describe("outbound guard", () => {
   });
 
   it("suppresses identical replies to the same chat during a burst, but allows different replies", () => {
-    const deduper = new AutoReplyContentDeduper(45_000);
+    const deduper = new AutoReplyContentDeduper();
     const t0 = 8_000_000;
     const jid = "customer@s.whatsapp.net";
     const reply = "La entrega a domicilio es gratuita en Sagua la Grande.";
@@ -37,7 +37,7 @@ describe("outbound guard", () => {
     expect(deduper.allow(jid, "LA ENTREGA  a domicilio es gratuita en Saguá la Grande.", t0 + 1_500)).toBe(false);
     expect(deduper.allow(jid, "El precio publicado es 190 USD.", t0 + 2_000)).toBe(true);
     expect(deduper.allow("other@s.whatsapp.net", reply, t0 + 2_000)).toBe(true);
-    expect(deduper.allow(jid, reply, t0 + 45_000)).toBe(true);
+    expect(deduper.allow(jid, reply, t0 + 3_000)).toBe(true);
   });
 
   it("new-chat cap follows warm-up tiers", () => {
