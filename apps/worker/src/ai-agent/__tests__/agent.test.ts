@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, resolveRecentProductQuery, isDeliveryQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, resolveRecentProductQuery, isDeliveryQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -117,6 +117,54 @@ describe("catalog inventory and model availability replies", () => {
   it("does not make inventory claims from stale or incomplete catalog syncs", () => {
     expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "running", updatedAt: sync.updatedAt }, now)).toBeNull();
     expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "completed", updatedAt: "2026-11-24T04:00:00Z" }, now)).toBeNull();
+  });
+});
+
+describe("grounded phone technical replies", () => {
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
+  const a16 = [{
+    id: "a16",
+    source: "revolico-sagua.pages.dev (catalog)",
+    score: 1,
+    text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nPrecio publicado: 190 USD",
+  }];
+  const a17 = [{
+    id: "a17",
+    source: "revolico-sagua.pages.dev (catalog)",
+    score: 1,
+    text: "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM\\nPrecio publicado: 200 USD",
+  }];
+
+  it("answers broad properties questions with only RAM and storage actually listed", () => {
+    const reply = buildPhoneTechnicalReply("¿Qué propiedades tiene el A16?", "¿Qué propiedades tiene el A16?", a16, sync, now);
+    expect(reply).toContain("4 GB de RAM");
+    expect(reply).toContain("128 GB de almacenamiento interno");
+    expect(reply).toContain("no quiero inventarlas");
+  });
+
+  it("does not infer 4G or 5G when the listing does not specify network generation", () => {
+    const reply = buildPhoneTechnicalReply("¿El A17 es 4G o 5G?", "¿El A17 es 4G o 5G?", a17, sync, now);
+    expect(reply).toContain("no especifica si es 4G o 5G");
+  });
+
+  it("reports a network generation only when explicitly present in the listing", () => {
+    const a56 = [{
+      ...a17[0],
+      text: "PRODUCTO: SAMSUNG GALAXY A56 5G — 8GB RAM / 256GB ROM",
+    }];
+    const reply = buildPhoneTechnicalReply("¿El A56 es 4G o 5G?", "¿El A56 es 4G o 5G?", a56, sync, now);
+    expect(reply).toContain("conectividad 5G");
+  });
+
+  it("does not answer from stale or incomplete catalog synchronization", () => {
+    expect(buildPhoneTechnicalReply("¿Qué propiedades tiene el A16?", "A16", a16, { stage: "running", updatedAt: sync.updatedAt }, now)).toBeNull();
+    expect(buildPhoneTechnicalReply("¿Qué propiedades tiene el A16?", "A16", a16, { stage: "completed", updatedAt: "2026-11-24T02:00:00Z" }, now)).toBeNull();
+  });
+
+  it("keeps a 4G/5G follow-up attached to the last actual phone model", () => {
+    const thread = "[Previous messages]\\nCustomer: ¿Tienes A17?\\nAgent: Sí, aparece en catálogo.";
+    expect(resolveRecentProductQuery("¿Y es 5G?", thread)).toBe("¿Tienes A17?");
   });
 });
 
