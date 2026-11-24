@@ -558,7 +558,8 @@ export function buildCatalogLookupReply(
     const details = [product.price, product.availability].filter(Boolean).join(" · ");
     return "• " + product.title + (details ? " — " + details : "");
   });
-  const introduction = isEcoFlowQuery ? "Estas son las " : "Estos son los ";\n  return introduction + label + " que aparecen en nuestro catálogo publicado:\n" + lines.join("\n") + "\n\nLa disponibilidad física debe confirmarse directamente con el vendedor.";
+  const introduction = isEcoFlowQuery ? "Estas son las " : "Estos son los ";
+  return introduction + label + " que aparecen en nuestro catálogo publicado:\n" + lines.join("\n") + "\n\nLa disponibilidad física debe confirmarse directamente con el vendedor.";
 }
 
 /**
