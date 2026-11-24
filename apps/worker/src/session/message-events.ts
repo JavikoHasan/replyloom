@@ -35,6 +35,8 @@ export interface MessageEventContext {
   allowAutoReply?: (jid: string) => boolean;
   /** Suppress identical replies to the same chat during a short burst. */
   allowAutoReplyContent?: (jid: string, text: string) => boolean;
+  /** Ensure one inbound WhatsApp message ID triggers at most one AI reply. */
+  allowAutoReplyMessage?: (jid: string, messageId: string) => boolean;
   /** A human outbound message pauses automatic replies only in that conversation for a short cooldown. */
   pauseAutoReply?: (jid: string) => Promise<void>;
   isAutoReplyPaused?: (jid: string) => Promise<boolean>;
@@ -188,6 +190,10 @@ export async function processLiveMessage(
     }
   }
   if (!parsed.fromMe && ctx.socket && parsed.body && isFresh && !autoReplyPaused) {
+    if (ctx.allowAutoReplyMessage && !ctx.allowAutoReplyMessage(parsed.remoteJid, parsed.waMessageId)) {
+      ctx.log("info", "Duplicate inbound WhatsApp message suppressed before AI auto-reply");
+      return;
+    }
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
       const senderJid = parsed.participant ?? parsed.remoteJid;
