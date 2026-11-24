@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isHardBlockedIntent, isPhoneBundleSupportQuestion, keywordPrecheck, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "../guardrails";
+import { isHardBlockedIntent, isPhoneBundleSupportQuestion, isPhoneTechnicalSupportQuestion, keywordPrecheck, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "../guardrails";
 
 describe("shouldEscalateToHuman", () => {
   it("escalates explicit human requests and clear frustration", () => {
@@ -25,6 +25,19 @@ describe("isHardBlockedIntent", () => {
     expect(isHardBlockedIntent("OFF_TOPIC")).toBe(true);
     expect(isHardBlockedIntent("CODING")).toBe(true);
     expect(isHardBlockedIntent("SENSITIVE")).toBe(true);
+  });
+});
+
+describe("store phone technical-question intent", () => {
+  it("recognizes model-specific specification and connectivity questions as commercial support", () => {
+    expect(isPhoneTechnicalSupportQuestion("¿Qué propiedades tiene el A16?")).toBe(true);
+    expect(isPhoneTechnicalSupportQuestion("El A17 es 4G o 5G")).toBe(true);
+    expect(isPhoneTechnicalSupportQuestion("¿Qué memoria RAM tiene el Samsung Galaxy A17?")).toBe(true);
+  });
+
+  it("does not turn unrelated questions or generic technical terms into phone support", () => {
+    expect(isPhoneTechnicalSupportQuestion("¿Qué tiempo hace hoy?")).toBe(false);
+    expect(isPhoneTechnicalSupportQuestion("¿Qué propiedades tiene este material?")).toBe(false);
   });
 });
 
