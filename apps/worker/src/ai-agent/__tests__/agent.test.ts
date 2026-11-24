@@ -300,6 +300,7 @@ describe("category-level delivery replies", () => {
     expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("https://wa.me/5354590237");
     expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("modelo o producto");
     expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("cantidad exacta");
+    expect(buildGeneralDeliveryPolicyReply("¿Te puedo dejar mi dirección para que me lleves el A17?")).toContain("https://wa.me/5354590237");
     expect(buildGeneralDeliveryPolicyReply("Te puedo dejar mi dirección y se la pasas al dueño para que cuando esté disponible me traiga el teléfono?")).toContain("No envíes tu dirección a este asistente");
   });
   it("answers delivery questions without inventing a fee", () => {
