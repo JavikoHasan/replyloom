@@ -54,6 +54,7 @@ export async function retrieveContext(
   sourcePrefix?: string,
   includeDocIds: string[] = [],
 ): Promise<RetrievedChunk[]> {
+  // Diagnostics are intentionally limited to the store catalog retrieval path.
   const terms = queryTerms(query);
   if (terms.length === 0) {
     if (sourcePrefix) console.info("[catalog-rag] retrieval", { stage: "empty-query-terms", termCount: 0 });
