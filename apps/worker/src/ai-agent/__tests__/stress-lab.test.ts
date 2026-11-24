@@ -129,6 +129,25 @@ describe("Cell Phone Store query stress laboratory", () => {
     expect(reply).not.toContain("ECOFLOW");
   });
 
+  it("routes singular and plural sales verbs for accessories before catalog/model matching", () => {
+    for (const question of [
+      "¿Vendes adaptador por separado?",
+      "¿Vende adaptadores por separado?",
+      "¿Tienes cargador de 25W en venta?",
+      "¿Venden cable USB-C 3A?",
+    ]) {
+      expect(isCatalogLookupQuestion(question), question).toBe(true);
+      const reply = buildCatalogLookupReply(question, catalog, sync, now);
+      expect(reply, question).not.toContain("ECOFLOW");
+      expect(reply, question).not.toContain("No encuentro un anuncio vigente");
+      if (/adaptador/i.test(question)) {
+        expect(reply, question).toContain("No tengo un anuncio confirmado de adaptadores");
+      } else {
+        expect(reply, question).toContain("No vendemos cables ni cargadores por separado");
+      }
+    }
+  });
+
   it("answers accessory questions with wattage or connector tokens without treating them as model IDs", () => {
     for (const question of ["¿Tienes cargador de 25W en venta?", "¿Venden cable USB-C 3A?"]) {
       expect(isCatalogLookupQuestion(question), question).toBe(true);
