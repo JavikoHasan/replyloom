@@ -11,15 +11,19 @@ describe("outbound guard", () => {
     expect(b.take(t0 + wait)).toBe(0);
   });
 
-  it("auto-reply limiter breaks bot-to-bot loops", () => {
+  it("allows normal product follow-ups while retaining anti-loop limits", () => {
     const l = new AutoReplyLimiter();
     const t0 = 5_000_000;
-    expect(l.allow("bot@s.whatsapp.net", t0)).toBe(true);
-    expect(l.allow("bot@s.whatsapp.net", t0 + 5_000)).toBe(false); // < 1 min apart
-    let allowed = 1;
-    for (let i = 1; i <= 10; i++) if (l.allow("bot@s.whatsapp.net", t0 + i * 61_000)) allowed++;
-    expect(allowed).toBe(5); // max 5 per hour per contact
-    expect(l.allow("human@s.whatsapp.net", t0 + 5_000)).toBe(true); // other contacts unaffected
+    expect(l.allow("customer@s.whatsapp.net", t0)).toBe(true);
+    expect(l.allow("customer@s.whatsapp.net", t0 + 5_000)).toBe(false); // brief anti-loop cooldown
+    expect(l.allow("customer@s.whatsapp.net", t0 + 10_000)).toBe(true); // follow-up after 10 seconds
+
+    let allowed = 2;
+    for (let i = 2; i <= 25; i++) {
+      if (l.allow("customer@s.whatsapp.net", t0 + i * 10_000)) allowed++;
+    }
+    expect(allowed).toBe(20); // max 20 per hour per contact
+    expect(l.allow("another-customer@s.whatsapp.net", t0 + 5_000)).toBe(true); // other contacts unaffected
   });
 
   it("new-chat cap follows warm-up tiers", () => {
