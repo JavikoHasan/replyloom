@@ -49,12 +49,12 @@ function canonicalWord(word: string): string {
 export function normalizeStoreCatalogQuery(value: string): string {
   return value
     .normalize("NFD")
-    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/([a-z])([0-9])/g, "$1 $2")
     .replace(/([0-9])([a-z])/g, "$1 $2")
-    .replace(/[a-z]+|[0-9]+|[^\\s]/g, (token) => canonicalWord(token))
-    .replace(/\\s+/g, " ")
+    .replace(/[a-z]+|[0-9]+|[^\s]/g, (token) => canonicalWord(token))
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -65,7 +65,7 @@ export function generateCatalogQueryVariants(query: string): string[] {
     query.toUpperCase(),
     query.toLowerCase(),
     query.replace(/á/gi, "a").replace(/é/gi, "e").replace(/í/gi, "i").replace(/ó/gi, "o").replace(/ú/gi, "u"),
-    query.replace(/\\s+/g, "  "),
+    query.replace(/\s+/g, "  "),
   ]);
   const substitutions: Array<[RegExp, string]> = [
     [/tienes/gi, "tines"], [/estaciones/gi, "estacones"],
