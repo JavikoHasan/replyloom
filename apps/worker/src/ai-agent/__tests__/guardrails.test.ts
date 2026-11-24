@@ -66,6 +66,7 @@ describe("customer delivery address is not seller private location", () => {
   it("does not block the customer's own address as sensitive seller information", () => {
     expect(privateLocationReply("Te puedo dejar mi dirección para la entrega?")).toBeNull();
     expect(privateLocationReply("Tráeme el teléfono a mi domicilio")).toBeNull();
+    expect(privateLocationReply("Te puedo dejar mi dirección y se la pasas al dueño para que cuando esté disponible me traiga el teléfono?")).toBeNull();
   });
 });
 
