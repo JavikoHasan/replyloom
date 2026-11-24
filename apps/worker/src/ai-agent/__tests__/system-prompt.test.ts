@@ -91,4 +91,13 @@ describe("buildClassifierPrompt", () => {
     expect(prompt).toContain("Android app");
     expect(prompt).toContain("as SUPPORT");
   });
+
+  it("asks the store classifier for semantic search terms without generating facts", () => {
+    const config = { ...baseConfig, businessName: "Cell Phone Store - Sagua la Grande" };
+    const prompt = buildClassifierPrompt(config, "¿Puedo pagar usando Zelle?");
+    expect(prompt).toContain("SEARCH: <short Spanish search terms>");
+    expect(prompt).toContain("natural synonyms");
+    expect(prompt).toContain("Do not invent a model, brand, product, price, availability, or business fact");
+    expect(prompt).toContain("Do not answer the customer");
+  });
 });
