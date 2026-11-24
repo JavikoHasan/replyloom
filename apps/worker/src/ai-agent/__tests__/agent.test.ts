@@ -159,7 +159,7 @@ describe("normalizeGeneratorResult", () => {
     })).toEqual({
       response: "El F07 cuesta 150 USD.",
       toolCalls: [],
-      format: "legacy",
+      format: "openai",
     });
   });
 
