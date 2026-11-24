@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -41,6 +41,78 @@ describe("phone bundle replies", () => {
 
   it("does not answer for a model absent from the retrieved catalog", () => {
     expect(buildPhoneBundleReply("¿Qué incluye el Samsung A07?", phoneContext)).toBeNull();
+  });
+});
+
+describe("catalog inventory and model availability replies", () => {
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
+  const catalog = [
+    {
+      id: "phone-1",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: [
+        "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM",
+        "Categoría: Telefonía",
+        "Precio publicado: 150 USD",
+        "Disponibilidad publicada: Disponible",
+      ].join("\n"),
+    },
+    {
+      id: "phone-2",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: [
+        "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM",
+        "Categoría: Telefonía",
+        "Precio publicado: 190 USD",
+        "Disponibilidad publicada: Disponible",
+      ].join("\n"),
+    },
+    {
+      id: "energy-1",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: [
+        "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh",
+        "Categoría: Estaciones de energía",
+        "Precio publicado: 800 USD",
+        "Disponibilidad publicada: Disponible",
+      ].join("\n"),
+    },
+  ];
+
+  it("recognizes model lookups and broad inventory questions", () => {
+    expect(isCatalogLookupQuestion("¿Tienes F07?")).toBe(true);
+    expect(isCatalogLookupQuestion("¿Qué teléfonos tienen en venta?")).toBe(true);
+    expect(isCatalogLookupQuestion("¿Tienes estaciones de energía?")).toBe(true);
+  });
+
+  it("confirms an exact model only from its own current listing", () => {
+    const reply = buildCatalogLookupReply("¿Tienes Samsung F07?", catalog, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY F07");
+    expect(reply).toContain("150 USD");
+    expect(reply).toContain("Disponible");
+    expect(reply).toContain("confirmarse directamente con el vendedor");
+  });
+
+  it("lists all matching phones and their published prices", () => {
+    const reply = buildCatalogLookupReply("¿Qué teléfonos tienen en venta?", catalog, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY F07");
+    expect(reply).toContain("SAMSUNG GALAXY A17");
+    expect(reply).not.toContain("ECOFLOW DELTA 2");
+  });
+
+  it("lists EcoFlow products separately from phones", () => {
+    const reply = buildCatalogLookupReply("¿Tienen estaciones de energía EcoFlow?", catalog, sync, now);
+    expect(reply).toContain("ECOFLOW DELTA 2");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+  });
+
+  it("does not make inventory claims from stale or incomplete catalog syncs", () => {
+    expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "running", updatedAt: sync.updatedAt }, now)).toBeNull();
+    expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "completed", updatedAt: "2026-11-24T04:00:00Z" }, now)).toBeNull();
   });
 });
 
