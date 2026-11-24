@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -174,6 +174,25 @@ describe("payment policy routing", () => {
     const reply = await handleAgentMessage({} as any, config, { message: "Aceptan pago por Zelle" });
     expect(reply.text).toContain("aceptamos Zelle");
     expect(reply.text).toContain("10%");
+  });
+});
+
+describe("Zelle product follow-up totals", () => {
+  const catalogReply = "Sí, SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM aparece en nuestro catálogo. El precio publicado es 150 USD. El anuncio indica: Disponible. La existencia física debe confirmarse directamente con el vendedor.";
+  const zelleThread = "[Previous messages]\nCustomer: Aceptan pago por zelle?\nAgent: Sí, aceptamos Zelle para los anuncios publicados en USD. Se aplica un recargo del 10%.\nCustomer: F07";
+
+  it("calculates the exact 10% surcharge when the customer names a product after asking about Zelle", () => {
+    expect(buildZelleTotalReply(catalogReply, zelleThread))
+      .toContain("Con el recargo del 10% por Zelle, el total es 165 USD.");
+  });
+
+  it("does not add a Zelle total without a prior Zelle payment exchange", () => {
+    expect(buildZelleTotalReply(catalogReply, "[Previous messages]\\nCustomer: F07")).toBeNull();
+    expect(buildZelleTotalReply(catalogReply, "Customer: ¿Aceptan Zelle?\\nAgent: No tengo esa información")).toBeNull();
+  });
+
+  it("does not calculate when the catalog reply has no verified USD price", () => {
+    expect(buildZelleTotalReply("El F07 aparece en catálogo.", zelleThread)).toBeNull();
   });
 });
 
