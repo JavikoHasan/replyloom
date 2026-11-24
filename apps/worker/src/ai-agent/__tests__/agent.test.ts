@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, resolveRecentProductQuery, isDeliveryQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -174,6 +174,46 @@ describe("payment policy routing", () => {
     const reply = await handleAgentMessage({} as any, config, { message: "Aceptan pago por Zelle" });
     expect(reply.text).toContain("aceptamos Zelle");
     expect(reply.text).toContain("10%");
+  });
+});
+
+describe("contextual delivery intelligence", () => {
+  const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const catalog = [{
+    id: "f07-delivery",
+    source: "revolico-sagua.pages.dev (catalog)",
+    score: 1,
+    text: [
+      "PRODUCTO: SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM",
+      "Categoría: Telefonía",
+      "Precio publicado: 150 USD",
+      "Disponibilidad publicada: Disponible",
+      "Entrega publicada: Entrega a domicilio gratuita",
+    ].join("\n"),
+  }];
+
+  it("recognizes delivery questions and carries the last product into a short follow-up", () => {
+    expect(isDeliveryQuestion("¿Tienen servicio a domicilio?")).toBe(true);
+    expect(resolveRecentProductQuery("¿Y la entrega?", "[Previous messages]\\nCustomer: ¿Tienen F07?\\nAgent: Sí, el F07 está publicado."))
+      .toBe("¿Tienen F07?");
+  });
+
+  it("explains free delivery using the electric motorina and charging availability", () => {
+    expect(buildCatalogDeliveryReply("F07", catalog, sync, now))
+      .toContain("motorina eléctrica");
+    expect(buildCatalogDeliveryReply("F07", catalog, sync, now))
+      .toContain("disponibilidad de carga");
+  });
+
+  it("does not claim delivery when the listing says no home service", () => {
+    const noDelivery = [{ ...catalog[0], text: catalog[0].text.replace("Entrega a domicilio gratuita", "No ofrece servicio a domicilio") }];
+    expect(buildCatalogDeliveryReply("F07", noDelivery, sync, now)).toContain("no ofrece servicio a domicilio");
+  });
+
+  it("does not infer free delivery from a missing listing field", () => {
+    const missing = [{ ...catalog[0], text: catalog[0].text.replace("Entrega publicada: Entrega a domicilio gratuita", "Entrega publicada: No especificada en la ficha") }];
+    expect(buildCatalogDeliveryReply("F07", missing, sync, now)).toContain("no especifica claramente");
   });
 });
 
