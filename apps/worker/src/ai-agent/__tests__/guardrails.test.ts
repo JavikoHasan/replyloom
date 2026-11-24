@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isHardBlockedIntent, isPhoneBundleSupportQuestion, isPhoneTechnicalSupportQuestion, keywordPrecheck, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "../guardrails";
+import { isHardBlockedIntent, isPhoneBundleSupportQuestion, isPhoneTechnicalSupportQuestion, isMotorcycleStoreQuestion, keywordPrecheck, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "../guardrails";
 
 describe("shouldEscalateToHuman", () => {
   it("escalates explicit human requests and clear frustration", () => {
@@ -50,6 +50,19 @@ describe("store phone bundle intent", () => {
   it("does not turn generic or unrelated questions into phone support", () => {
     expect(isPhoneBundleSupportQuestion("¿Qué tiempo hace hoy?")).toBe(false);
     expect(isPhoneBundleSupportQuestion("¿Cuántos días de garantía tienen?")).toBe(false);
+  });
+});
+
+describe("store motorcycle support intent", () => {
+  it("allows commercial inventory, delivery and warranty questions about listed motorcycles", () => {
+    expect(isMotorcycleStoreQuestion("¿Tienes motos?")).toBe(true);
+    expect(isMotorcycleStoreQuestion("¿Cómo es el servicio de entrega y garantía de las motos?")).toBe(true);
+    expect(isMotorcycleStoreQuestion("¿Cómo puedo encargar una IZUKI HURACAN?")).toBe(true);
+  });
+
+  it("does not treat unrelated motorcycle discussion as store business", () => {
+    expect(isMotorcycleStoreQuestion("¿Cómo reparo el carburador de mi moto?")).toBe(false);
+    expect(isMotorcycleStoreQuestion("¿Qué tiempo hace hoy?")).toBe(false);
   });
 });
 
