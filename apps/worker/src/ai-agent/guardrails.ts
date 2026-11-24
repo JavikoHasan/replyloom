@@ -34,6 +34,18 @@ export async function classifyIntent(
   config: AgentConfig,
   message: string,
 ): Promise<GuardrailResult> {
+  // Product-specific technical questions are commercial support, not requests for
+  // private/internal data. Route them to catalog retrieval with focused search terms.
+  if (config.businessName === "Cell Phone Store - Sagua la Grande" && isPhoneTechnicalSupportQuestion(message)) {
+    const modelIds = [...message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().matchAll(/\\b[a-z]{1,6}\\s*\\d{1,4}[a-z0-9]*\\b/g)]
+      .map((match) => match[0].replace(/\\s+/g, ""));
+    const modelHint = modelIds.length ? " modelo " + modelIds.join(" ") : "";
+    return {
+      allowed: true,
+      label: "SUPPORT",
+      searchQuery: "especificaciones tecnicas caracteristicas conectividad red 4G 5G memoria RAM ROM procesador pantalla bateria camara" + modelHint,
+    };
+  }
   // Known commercial phone-bundle questions must not be misclassified as OFF_TOPIC.
   if (config.businessName === "Cell Phone Store - Sagua la Grande" && isPhoneBundleSupportQuestion(message)) {
     return { allowed: true, label: "SUPPORT" };
@@ -75,6 +87,21 @@ export async function classifyIntent(
  * "write me an invoice" as CODING) would wrongly silence a real support
  * question, so the classifier handles everything that isn't unmistakable.
  */
+/**
+ * Store-only intent exception for questions about technical characteristics of
+ * a specifically referenced phone. These are valid product questions, not
+ * requests for private/internal information. The answer still requires sources.
+ */
+export function isPhoneTechnicalSupportQuestion(message: string): boolean {
+  const m = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  const asksTechnical =
+    /\\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz)\\b/.test(m);
+  const hasPhoneOrModel =
+    /\\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\\b/.test(m) ||
+    /\\b[a-z]{1,6}\\s*\\d{1,4}[a-z0-9]*\\b/.test(m);
+  return asksTechnical && hasPhoneOrModel;
+}
+
 /** Store-only intent exception for model-specific phone bundle/warranty questions. */
 export function isPhoneBundleSupportQuestion(message: string): boolean {
   const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
