@@ -77,6 +77,8 @@ export interface GuardrailResult {
   allowed: boolean;
   label: IntentLabel;
   cannedReply?: string;
+  /** Model-generated Spanish search terms; never used as factual answer content. */
+  searchQuery?: string;
 }
 
 export interface AgentReply {
