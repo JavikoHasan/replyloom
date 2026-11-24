@@ -85,6 +85,16 @@ describe("Cell Phone Store query stress laboratory", () => {
     expect(reply).not.toContain("ECOFLOW");
   });
 
+  it("answers accessory questions with wattage or connector tokens without treating them as model IDs", () => {
+    for (const question of ["¿Tienes cargador de 25W en venta?", "¿Venden cable USB-C 3A?"]) {
+      expect(isCatalogLookupQuestion(question), question).toBe(true);
+      const reply = buildCatalogLookupReply(question, catalog, sync, now);
+      expect(reply, question).toContain("No vendemos cables ni cargadores por separado");
+      expect(reply, question).toContain("Se incluyen con la compra de cualquiera de nuestros teléfonos");
+      expect(reply, question).not.toContain("No encuentro un anuncio vigente");
+    }
+  });
+
   it("keeps the cable and charger policy correct under case and typo variations", () => {
     for (const question of generateCatalogQueryVariants("¿Tienes cargador en venta?")) {
       expect(isCatalogLookupQuestion(question), question).toBe(true);
