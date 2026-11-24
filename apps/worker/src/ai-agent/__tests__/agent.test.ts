@@ -125,14 +125,14 @@ describe("exact catalog model matching", () => {
   const now = Date.parse("2026-11-24T17:05:00.000Z");
 
   it("does not match a short model identifier inside a longer model", () => {
-    const a16 = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
-    expect(buildCatalogLookupReply("¿Tienes A1?", a16, sync, now)).toContain("no encuentro un anuncio vigente");
-    const a160 = [{ text: "PRODUCTO: SAMSUNG GALAXY A160 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
-    expect(buildCatalogLookupReply("¿Tienes A16?", a160, sync, now)).toContain("no encuentro un anuncio vigente");
+    const a16 = [{ id: "a16", source: "catalog", score: 1, text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
+    expect(buildCatalogLookupReply("¿Tienes A1?", a16, sync, now)?.toLowerCase()).toContain("no encuentro un anuncio vigente");
+    const a160 = [{ id: "a160", source: "catalog", score: 1, text: "PRODUCTO: SAMSUNG GALAXY A160 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
+    expect(buildCatalogLookupReply("¿Tienes A16?", a160, sync, now)?.toLowerCase()).toContain("no encuentro un anuncio vigente");
   });
 
   it("still matches the exact model in a longer product title", () => {
-    const a16 = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
+    const a16 = [{ id: "a16", source: "catalog", score: 1, text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
     expect(buildCatalogLookupReply("¿Tienes A16?", a16, sync, now)).toContain("SAMSUNG GALAXY A16");
   });
 });
@@ -270,6 +270,16 @@ describe("contextual delivery intelligence", () => {
       .toBe("¿Tienen F07?");
   });
 
+  it("recognizes the three short delivery questions from the WhatsApp test", () => {
+    for (const question of ["¿Tienen servicio a domicilio?", "¿Hay domicilio?", "¿Hay que pagar domicilio?"]) {
+      expect(isDeliveryQuestion(question)).toBe(true);
+    }
+    const thread = "[Previous messages]\\nCustomer: ¿Tienes A16?\\nAgent: Sí, aparece en catálogo.";
+    const contextQuery = resolveRecentProductQuery("¿Hay que pagar domicilio?", thread);
+    expect(buildGeneralDeliveryPolicyReply("¿Hay que pagar domicilio?", contextQuery)).toContain("gratuita");
+    expect(buildGeneralDeliveryPolicyReply("¿Hay domicilio?", contextQuery)).toContain("Sagua la Grande");
+  });
+
   it("keeps a newly named model when the question also contains 4G or 5G", () => {
     const previousPhone = "[Previous messages]\\nCustomer: ¿Tienes A16?\\nAgent: Sí, aparece en catálogo.";
     expect(resolveRecentProductQuery("¿El A17 es 4G o 5G?", previousPhone)).toBe("¿El A17 es 4G o 5G?");
@@ -324,6 +334,14 @@ describe("Zelle product follow-up totals", () => {
 });
 
 describe("payment policy replies", () => {
+  it("answers a simple Zelle acceptance question without adding an unsolicited product total", () => {
+    const reply = buildPaymentPolicyReply("Aceptan Zelle");
+    expect(reply).toContain("aceptamos Zelle");
+    expect(reply).toContain("10%");
+    expect(reply).not.toContain("209 USD");
+    expect(reply).not.toContain("190 USD");
+  });
+
   it("answers CUP payment questions without suggesting an exchange rate", () => {
     expect(buildPaymentPolicyReply("¿Aceptan CUP?"))
       .toBe("No aceptamos efectivo en CUP ni transferencias en CUP para los anuncios publicados en USD. Los precios se mantienen en la moneda indicada en cada anuncio.");
