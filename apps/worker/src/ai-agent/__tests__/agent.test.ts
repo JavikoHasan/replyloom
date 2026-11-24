@@ -93,6 +93,12 @@ describe("catalog inventory and model availability replies", () => {
     expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
   });
 
+  it("does not offer the A07 because it is absent from the live catalog", () => {
+    const reply = buildCatalogLookupReply("¿Tienes A07?", catalog, sync, now);
+    expect(reply?.toLowerCase()).toContain("no encuentro un anuncio vigente");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+  });
+
   it("confirms an exact model only from its own current listing", () => {
     const reply = buildCatalogLookupReply("¿Tienes Samsung F07?", catalog, sync, now);
     expect(reply).toContain("SAMSUNG GALAXY F07");
