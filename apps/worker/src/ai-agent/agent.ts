@@ -114,6 +114,38 @@ export async function handleAgentMessage(
     return { text: CLARIFY_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
   }
 
+  // Catalog inventory and exact-model availability are deterministic business
+  // lookups, not general conversation. Resolve them BEFORE the probabilistic
+  // intent classifier so a classifier false-negative cannot hide real listings.
+  if (catalogOnlyBusiness && isCatalogLookupQuestion(message)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const catalogLookupReply = buildCatalogLookupReply(message, allCatalogChunks, syncStatus);
+      console.info("[catalog-agent] deterministic-catalog-lookup", {
+        queryType: "inventory-or-model",
+        contextRows: allCatalogChunks.length,
+        syncStage: syncStatus?.stage ?? "missing",
+        responsePresent: Boolean(catalogLookupReply),
+        responseLength: catalogLookupReply?.length ?? 0,
+      });
+      return {
+        text: catalogLookupReply ?? NO_INFO_REPLY,
+        usedTools: [],
+        usedContext: allCatalogChunks,
+        blocked: false,
+        cached: false,
+      };
+    } catch (error) {
+      console.warn("[catalog-agent] deterministic-catalog-lookup-error", {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   // ── 1b) Conversation thread — gives the model continuity for follow-ups
   // like "and shipping?" without a full message-history tool call, and
   // grounds the RAG query in what the customer was actually asking about. ──
@@ -165,31 +197,6 @@ export async function handleAgentMessage(
     }
   }
 
-  if (catalogOnlyBusiness && isCatalogLookupQuestion(message)) {
-    const syncStatus = await env.REPLY_CACHE
-      .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
-      .catch(() => null);
-    const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-    const catalogLookupReply = buildCatalogLookupReply(message, allCatalogChunks, syncStatus);
-    if (catalogLookupReply) {
-      return {
-        text: catalogLookupReply,
-        usedTools: [],
-        usedContext: allCatalogChunks,
-        blocked: false,
-        cached: false,
-      };
-    }
-    // Never fall through to generative answers for inventory/availability:
-    // missing or stale catalog data must remain an explicit human handoff.
-    return {
-      text: NO_INFO_REPLY,
-      usedTools: [],
-      usedContext: allCatalogChunks,
-      blocked: false,
-      cached: false,
-    };
-  }
 
   // Answer the store's fixed phone bundle directly from the permanent code policy.
   // This avoids dependence on a policy chunk being selected by RAG.
