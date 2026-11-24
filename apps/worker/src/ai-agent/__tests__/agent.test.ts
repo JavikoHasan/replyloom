@@ -292,7 +292,7 @@ describe("reservation policy replies", () => {
   it("hands phone reservations to the seller without promising a hold", () => {
     const reply = buildReservationPolicyReply("¿Cómo puedo reservar uno?", "¿Tienes A17?");
     expect(reply).toContain("No puedo apartar ni garantizar una reserva");
-    expect(reply).toContain("existencia física");
+    expect(reply).toContain("físicamente disponible");
     expect(reply).toContain("https://wa.me/5354590237");
   });
 
