@@ -660,8 +660,8 @@ export function buildCatalogDeliveryReply(
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = blocks.filter((block) => {
     const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
-    const compactTitle = normalizeBusinessText(title).replace(/[^a-z0-9]/g, "");
-    return modelIds.some((id) => compactTitle.includes(id));
+    const normalizedTitle = normalizeBusinessText(title);
+    return modelIds.some((id) => new RegExp("(^|[^a-z0-9])" + id + "([^a-z0-9]|$)").test(normalizedTitle));
   });
   const unique = new Map<string, string>();
   for (const block of matches) {
