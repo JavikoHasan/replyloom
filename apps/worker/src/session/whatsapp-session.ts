@@ -3159,7 +3159,7 @@ export class WhatsAppSession implements DurableObject {
         this.withWorkspaceId(async (workspaceId) => {
           const pending: Promise<void>[] = [];
           for (const msg of upsert.messages) {
-            const jid = msg?.key?.remoteJid as string | undefined;
+            const jid = msg.key.remoteJid as string | undefined;
             const previous = jid ? this.liveMessageQueues.get(jid) : undefined;
             const task = (previous ?? Promise.resolve())
               .catch(() => undefined)
