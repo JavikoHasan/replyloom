@@ -636,12 +636,12 @@ export function buildPaymentPolicyReply(message: string): string | null {
  * context is required so ordinary catalog replies never assume Zelle.
  */
 export function buildZelleTotalReply(catalogReply: string, conversationThread: string): string | null {
-  const normalizedThread = conversationThread.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const normalizedThread = conversationThread.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const hasZellePaymentExchange =
-    /Customer:[^\\n]*\\bzelle\\b[\\s\\S]*Agent:[^\\n]*aceptamos Zelle/i.test(normalizedThread);
+    /Customer:[^\n]*\bzelle\b[\s\S]*Agent:[^\n]*aceptamos Zelle/i.test(normalizedThread);
   if (!hasZellePaymentExchange) return null;
 
-  const priceMatch = catalogReply.match(/\\bprecio publicado es\\s+([\\d,.]+)\\s*USD\\b/i);
+  const priceMatch = catalogReply.match(/\bprecio publicado es\s+([\d,.]+)\s*USD\b/i);
   if (!priceMatch) return null;
   const publishedPrice = Number(priceMatch[1].replace(/,/g, ""));
   if (!Number.isFinite(publishedPrice) || publishedPrice <= 0) return null;
