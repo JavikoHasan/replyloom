@@ -126,6 +126,18 @@ export async function handleAgentMessage(
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
+  // Resolve short product-policy follow-ups before the generic intent classifier.
+  if (catalogOnlyBusiness) {
+    const phoneBundleReply = buildPhoneBundleReply(message, [], contextualProductQuery);
+    if (phoneBundleReply) {
+      return { text: phoneBundleReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+    const contextualPolicyReply = buildStorePolicyOnlyReply(message, contextualProductQuery);
+    if (contextualPolicyReply) {
+      return { text: contextualPolicyReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   // Explicit requests for a same-day/next-day delivery need a safe, deterministic
   // handoff. Never let the language model imply that a slot has been booked.
   if (catalogOnlyBusiness && isDeliverySchedulingQuestion(message)) {
@@ -368,7 +380,7 @@ export async function handleAgentMessage(
   // Answer the store's fixed phone bundle directly from the permanent code policy.
   // This avoids dependence on a policy chunk being selected by RAG.
   if (catalogOnlyBusiness) {
-    const phoneBundleReply = buildPhoneBundleReply(message, context);
+    const phoneBundleReply = buildPhoneBundleReply(message, context, contextualProductQuery);
     if (phoneBundleReply) {
       return {
         text: phoneBundleReply,
@@ -384,7 +396,7 @@ export async function handleAgentMessage(
   // has no matching listing. The reply must never imply that a model is
   // currently advertised or in stock; catalog presence remains a separate check.
   if (catalogOnlyBusiness) {
-    const policyReply = buildStorePolicyOnlyReply(message);
+    const policyReply = buildStorePolicyOnlyReply(message, contextualProductQuery);
     if (policyReply) {
       return {
         text: policyReply,
@@ -670,7 +682,7 @@ export function isDeliverySchedulingQuestion(message: string): boolean {
 /** Detect clear purchase-interest phrases; a bare "sí" is intentionally ambiguous. */
 export function isPurchaseInterestMessage(message: string): boolean {
   const normalized = normalizeStoreCatalogQuery(message);
-  return /\\b(me interesa|estoy interesado|estoy interesada|lo quiero|la quiero|quiero comprarlo|quiero comprarla|quiero ese|quiero esa|me lo llevo|me la llevo)\\b/.test(normalized);
+  return /\b(me interesa|estoy interesado|estoy interesada|lo quiero|la quiero|quiero comprarlo|quiero comprarla|quiero ese|quiero esa|me lo llevo|me la llevo)\b/.test(normalized);
 }
 
 /** Continue an exact catalog lookup without inventing stock or a reservation. */
@@ -687,7 +699,7 @@ export function buildPurchaseInterestReply(productQuery: string, catalogReply: s
 export function isPhoneFunctionalityQuestion(message: string, productQuery: string): boolean {
   const normalizedMessage = normalizeStoreCatalogQuery(message);
   const normalizedQuery = normalizeStoreCatalogQuery(productQuery);
-  const asksFunctionality = /\\b(funciona|funcionamiento|sirve|funcionar)\\b/.test(normalizedMessage);
+  const asksFunctionality = /\b(funciona|funcionamiento|sirve|funcionar)\b/.test(normalizedMessage);
   const namesPhone = /\\b(telefono|telefonos|celular|celulares|samsung|galaxy|redmi|iphone|f07|a16|a17|a56)\\b/.test(normalizedQuery);
   return asksFunctionality && namesPhone;
 }
@@ -805,7 +817,7 @@ export function isCatalogLookupQuestion(message: string): boolean {
   const normalized = normalizeStoreCatalogQuery(message);
   const hasModelCode = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(normalized)
     && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(normalized);
-  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estacion(?:es)? de energia|productos?|equipos?|catalogo|que hay|que tienes|que tienen|que cosas tienes|que cosas tienen|que venden|que vendes|que cosas venden|que cosas vendes|que ofrecen|a la venta)\b/.test(normalized);
+  const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estacion(?:es)? de energia|motocicletas?|motos?|productos?|equipos?|catalogo|que hay|que tienes|que tienen|que cosas tienes|que cosas tienen|que venden|que vendes|que cosas venden|que cosas vendes|que ofrecen|a la venta)\b/.test(normalized);
   const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\b/.test(normalized);
   const asksKnownBrand = /\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/.test(normalized);
   const asksAccessory = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
@@ -876,6 +888,7 @@ export function buildCatalogLookupReply(
 
   const isPhoneQuery = /\b(telefonos?|celulares?|moviles?|smartphones?)\b/.test(normalized);
   const isEnergyQuery = /\bestacion(?:es)? de energia\b|\benergia portatil\b/.test(normalized);
+  const isMotorcycleQuery = /\b(motocicletas?|motos?)\b/.test(normalized);
   const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
   let filtered = products;
@@ -890,12 +903,14 @@ export function buildCatalogLookupReply(
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(brand));
   } else if (isEnergyQuery) {
     filtered = products.filter((product) => /\bestacion(?:es)? de energia\b|\benergia\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
+  } else if (isMotorcycleQuery) {
+    filtered = products.filter((product) => /\b(motocicleta|moto|izuki|xmx|huracan)\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
   }
   if (filtered.length === 0) {
-    const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : "productos";
+    const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : "productos";
     return "Ahora mismo no encuentro anuncios vigentes de " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
   }
-  const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isAccessoryQuery ? "accesorios" : "productos";
+  const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : isAccessoryQuery ? "accesorios" : "productos";
   const lines = filtered.slice(0, 20).map((product) => {
     const details = [product.price, product.availability].filter(Boolean).join(" · ");
     return "• " + product.title + (details ? " — " + details : "");
@@ -972,8 +987,8 @@ export function buildZelleTotalReply(catalogReply: string, conversationThread: s
  * Answers only stable, explicitly approved category policies. This path does
  * not confirm that a particular model is listed, available, or orderable.
  */
-export function buildStorePolicyOnlyReply(message: string): string | null {
-  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+export function buildStorePolicyOnlyReply(message: string, productQuery = ""): string | null {
+  const normalized = (message + " " + productQuery).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const asksConditions = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|que incluye|accesorios|garantia|garantía|entrega|entregan|entregar|entregado|entregada|envio|envío|domicilio|prueba|devolucion|devolución|reparacion|reparación|encargo|encargar|encargue|pedido|proceso|pasos|funciona|vendo|vender|comprar|compra|cambio|cambiar|permuta|permuto|vuelto|tasar|tasacion)\b/.test(normalized);
   if (!asksConditions) return null;
 
@@ -1096,14 +1111,15 @@ export function buildPhoneTechnicalReply(
  * Answers questions about the fixed bundle included with listed phones.
  * Requires both a matching product block and the pinned phone policy chunk.
  */
-export function buildPhoneBundleReply(message: string, context: RetrievedChunk[]): string | null {
+export function buildPhoneBundleReply(message: string, context: RetrievedChunk[], productQuery = message): string | null {
   const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalizedProductQuery = productQuery.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const asksAboutBundle = /\b(incluye|incluyen|incluido|incluidos|trae|viene con|que trae|accesorios|garantia|dias de garantia)\b/.test(normalizedQuestion);
   if (!asksAboutBundle) return null;
-
-  const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
-  if (modelIds.length === 0) return null;
-
+  const phoneContext = /\b(telefono|telefonos|celular|celulares|movil|moviles|smartphone|smartphones|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo|f07|a16|a17|a56)\b/.test(normalizedProductQuery);
+  if (!phoneContext) return null;
+  const modelIds = [...(normalizedQuestion + " " + normalizedProductQuery).matchAll(/\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
+  if (modelIds.length === 0 || context.length === 0) return "La compra de cualquiera de nuestros teléfonos incluye cover de fábrica, mica protectora de cristal templado, cable USB y cargador original. Además, cuenta con 15 días de garantía.";
   const productBlocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = productBlocks.filter((block) => {
     const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
@@ -1111,18 +1127,12 @@ export function buildPhoneBundleReply(message: string, context: RetrievedChunk[]
     const isPhone = /\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(normalizedTitle);
     return isPhone && modelIds.some((modelId) => new RegExp("(^|[^a-z0-9])" + modelId + "([^a-z0-9]|$)").test(normalizedTitle));
   });
-  if (matches.length !== 1) return null;
-
-  // The fixed phone bundle is sourced from the permanent code policy, not a
-  // pinned RAG chunk that can be dropped by the context-size limit.
+  if (matches.length !== 1) return "La compra de cualquiera de nuestros teléfonos incluye cover de fábrica, mica protectora de cristal templado, cable USB y cargador original. Además, cuenta con 15 días de garantía.";
   const policy = STORE_POLICY.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (!["cover de fabrica", "cable", "cargador", "mica protectora", "15 dias de garantia"].every((fact) => policy.includes(fact))) {
-    return null;
-  }
-
+  if (!["cover de fabrica", "cable", "cargador", "mica protectora", "15 dias de garantia"].every((fact) => policy.includes(fact))) return null;
   const title = matches[0].match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
   if (!title) return null;
-  return "La compra de " + title + " incluye cover de fábrica, cable, cargador original y mica protectora de cristal templado. Además, cuenta con 15 días de garantía.";
+  return "La compra de " + title + " incluye cover de fábrica, mica protectora de cristal templado, cable USB y cargador original. Además, cuenta con 15 días de garantía.";
 }
 
 /**
