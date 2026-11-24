@@ -292,7 +292,7 @@ describe("contextual delivery intelligence", () => {
   });
 
   it("uses the newest category lookup instead of reviving an older phone for delivery follow-ups", () => {
-    const thread = "[Previous messages]\\nCustomer: ¿Tienes F07?\\nAgent: Sí.\\nCustomer: ¿Tienen estaciones de energía?\\nAgent: Sí, aparece una EcoFlow.";
+    const thread = "[Previous messages]\nCustomer: ¿Tienes F07?\nAgent: Sí.\nCustomer: ¿Tienen estaciones de energía?\nAgent: Sí, aparece una EcoFlow.";
     expect(resolveRecentProductQuery("¿Hacen domicilio?", thread)).toBe("¿Tienen estaciones de energía?");
     expect(buildGeneralDeliveryPolicyReply("¿Hacen domicilio?", resolveRecentProductQuery("¿Hacen domicilio?", thread)))
       .toContain("estaciones EcoFlow anunciadas");
