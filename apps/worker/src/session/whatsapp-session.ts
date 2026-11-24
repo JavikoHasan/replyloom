@@ -399,6 +399,10 @@ export class WhatsAppSession implements DurableObject {
   private outboundBucket = new TokenBucket(OUTBOUND_BURST, OUTBOUND_PER_SEC);
   private autoReplyLimiter = new AutoReplyLimiter();
   private autoReplyContentDeduper = new AutoReplyContentDeduper();
+  // Serialize inbound processing per private chat. Separate Baileys upsert events
+  // can overlap; without this queue, an older AI task may read a newer/older
+  // conversation snapshot and send a reply for the wrong customer question.
+  private liveMessageQueues = new Map<string, Promise<void>>();
   private sessionCreatedAt: Date | null | undefined = undefined;
 
   /**
@@ -3153,28 +3157,42 @@ export class WhatsAppSession implements DurableObject {
 
       this.state.waitUntil(
         this.withWorkspaceId(async (workspaceId) => {
+          const pending: Promise<void>[] = [];
           for (const msg of upsert.messages) {
-            await processLiveMessage(
-              {
-                db: this.db,
-                env: this.env,
-                socket: this.socket,
-                sessionIdName: this.sessionIdName,
-                workspaceId,
-                log: this.log.bind(this),
-                broadcast: this.broadcast.bind(this),
-                allowAutoReply: this.allowAutoReply.bind(this),
-                allowAutoReplyContent: (jid, text) => this.autoReplyContentDeduper.allow(jid, text),
-                pauseAutoReply: this.pauseAutoReply.bind(this),
-                isAutoReplyPaused: this.isAutoReplyPaused.bind(this),
-                markBotReply: this.markBotReply.bind(this),
-                consumeBotReplyMarker: this.consumeBotReplyMarker.bind(this),
-                waitUntil: (p) => this.state.waitUntil(p),
-              },
-              msg,
-              upsertType
-            );
+            const jid = msg?.key?.remoteJid as string | undefined;
+            const previous = jid ? this.liveMessageQueues.get(jid) : undefined;
+            const task = (previous ?? Promise.resolve())
+              .catch(() => undefined)
+              .then(() => processLiveMessage(
+                {
+                  db: this.db,
+                  env: this.env,
+                  socket: this.socket,
+                  sessionIdName: this.sessionIdName,
+                  workspaceId,
+                  log: this.log.bind(this),
+                  broadcast: this.broadcast.bind(this),
+                  allowAutoReply: this.allowAutoReply.bind(this),
+                  allowAutoReplyContent: (chatJid, text) => this.autoReplyContentDeduper.allow(chatJid, text),
+                  pauseAutoReply: this.pauseAutoReply.bind(this),
+                  isAutoReplyPaused: this.isAutoReplyPaused.bind(this),
+                  markBotReply: this.markBotReply.bind(this),
+                  consumeBotReplyMarker: this.consumeBotReplyMarker.bind(this),
+                  waitUntil: (p) => this.state.waitUntil(p),
+                },
+                msg,
+                upsertType
+              ));
+            if (jid) {
+              this.liveMessageQueues.set(jid, task);
+              void task.then(
+                () => { if (this.liveMessageQueues.get(jid) === task) this.liveMessageQueues.delete(jid); },
+                () => { if (this.liveMessageQueues.get(jid) === task) this.liveMessageQueues.delete(jid); }
+              );
+            }
+            pending.push(task);
           }
+          await Promise.all(pending);
         })
       );
     });
