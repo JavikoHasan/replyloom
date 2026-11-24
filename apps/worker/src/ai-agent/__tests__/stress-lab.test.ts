@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCatalogLookupReply,
+  buildGeneralDeliveryPolicyReply,
+  buildPaymentPolicyReply,
   isCatalogLookupQuestion,
+  isDeliveryQuestion,
   resolveRecentProductQuery,
 } from "../agent";
 import { generateCatalogQueryVariants, normalizeStoreCatalogQuery } from "../catalog-query-normalization";
@@ -74,6 +77,30 @@ describe("Cell Phone Store query stress laboratory", () => {
     expect(normalizeStoreCatalogQuery("¿Tines Samsung F07?")).toContain("tienes");
     expect(normalizeStoreCatalogQuery("¿Tienes Oups?")).toContain("oupes");
     expect(normalizeStoreCatalogQuery("¿Tienes cargdor?")).toContain("cargador");
+  });
+
+  it("normalizes common payment typos without changing approved payment terms", () => {
+    const question = "¿Aseptan trasferencia en CUP?";
+    expect(normalizeStoreCatalogQuery(question)).toContain("aceptan transferencia");
+    const reply = buildPaymentPolicyReply(question);
+    expect(reply).toContain("No aceptamos efectivo en CUP ni transferencias en CUP");
+    expect(reply).not.toMatch(/tasa fija|equivalencia|conversión estimada/i);
+  });
+
+  it("normalizes common delivery typos before intent routing and policy replies", () => {
+    const question = "¿Hacen domisilio gratis para celulares?";
+    expect(isDeliveryQuestion(question)).toBe(true);
+    const reply = buildGeneralDeliveryPolicyReply(question);
+    expect(reply).toContain("La entrega a domicilio de los teléfonos es gratuita");
+    expect(reply).toContain("Sagua la Grande, Isabela de Sagua, Cifuentes y Quemado");
+  });
+
+  it("recognizes a misspelled question about delivery cost without inventing a fee", () => {
+    const question = "¿Cuanto cuesta el domisilio?";
+    expect(isDeliveryQuestion(question)).toBe(true);
+    const reply = buildGeneralDeliveryPolicyReply(question);
+    expect(reply).toContain("el costo y la modalidad deben confirmarse");
+    expect(reply).not.toMatch(/cuesta 0|gratis para todos los productos/i);
   });
 
   it("keeps brand requests isolated and never substitutes EcoFlow for Oupes", () => {
