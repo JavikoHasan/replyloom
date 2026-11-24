@@ -700,7 +700,7 @@ export function isPhoneFunctionalityQuestion(message: string, productQuery: stri
   const normalizedMessage = normalizeStoreCatalogQuery(message);
   const normalizedQuery = normalizeStoreCatalogQuery(productQuery);
   const asksFunctionality = /\b(funciona|funcionamiento|sirve|funcionar)\b/.test(normalizedMessage);
-  const namesPhone = /\\b(telefono|telefonos|celular|celulares|samsung|galaxy|redmi|iphone|f07|a16|a17|a56)\\b/.test(normalizedQuery);
+  const namesPhone = /\b(telefono|telefonos|celular|celulares|samsung|galaxy|redmi|iphone|f07|a16|a17|a56)\b/.test(normalizedQuery);
   return asksFunctionality && namesPhone;
 }
 
