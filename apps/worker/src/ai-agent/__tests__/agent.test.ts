@@ -278,7 +278,7 @@ describe("payment policy replies", () => {
 
   it("answers general payment questions only with approved terms", () => {
     expect(buildPaymentPolicyReply("¿Qué formas de pago aceptan?")).toContain("Zelle");
-    expect(buildPaymentPolicyReply("¿Cuánto es el cambio?")).toBeNull();
+    expect(buildPaymentPolicyReply("¿Cuánto es el cambio?")).toContain("No ofrecemos una tasa fija");
   });
 });
 
