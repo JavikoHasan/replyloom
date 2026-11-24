@@ -1127,7 +1127,7 @@ export function buildPhoneBundleReply(message: string, context: RetrievedChunk[]
     const isPhone = /\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(normalizedTitle);
     return isPhone && modelIds.some((modelId) => new RegExp("(^|[^a-z0-9])" + modelId + "([^a-z0-9]|$)").test(normalizedTitle));
   });
-  if (matches.length !== 1) return "La compra de cualquiera de nuestros teléfonos incluye cover de fábrica, mica protectora de cristal templado, cable USB y cargador original. Además, cuenta con 15 días de garantía.";
+  if (matches.length !== 1) return null;
   const policy = STORE_POLICY.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (!["cover de fabrica", "cable", "cargador", "mica protectora", "15 dias de garantia"].every((fact) => policy.includes(fact))) return null;
   const title = matches[0].match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
