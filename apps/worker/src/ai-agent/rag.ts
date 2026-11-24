@@ -179,6 +179,33 @@ export async function retrieveContext(
   return context;
 }
 
+
+/**
+ * Loads every chunk from one trusted public-catalog source for deterministic
+ * inventory answers. Unlike relevance-ranked RAG, this must not truncate the
+ * inventory to the top eight chunks.
+ */
+export async function retrieveCatalogChunks(
+  env: AgentEnv,
+  config: AgentConfig,
+  sourcePrefix: string,
+): Promise<RetrievedChunk[]> {
+  const result = await env.DB.prepare(
+    `SELECT id, text, source FROM doc_chunks
+     WHERE workspace_id = ? AND source LIKE ?
+     ORDER BY id
+     LIMIT 100`,
+  ).bind(config.workspaceId, `${sourcePrefix}%`)
+    .all<{ id: string; text: string; source: string }>();
+
+  return result.results.map((row) => ({
+    id: row.id,
+    text: row.text,
+    source: row.source,
+    score: 1,
+  }));
+}
+
 /**
  * Stores document chunks directly in D1. Re-ingesting a docId replaces its
  * previous chunks. No embedding model or Vectorize index is required.
