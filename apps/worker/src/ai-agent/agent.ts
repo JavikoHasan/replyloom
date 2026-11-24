@@ -14,7 +14,7 @@ const MAX_TURNS = 2; // generation loop depth, not conversation turns
 const MAX_REPLY_TOKENS = 400;
 const MAX_INPUT_CHARS = 4000;
 const MAX_THREAD_CHARS = 1500;
-const THREAD_MESSAGE_LIMIT = 4;
+const THREAD_MESSAGE_LIMIT = 12;
 
 const NO_INFO_REPLY =
   "Soy el asistente virtual de Cell Phone Store. Solo estoy autorizado para informar sobre los productos publicados y datos que estén verificados. No tengo información confirmada sobre esa consulta; para evitar errores, puedes consultarlo directamente con el vendedor.";
@@ -114,9 +114,61 @@ export async function handleAgentMessage(
     return { text: CLARIFY_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
   }
 
-  // Payment policy is a high-confidence deterministic intent. Resolve it before
-  // catalog lookup and the probabilistic classifier so paraphrases never get
-  // rejected by a model gate or mistaken for a product search.
+  // Keep a larger, bounded recent thread for multi-turn product/payment/delivery
+  // follow-ups. The previous four-message window lost the original Zelle exchange
+  // after a customer asked a clarification and repeated the model name.
+  const recentThread = catalogOnlyBusiness
+    ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT)
+    : "";
+  const contextualProductQuery = catalogOnlyBusiness
+    ? resolveRecentProductQuery(message, recentThread)
+    : message;
+  const asksZelleNow = /\\bzelle\\b/i.test(normalizeBusinessText(message));
+
+  // Delivery questions are answered from the delivery field of the exact live
+  // listing. Category defaults are never used to override a listing's explicit
+  // delivery option.
+  if (catalogOnlyBusiness && isDeliveryQuestion(message)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const deliveryReply = buildCatalogDeliveryReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      if (deliveryReply) {
+        console.info("[catalog-agent] deterministic-delivery-policy", { responsePresent: true, contextRows: allCatalogChunks.length });
+        return { text: deliveryReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
+      }
+    } catch (error) {
+      console.warn("[catalog-agent] deterministic-delivery-error", { errorType: error instanceof Error ? error.name : typeof error });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
+  // If Zelle is mentioned together with a product, or the product is clear
+  // from the recent thread, resolve its exact current listing and calculate
+  // the total before returning the generic payment-policy explanation.
+  if (catalogOnlyBusiness && asksZelleNow && hasProductReference(contextualProductQuery)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const catalogReply = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      if (catalogReply) {
+        const zelleReply = buildZelleTotalReply(catalogReply, recentThread + "\\nCustomer: " + message, true);
+        if (zelleReply) {
+          console.info("[catalog-agent] deterministic-zelle-product-total", { responsePresent: true });
+          return { text: zelleReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
+        }
+      }
+    } catch (error) {
+      console.warn("[catalog-agent] deterministic-zelle-total-error", { errorType: error instanceof Error ? error.name : typeof error });
+    }
+  }
+
+  // Payment policy is resolved only after product-aware follow-ups. CUP is
+  // never converted and Zelle totals are calculated from the live listing.
   if (catalogOnlyBusiness) {
     const paymentReply = buildPaymentPolicyReply(message);
     if (paymentReply) {
@@ -125,19 +177,18 @@ export async function handleAgentMessage(
     }
   }
 
-  // Catalog inventory and exact-model availability are deterministic business
-  // lookups, not general conversation. Resolve them BEFORE the probabilistic
-  // intent classifier so a classifier false-negative cannot hide real listings.
+  // Inventory and exact-model lookups remain deterministic and catalog-grounded.
   if (catalogOnlyBusiness && isCatalogLookupQuestion(message)) {
     try {
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
-      const recentThread = await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT);
       const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const catalogLookupReply = buildCatalogLookupReply(message, allCatalogChunks, syncStatus);
+      const catalogLookupReply = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
       const zelleAwareReply = catalogLookupReply
-        ? buildZelleTotalReply(catalogLookupReply, recentThread) ?? catalogLookupReply
+        ? buildZelleTotalReply(catalogLookupReply, recentThread)
+          ?? (asksZelleNow ? buildZelleTotalReply(catalogLookupReply, recentThread, true) : null)
+          ?? catalogLookupReply
         : null;
       console.info("[catalog-agent] deterministic-catalog-lookup", {
         queryType: "inventory-or-model",
@@ -528,6 +579,85 @@ function cache(env: AgentEnv, config: AgentConfig, key: string, value: string, t
 }
 
 
+/** Normalize user-facing business text without changing product identifiers. */
+function normalizeBusinessText(value: string): string {
+  return value.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+}
+
+/** Detect whether the customer is asking about delivery or home service. */
+export function isDeliveryQuestion(message: string): boolean {
+  return /\\b(entrega|entregan|entregar|envio|envian|domicilio|a casa|servicio a domicilio|reparto|llevarlo|llevarla)\\b/.test(normalizeBusinessText(message));
+}
+
+/** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
+export function resolveRecentProductQuery(message: string, conversationThread: string): string {
+  if (hasProductReference(message)) return message;
+  if (!conversationThread) return message;
+  const customerMessages = [...conversationThread.matchAll(/Customer:\\s*([^\\n]+)/g)].map((match) => match[1]);
+  for (const previous of customerMessages.reverse()) {
+    if (hasProductReference(previous)) return previous;
+  }
+  return message;
+}
+
+export function hasProductReference(message: string): boolean {
+  return /\\b(?:[a-z]{1,8}\\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})\\b/i.test(message)
+    && !/\\b\\d+(?:gb|mb|ram|rom)\\b/i.test(message);
+}
+
+/** Answer delivery only from the exact product's published delivery field. */
+export function buildCatalogDeliveryReply(
+  message: string,
+  context: RetrievedChunk[],
+  syncStatus: { stage?: string; updatedAt?: string } | null,
+  now = Date.now(),
+): string | null {
+  if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
+  const syncedAt = Date.parse(syncStatus.updatedAt);
+  const ageMs = now - syncedAt;
+  if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
+
+  const normalized = normalizeBusinessText(message);
+  const modelIds = [...normalized.matchAll(/\\b([a-z]{1,8}\\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})\\b/g)]
+    .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
+    .filter((key) => !/^\\d+(?:gb|mb|ram|rom)$/.test(key));
+  if (modelIds.length === 0) return null;
+
+  const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\\s*)/));
+  const matches = blocks.filter((block) => {
+    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
+    const compactTitle = normalizeBusinessText(title).replace(/[^a-z0-9]/g, "");
+    return modelIds.some((id) => compactTitle.includes(id));
+  });
+  const unique = new Map<string, string>();
+  for (const block of matches) {
+    const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
+    if (title) unique.set(normalizeBusinessText(title), block);
+  }
+  if (unique.size !== 1) return null;
+
+  const block = [...unique.values()][0];
+  const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
+  const delivery = block.match(/^Entrega publicada:\\s*(.+)$/im)?.[1]?.trim();
+  if (!title || !delivery || /no especificada/i.test(delivery)) {
+    return "La ficha vigente de ese producto no especifica claramente el servicio a domicilio. Para no darte una información incorrecta, debes confirmarlo con el vendedor.";
+  }
+  const value = normalizeBusinessText(delivery);
+  if (/\\b(gratis|gratuita|gratuito|sin costo|sin recargo)\\b/.test(value)) {
+    if (/\\b(moto|motocicleta)\\b/.test(normalizeBusinessText(title))) {
+      return "La ficha de " + title + " indica entrega a domicilio sin costo adicional. Al ser un producto por encargo, la entrega en la puerta del domicilio se coordina directamente con el vendedor; no puedo confirmar fecha ni hora.";
+    }
+    return "La ficha de " + title + " indica entrega a domicilio gratuita. Se realiza mediante motorina eléctrica, sin costo adicional. El horario depende de la disponibilidad de carga y debe coordinarse previamente con el vendedor.";
+  }
+  if (/\\b(costo adicional|costo extra|con costo|no gratuita|no gratis)\\b/.test(value)) {
+    return "La ficha de " + title + " indica entrega a domicilio con costo adicional. El importe y la disponibilidad deben confirmarse directamente con el vendedor; no tengo un costo de entrega confirmado en el anuncio.";
+  }
+  if (/\\b(no ofrece|sin servicio|no dispone|no cuenta con|no hay servicio)\\b/.test(value)) {
+    return "La ficha de " + title + " indica que no ofrece servicio a domicilio.";
+  }
+  return "La ficha de " + title + " indica esta condición de entrega: " + delivery + ". Para confirmar cómo se realiza y su disponibilidad, debes coordinarlo directamente con el vendedor.";
+}
+
 /** Detect a catalog lookup that can be answered without generative guessing. */
 export function isCatalogLookupQuestion(message: string): boolean {
   const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -635,11 +765,11 @@ export function buildPaymentPolicyReply(message: string): string | null {
  * 10% surcharge from that product's verified catalog price. Conversation
  * context is required so ordinary catalog replies never assume Zelle.
  */
-export function buildZelleTotalReply(catalogReply: string, conversationThread: string): string | null {
+export function buildZelleTotalReply(catalogReply: string, conversationThread: string, explicitCurrentZelleIntent = false): string | null {
   const normalizedThread = conversationThread.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const hasZellePaymentExchange =
     /Customer:[^\n]*\bzelle\b[\s\S]*Agent:[^\n]*aceptamos Zelle/i.test(normalizedThread);
-  if (!hasZellePaymentExchange) return null;
+  if (!hasZellePaymentExchange && !explicitCurrentZelleIntent) return null;
 
   const priceMatch = catalogReply.match(/\bprecio publicado es\s+([\d,.]+)\s*USD\b/i);
   if (!priceMatch) return null;
