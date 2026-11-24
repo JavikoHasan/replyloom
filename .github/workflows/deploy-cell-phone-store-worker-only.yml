@@ -103,6 +103,23 @@ jobs:
       - name: Build Worker
         run: pnpm --filter worker build
 
+      - name: Verify isolated production target
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const config = fs.readFileSync('apps/worker/wrangler.jsonc', 'utf8');
+          if (!/"name"\\s*:\\s*"cell-phone-store-whatsapp-ai"/.test(config)) {
+            throw new Error('Refusing deployment: Worker name is not cell-phone-store-whatsapp-ai.');
+          }
+          if (config.includes('REPLACE_WITH_')) {
+            throw new Error('Refusing deployment: unresolved Cloudflare resource IDs remain.');
+          }
+          for (const binding of ['REPLY_CACHE', 'MEDIA_STORE', 'DB', 'WHATSAPP_SESSION']) {
+            if (!config.includes('"' + binding + '"')) throw new Error('Missing required binding: ' + binding);
+          }
+          console.log('Confirmed isolated target: cell-phone-store-whatsapp-ai.');
+          NODE
+
       # This deploys only cell-phone-store-whatsapp-ai. It intentionally does
       # not run D1 migrations, deploy the CRM web Worker, or rewrite secrets.
       - name: Deploy WhatsApp Worker only
