@@ -143,6 +143,12 @@ describe("grounded phone technical replies", () => {
     expect(reply).toContain("no quiero inventarlas");
   });
 
+  it("requires an exact model identifier instead of matching a shorter model as a substring", () => {
+    expect(buildPhoneTechnicalReply("¿Qué propiedades tiene el A1?", "¿Qué propiedades tiene el A1?", a16, sync, now)).toBeNull();
+    const a160 = [{ ...a16[0], text: a16[0].text.replace("A16", "A160") }];
+    expect(buildPhoneTechnicalReply("¿Qué propiedades tiene el A16?", "¿Qué propiedades tiene el A16?", a160, sync, now)).toBeNull();
+  });
+
   it("does not infer 4G or 5G when the listing does not specify network generation", () => {
     const reply = buildPhoneTechnicalReply("¿El A17 es 4G o 5G?", "¿El A17 es 4G o 5G?", a17, sync, now);
     expect(reply).toContain("no especifica si es 4G o 5G");
