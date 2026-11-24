@@ -737,8 +737,8 @@ export function buildCatalogLookupReply(
     .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/.test(key));
   if (modelIds.length > 0) {
     const matches = products.filter((product) => {
-      const title = product.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      return modelIds.some((id) => title.includes(id));
+      const title = product.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return modelIds.some((id) => new RegExp("(^|[^a-z0-9])" + id + "([^a-z0-9]|$)").test(title));
     });
     if (matches.length !== 1) {
       return "No encuentro un anuncio vigente que coincida exactamente con ese modelo en nuestro catálogo. Puedes pedir al vendedor que confirme si está disponible.";
