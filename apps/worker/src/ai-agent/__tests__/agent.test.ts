@@ -120,6 +120,38 @@ describe("catalog inventory and model availability replies", () => {
     expect(reply).not.toContain("SAMSUNG GALAXY F07");
   });
 
+  it("filters a requested energy brand instead of returning unrelated EcoFlow products", () => {
+    const oupesQuestion = "¿Tienes estaciones de energía marca Oupes?";
+    expect(isCatalogLookupQuestion(oupesQuestion)).toBe(true);
+    const reply = buildCatalogLookupReply(oupesQuestion, catalog, sync, now);
+    expect(reply).toContain("marca OUPES");
+    expect(reply).toContain("no encuentro anuncios vigentes");
+    expect(reply).not.toContain("ECOFLOW DELTA 2");
+    expect(isCatalogLookupQuestion("¿Tienes Oupes?")).toBe(true);
+    expect(buildCatalogLookupReply("¿Tienes Oupes?", catalog, sync, now)).not.toContain("ECOFLOW DELTA 2");
+  });
+
+  it("lists all energy stations across brands instead of treating the category as EcoFlow-only", () => {
+    const bluetti = {
+      id: "energy-2",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: ["PRODUCTO: BLUETTI ELITE 100 V2", "Categoría: Estaciones de energía", "Precio publicado: 600 USD", "Disponibilidad publicada: Disponible"].join("\\n"),
+    };
+    const reply = buildCatalogLookupReply("¿Tienes estaciones de energía?", [...catalog, bluetti], sync, now);
+    expect(reply).toContain("ECOFLOW DELTA 2");
+    expect(reply).toContain("BLUETTI ELITE 100 V2");
+  });
+
+  it("answers accessory inventory without confusing included phone accessories with separate listings", () => {
+    const question = "¿Tienes cable y cargador en venta?";
+    expect(isCatalogLookupQuestion(question)).toBe(true);
+    const reply = buildCatalogLookupReply(question, catalog, sync, now);
+    expect(reply).toContain("no aparecen anuncios independientes");
+    expect(reply).toContain("cable USB y cargador original");
+    expect(reply).not.toContain("ECOFLOW");
+  });
+
   it("does not make inventory claims from stale or incomplete catalog syncs", () => {
     expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "running", updatedAt: sync.updatedAt }, now)).toBeNull();
     expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "completed", updatedAt: "2026-11-24T04:00:00Z" }, now)).toBeNull();
