@@ -794,7 +794,7 @@ export function buildCatalogLookupReply(
     filtered = products.filter((product) => (product.title + " " + product.category)
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(brand));
   } else if (isEnergyQuery) {
-    filtered = products.filter((product) => /\bestaciones? de energia\b|\benergia\b/i.test(product.category + " " + product.title));
+    filtered = products.filter((product) => /\bestaciones? de energia\b|\benergia\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
   } else if (isAccessoryQuery) {
     filtered = products.filter((product) => /\b(cable|cargador|adaptador|mica|cover|funda)\b/i.test(product.title + " " + product.category));
   }
