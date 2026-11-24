@@ -30,8 +30,16 @@ describe("phone bundle replies", () => {
 
   it("answers accessories and warranty from permanent policy without a Knowledge policy chunk", () => {
     expect(buildPhoneBundleReply("¿Qué incluye la compra del Samsung F07 y cuántos días de garantía tiene?", phoneContext))
-      .toBe("La compra de SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM incluye cover de fábrica, cable, cargador original y mica protectora de cristal templado. Además, cuenta con 15 días de garantía.");
+      .toBe("La compra de SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM incluye cover de fábrica, mica protectora de cristal templado, cable USB y cargador original. Además, cuenta con 15 días de garantía.");
     expect(buildPhoneBundleReply("¿Cuántos días de garantía tiene el F07?", phoneContext)).toContain("15 días de garantía");
+  });
+
+  it("answers generic phone warranty and accessory follow-ups when the recent conversation was about phones", () => {
+    const reply = buildPhoneBundleReply("¿Qué garantía tienen?", [], "Hola, ¿tienes teléfonos?");
+    expect(reply).toContain("15 días de garantía");
+    expect(reply).toContain("cable USB y cargador original");
+    expect(buildPhoneBundleReply("¿Qué accesorios trae?", [], "Estos son los teléfonos publicados")).toContain("cover de fábrica");
+    expect(buildPhoneBundleReply("¿Qué garantía tienen?", [], "¿Tienes estaciones de energía?")).toBeNull();
   });
 
   it("does not apply phone accessories to energy stations or other products", () => {
@@ -89,8 +97,27 @@ describe("catalog inventory and model availability replies", () => {
     expect(isCatalogLookupQuestion("¿Cuáles son las cosas que vendes?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Qué vendes?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Tienes estaciones de energía?")).toBe(true);
+    expect(isCatalogLookupQuestion("¿Tienes motos?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Qué procesador tiene el F07?")).toBe(false);
     expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
+  });
+
+  it("lists only the motorcycles present in the published catalog", () => {
+    const motorcycleCatalog = [{
+      id: "moto-1",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: ["PRODUCTO: IZUKI HURACAN 250cc", "Categoría: Motocicletas", "Disponibilidad publicada: Por encargo"].join("\n"),
+    }, {
+      id: "moto-2",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: ["PRODUCTO: XMX 250cc", "Categoría: Motocicletas", "Disponibilidad publicada: Por encargo"].join("\n"),
+    }];
+    const reply = buildCatalogLookupReply("¿Tienes motos?", motorcycleCatalog, sync, now);
+    expect(reply).toContain("motocicletas");
+    expect(reply).toContain("IZUKI HURACAN 250cc");
+    expect(reply).toContain("XMX 250cc");
   });
 
   it("does not offer the A07 because it is absent from the live catalog", () => {
@@ -525,6 +552,11 @@ describe("store policy-only replies", () => {
   it("answers EcoFlow delivery and warranty questions from approved policy", () => {
     expect(buildStorePolicyOnlyReply("¿La EcoFlow tiene entrega a domicilio?")).toContain("entrega a domicilio");
     expect(buildStorePolicyOnlyReply("¿Qué garantía tiene EcoFlow?")).toContain("no tienen garantía comercial");
+  });
+
+  it("uses recent product category for short EcoFlow warranty follow-ups", () => {
+    expect(buildStorePolicyOnlyReply("¿Qué garantía tienen?", "¿Tienes estaciones de energía?"))
+      .toContain("no tienen garantía comercial");
   });
 
   it("does not invent motorcycle warranty coverage", () => {
