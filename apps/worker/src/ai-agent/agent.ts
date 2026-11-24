@@ -131,6 +131,15 @@ export async function handleAgentMessage(
     retrieveContext(env, config, query, catalogOnlyBusiness ? "revolico-sagua.pages.dev" : undefined, catalogOnlyBusiness ? ["condiciones-venta-telefonos"] : []),
   ]);
 
+  if (catalogOnlyBusiness) {
+    console.info("[catalog-agent] pipeline-input", {
+      gateAllowed: gate.allowed,
+      gateLabel: gate.label,
+      contextRows: context.length,
+      hasThread: Boolean(thread),
+    });
+  }
+
   if (!gate.allowed) {
     const text = gate.cannedReply!;
     if (replyCacheTtlSeconds > 0) await cache(env, config, cacheKey, text, replyCacheTtlSeconds);
@@ -225,6 +234,14 @@ export async function handleAgentMessage(
 
   // ── 4+5) Grounded generation (context + tools, at most 2 tool turns) ──
   const { text, usedTools } = await generateReply(ctx, message, context, toolSchemas, thread);
+  if (catalogOnlyBusiness) {
+    console.info("[catalog-agent] generation-result", {
+      contextRows: context.length,
+      responseLength: text.length,
+      usedToolCount: usedTools.length,
+      responsePresent: Boolean(text),
+    });
+  }
   const safeText = redactSensitive(text || (catalogOnlyBusiness ? NO_INFO_REPLY : "I will connect you with a team member for help."), catalogOnlyBusiness);
 
   // ── 6) Cache tool-free grounded answers only — per-customer tool results
@@ -264,10 +281,34 @@ async function generateReply(
     let result: any;
     try {
       result = await ctx.env.AI.run(ctx.config.models.generator, body, runOptions);
-    } catch {
+      if (ctx.config.businessName === "Cell Phone Store - Sagua la Grande") {
+        console.info("[catalog-agent] generator-response", {
+          turn,
+          responsePresent: Boolean(result?.response),
+          responseLength: typeof result?.response === "string" ? result.response.length : 0,
+          toolCallCount: Array.isArray(result?.tool_calls) ? result.tool_calls.length : 0,
+          resultType: typeof result,
+        });
+      }
+    } catch (error) {
       // Primary model failed (after the gateway's own retries) — fail down to
       // a lighter model rather than letting the reply die for the customer.
+      if (ctx.config.businessName === "Cell Phone Store - Sagua la Grande") {
+        console.warn("[catalog-agent] generator-primary-error", {
+          turn,
+          errorType: error instanceof Error ? error.name : typeof error,
+        });
+      }
       result = await ctx.env.AI.run(FALLBACK_GENERATOR, body, runOptions);
+      if (ctx.config.businessName === "Cell Phone Store - Sagua la Grande") {
+        console.info("[catalog-agent] generator-fallback-response", {
+          turn,
+          responsePresent: Boolean(result?.response),
+          responseLength: typeof result?.response === "string" ? result.response.length : 0,
+          toolCallCount: Array.isArray(result?.tool_calls) ? result.tool_calls.length : 0,
+          resultType: typeof result,
+        });
+      }
     }
 
     const toolCalls: any[] = result?.tool_calls ?? [];
