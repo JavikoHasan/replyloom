@@ -748,12 +748,11 @@ export function buildCatalogLookupReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalized = normalizeStoreCatalogQuery(message);
-  const asksCableOrCharger = /\\b(cables?|cargadores?)\\b/.test(normalized)
-    && /\\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\\b/.test(normalized);
-  const asksCoverOrScreenProtector = /\\b(micas?|covers?|fundas?)\\b/.test(normalized)
-    && /\\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\\b/.test(normalized);
-  const asksAdapter = /\\badaptadores?\\b/.test(normalized)
-    && /\\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\\b/.test(normalized);
+  const isAccessoryQuery = /\b(cables?|cargadores?|adaptadores?|micas?|covers?|fundas?)\b/.test(normalized);
+  const commerceIntent = /\b(tienes?|tienen|hay|vende(?:s|n|mos)?|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
+  const asksCableOrCharger = /\b(cables?|cargadores?)\b/.test(normalized) && commerceIntent;
+  const asksCoverOrScreenProtector = /\b(micas?|covers?|fundas?)\b/.test(normalized) && commerceIntent;
+  const asksAdapter = /\badaptadores?\b/.test(normalized) && commerceIntent;
   // Route accessory commerce before parsing wattage/current tokens as model identifiers.
   if (asksCableOrCharger) {
     return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
