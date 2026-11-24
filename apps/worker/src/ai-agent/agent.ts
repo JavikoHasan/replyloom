@@ -791,6 +791,7 @@ export function buildCatalogLookupReply(
   const isEnergyQuery = /\bestacion(?:es)? de energia\b|\benergia portatil\b/.test(normalized);
   const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
+  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   let filtered = products;
   if (isPhoneQuery) {
     filtered = products.filter((product) => {
