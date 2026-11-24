@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -86,6 +86,8 @@ describe("catalog inventory and model availability replies", () => {
   it("recognizes model lookups and broad inventory questions", () => {
     expect(isCatalogLookupQuestion("¿Tienes F07?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Qué teléfonos tienen en venta?")).toBe(true);
+    expect(isCatalogLookupQuestion("¿Cuáles son las cosas que vendes?")).toBe(true);
+    expect(isCatalogLookupQuestion("¿Qué vendes?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Tienes estaciones de energía?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Qué procesador tiene el F07?")).toBe(false);
     expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
@@ -155,6 +157,25 @@ describe("catalog price replies", () => {
   });
 });
 
+
+describe("payment policy replies", () => {
+  it("answers CUP payment questions without suggesting an exchange rate", () => {
+    expect(buildPaymentPolicyReply("¿Aceptan CUP?"))
+      .toBe("No aceptamos efectivo en CUP ni transferencias en CUP para los anuncios publicados en USD. Los precios se mantienen en la moneda indicada en cada anuncio.");
+  });
+
+  it("explains the Zelle surcharge and offers an exact product total", () => {
+    const reply = buildPaymentPolicyReply("¿Aceptan Zelle?");
+    expect(reply).toContain("aceptamos Zelle");
+    expect(reply).toContain("10%");
+    expect(reply).toContain("total exacto");
+  });
+
+  it("answers general payment questions only with approved terms", () => {
+    expect(buildPaymentPolicyReply("¿Qué formas de pago aceptan?")).toContain("Zelle");
+    expect(buildPaymentPolicyReply("¿Cuánto es el cambio?")).toBeNull();
+  });
+});
 
 describe("store policy-only replies", () => {
   it("answers EcoFlow inclusion questions without claiming a model is listed", () => {
