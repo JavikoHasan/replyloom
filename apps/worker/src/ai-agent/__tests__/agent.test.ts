@@ -247,6 +247,11 @@ describe("contextual delivery intelligence", () => {
       .toBe("¿Tienen F07?");
   });
 
+  it("keeps a newly named model when the question also contains 4G or 5G", () => {
+    const previousPhone = "[Previous messages]\\nCustomer: ¿Tienes A16?\\nAgent: Sí, aparece en catálogo.";
+    expect(resolveRecentProductQuery("¿El A17 es 4G o 5G?", previousPhone)).toBe("¿El A17 es 4G o 5G?");
+  });
+
   it("does not let an old phone model override a new EcoFlow category lookup", () => {
     const previousPhone = "[Previous messages]\\nCustomer: ¿Tienes F07?\\nAgent: Sí, aparece en catálogo.";
     expect(resolveRecentProductQuery("¿Tienes EcoFlow?", previousPhone)).toBe("¿Tienes EcoFlow?");
