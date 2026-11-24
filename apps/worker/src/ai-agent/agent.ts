@@ -680,13 +680,6 @@ export function buildCatalogDeliveryReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalized = normalizeBusinessText(message);
-  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
-  const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
-  // Wattage and connector tokens such as 25W or 3A are not product model IDs.
-  if (asksAccessoryCommerce) {
-    return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
-  }
-
   const modelIds = [...normalized.matchAll(/\b([a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/g)]
     .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
     .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/.test(key));
@@ -755,6 +748,12 @@ export function buildCatalogLookupReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalized = normalizeStoreCatalogQuery(message);
+  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
+  const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
+  // Handle accessory policy before interpreting wattage or connector versions as model codes.
+  if (asksAccessoryCommerce) {
+    return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
+  }
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const byTitle = new Map<string, { title: string; category: string; price: string; availability: string }>();
   for (const block of blocks) {
