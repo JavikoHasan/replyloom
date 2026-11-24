@@ -555,8 +555,10 @@ describe("store policy-only replies", () => {
   });
 
   it("uses recent product category for short EcoFlow warranty follow-ups", () => {
-    expect(buildStorePolicyOnlyReply("¿Qué garantía tienen?", "¿Tienes estaciones de energía?"))
-      .toContain("no tienen garantía comercial");
+    const reply = buildStorePolicyOnlyReply("¿Qué garantía tienen?", "¿Tienes estaciones de energía?");
+    expect(reply).toContain("no tienen garantía comercial");
+    expect(reply).toContain("Bluetti Elite 100 V2");
+    expect(reply).toContain("no tengo condiciones de garantía verificadas");
   });
 
   it("does not invent motorcycle warranty coverage", () => {
