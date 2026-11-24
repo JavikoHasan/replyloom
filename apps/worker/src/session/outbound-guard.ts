@@ -64,7 +64,7 @@ export class AutoReplyLimiter {
 
   constructor(
     // Customers often ask several product questions in quick succession.
-    // Keep a short anti-loop cooldown without suppressing normal follow-ups.
+    // No cooldown during testing; hourly ceilings remain as loop protection.
     private readonly perContactMinGapMs = 0,
     private readonly perContactPerHour = 120,
     private readonly sessionPerHour = 1_000
