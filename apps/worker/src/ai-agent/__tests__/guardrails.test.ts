@@ -85,6 +85,8 @@ describe("privateLocationReply", () => {
   it("does not volunteer the home address for general business-location questions", () => {
     expect(privateLocationReply("¿Por dónde radican?")).toContain("No tenemos tienda física");
     expect(privateLocationReply("¿Tienen negocio o tienda?")).toContain("No tenemos tienda física");
+    expect(privateLocationReply("¿Por dónde radican?")).toContain("No tenemos tienda física");
+    expect(privateLocationReply("¿Dónde está la tienda?")).toContain("No tenemos tienda física");
     expect(privateLocationReply("¿Cuál es tu dirección personal?")).not.toContain("Edificio #5");
   });
   it("requires customers to coordinate before visiting", () => {
