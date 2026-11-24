@@ -1,0 +1,42 @@
+name: Validate F07 catalog diagnostics (no deploy)
+
+on:
+  push:
+    branches:
+      - debug/f07-rag-diagnostics
+  pull_request:
+    branches:
+      - adaptacion-cell-phone-store
+    paths:
+      - "apps/worker/**"
+      - "packages/db/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Cloudflare types from example config
+        run: pnpm --filter web --filter worker cf-typegen:ci
+      - name: Lint
+        run: pnpm --filter worker lint
+      - name: Typecheck
+        run: pnpm --filter worker typecheck
+      - name: Test
+        run: pnpm --filter worker test
+      - name: Build (dry run only)
+        run: pnpm --filter worker build
