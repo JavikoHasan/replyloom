@@ -88,6 +88,7 @@ describe("catalog inventory and model availability replies", () => {
     expect(isCatalogLookupQuestion("¿Qué teléfonos tienen en venta?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Tienes estaciones de energía?")).toBe(true);
     expect(isCatalogLookupQuestion("¿Qué procesador tiene el F07?")).toBe(false);
+    expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
   });
 
   it("confirms an exact model only from its own current listing", () => {
