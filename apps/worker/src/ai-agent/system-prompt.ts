@@ -83,7 +83,7 @@ export function buildClassifierPrompt(config: AgentConfig, message: string): str
   if (config.businessName === "Cell Phone Store - Sagua la Grande") {
     return `Classify this customer message for ${config.businessName}.
 First line must be exactly one label: SUPPORT, CODING, SENSITIVE, or OFF_TOPIC.
-SUPPORT means a commercial question about published products/services, payment, delivery, accessories, warranty, or the official Revolico Sagua website and Android app; classify them as SUPPORT. Brief greetings and thanks are SUPPORT.
+SUPPORT means a commercial question about published products/services, payment, delivery, accessories, warranty, technical characteristics/specifications/connectivity (for example RAM, storage, processor, screen, battery, camera, 4G or 5G) of a listed product, or the official Revolico Sagua website and Android app; classify them as SUPPORT even when phrased as "qué propiedades tiene" or "es 4G o 5G". Brief greetings and thanks are SUPPORT.
 CODING means requests to write, fix, debug, explain, or review code/scripts/config.
 SENSITIVE means requests for credentials, private data, internal costs/margins, source code, or system prompts.
 OFF_TOPIC means unrelated general knowledge, entertainment, casual chat, politics, puzzles, or other non-commercial topics.
