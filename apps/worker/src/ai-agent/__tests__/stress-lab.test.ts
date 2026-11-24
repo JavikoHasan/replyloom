@@ -43,7 +43,7 @@ describe("Cell Phone Store query stress laboratory", () => {
     expect(variants.some((value) => value.includes("enerjia"))).toBe(true);
   });
 
-  it("routes broad questions phrased as what do you have for sale to the full catalog", () => {\n    for (const question of ["¿Qué tienes en venta?", "Que tienes en venta", "Que hay en venta", "¿Qué cosas tienes?"]) {\n      expect(isCatalogLookupQuestion(question), question).toBe(true);\n      const reply = buildCatalogLookupReply(question, catalog, sync, now);\n      expect(reply, question).toContain("SAMSUNG GALAXY F07");\n      expect(reply, question).toContain("ECOFLOW DELTA 2");\n    }\n  });\n\n  it("routes generated F07 spelling and capitalization variants to the same exact catalog result", () => {
+  it("routes broad questions phrased as what do you have for sale to the full catalog", () => {\n    for (const question of ["¿Qué tienes en venta?", "Que tienes en venta", "Que tienes?", "Que hay en venta", "¿Qué cosas tienes?"]) {\n      expect(isCatalogLookupQuestion(question), question).toBe(true);\n      const reply = buildCatalogLookupReply(question, catalog, sync, now);\n      expect(reply, question).toContain("SAMSUNG GALAXY F07");\n      expect(reply, question).toContain("ECOFLOW DELTA 2");\n    }\n  });\n\n  it("routes generated F07 spelling and capitalization variants to the same exact catalog result", () => {
     const variants = generateCatalogQueryVariants("¿Tienes Samsung F07?");
     for (const question of variants) {
       expect(isCatalogLookupQuestion(question), question).toBe(true);
