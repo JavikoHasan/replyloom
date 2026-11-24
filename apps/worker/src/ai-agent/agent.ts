@@ -544,6 +544,7 @@ export function buildCatalogPriceReply(
   const syncedAt = Date.parse(syncStatus.updatedAt);
   const ageMs = now - syncedAt;
   // Catalog sync is intentionally throttled to six hours; allow one hour of cron/scheduling slack.
+  // Keep this freshness limit aligned with the six-hour sync cooldown.
   // A 30-minute freshness gate made valid, completed catalog data unusable for most of that interval.
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
