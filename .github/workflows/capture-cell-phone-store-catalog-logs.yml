@@ -1,0 +1,37 @@
+name: Capture Cell Phone Store catalog diagnostics
+
+on:
+  push:
+    branches:
+      - debug/capture-f07-runtime-logs
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install Worker dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Capture only privacy-safe catalog-agent logs
+        working-directory: apps/worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          set +e
+          timeout --signal=INT 240s pnpm exec wrangler tail cell-phone-store-whatsapp-ai --format json --search "[catalog-agent]" --sampling-rate 1
+          result=$?
+          if [ "$result" -ne 0 ] && [ "$result" -ne 124 ] && [ "$result" -ne 130 ]; then
+            exit "$result"
+          fi
