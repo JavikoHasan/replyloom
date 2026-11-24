@@ -105,6 +105,10 @@ export function keywordPrecheck(message: string): IntentLabel | null {
  */
 export function privateLocationReply(message: string): string | null {
   const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // A customer's own address for a requested delivery is not the seller's private location.
+  const customerDeliveryAddress = /\b(mi direccion|mi domicilio|mi casa|a esta direccion|esta direccion)\b/.test(m)
+    && /\b(traer|traiga|traigan|llevar|lleve|lleven|entrega|entregar|envio|enviar|mandar|pasar|pasas|pasarle|coordinar|disponible)\b/.test(m);
+  if (customerDeliveryAddress) return null;
 
   if (/\b(tienda fisica|local fisico|establecimiento fisico|sucursal|showroom)\b/.test(m) ||
       (/\b(tienda|local|establecimiento)\b/.test(m) &&
