@@ -612,7 +612,9 @@ export function buildGeneralDeliveryPolicyReply(message: string): string | null 
 
 /** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
-  if (hasProductReference(message)) return message;
+  // A fresh inventory/category query must override an older product in the chat.
+  // Otherwise "¿Tienes EcoFlow?" can inherit a previous F07 lookup.
+  if (isCatalogLookupQuestion(message) || hasProductReference(message)) return message;
   if (!conversationThread) return message;
   const customerMessages = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]);
   for (const previous of customerMessages.reverse()) {
