@@ -25,12 +25,9 @@ export interface AiAutoReplyParams {
   body: string;
 }
 
-// Anti-abuse: generous per-conversation cap to prevent runaway usage without
-// interrupting normal customer conversations. Thirty messages in a fixed
-// five-minute window allows rapid product follow-ups while retaining a burst
-// limit. The counter lives in the SQLite Durable Object, not Workers KV.
-const RATE_WINDOW_SECONDS = 300; // 5 minutes
-const MAX_AGENT_INVOCATIONS_PER_WINDOW = 30;
+// No per-conversation AI invocation cap for this store: rapid customer
+// follow-ups must not be silently dropped. The WhatsApp session still keeps
+// its independent hourly anti-loop ceiling and outbound pacing protections.
 const log = scopedLogger("ai-autoreply");
 
 /** Returns the reply text to send, or null if the agent is off / should stay quiet. */
@@ -43,37 +40,6 @@ export async function maybeAiAutoReply(env: Env, params: AiAutoReplyParams): Pro
 
   const db = createDb(env.DB);
   if (await isBlocked(db, params.workspaceId, params.waSessionId, "auto_reply", params.senderJid)) return null;
-
-  // Rate-limit BEFORE classifier/RAG/generation. Use the existing SQLite-backed
-  // Durable Object limiter: a customer message must never consume a Workers KV
-  // write just to increment a counter.
-  try {
-    const digest = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(`agent:${params.workspaceId}:${params.conversationId}`),
-    );
-    const keyHash = Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-    const shard = `rate-limiter:${keyHash.slice(0, 2)}`;
-    const limiter = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(shard));
-    const response = await limiter.fetch("https://rate-limit.internal/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        keyHash,
-        limit: MAX_AGENT_INVOCATIONS_PER_WINDOW,
-        windowMs: RATE_WINDOW_SECONDS * 1000,
-      }),
-    });
-    if (!response.ok) throw new Error(`Agent rate limiter failed (${response.status})`);
-    const result = await response.json();
-    if (!result || typeof result !== "object" || !("success" in result) || result.success !== true) return null;
-  } catch (err) {
-    // Fail open if the limiter itself is unavailable; never silence a buyer
-    // because an anti-abuse counter failed.
-    log.warn({ err, workspaceId: params.workspaceId }, "Agent rate limiter unavailable; continuing without KV");
-  }
 
   try {
     const reply = await handleAgentMessage(env, config, {
