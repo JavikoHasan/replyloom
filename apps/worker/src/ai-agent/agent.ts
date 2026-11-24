@@ -218,7 +218,7 @@ export async function handleAgentMessage(
   // like "and shipping?" without a full message-history tool call, and
   // grounds the RAG query in what the customer was actually asking about. ──
   const currentMessageHasModel = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(message)
-    && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(message);
+    && !/\b(?:\d+(?:gb|mb|ram|rom)|4g|5g)\b/i.test(message);
   const thread = input.conversationId && (!catalogOnlyBusiness || !currentMessageHasModel)
     ? await loadConversationThread(env, input, THREAD_MESSAGE_LIMIT)
     : "";
@@ -274,6 +274,18 @@ export async function handleAgentMessage(
     const text = gate.cannedReply!;
     if (replyCacheTtlSeconds > 0) await cache(env, config, cacheKey, text, replyCacheTtlSeconds);
     return { text, usedTools: [], usedContext: [], blocked: true, blockReason: gate.label, cached: false };
+  }
+
+  // Answer technical phone questions only from fields explicitly present in
+  // the exact, freshly synchronized listing. Missing specifications stay unknown.
+  if (catalogOnlyBusiness) {
+    const syncStatus = await env.REPLY_CACHE
+      .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+      .catch(() => null);
+    const technicalReply = buildPhoneTechnicalReply(message, contextualProductQuery, context, syncStatus);
+    if (technicalReply) {
+      return { text: technicalReply, usedTools: [], usedContext: context, blocked: false, cached: false };
+    }
   }
 
   // For the store's public catalog, answer exact price questions deterministically
@@ -625,7 +637,7 @@ export function resolveRecentProductQuery(message: string, conversationThread: s
 
 export function hasProductReference(message: string): boolean {
   return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(message)
-    && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(message);
+    && !/\b(?:\d+(?:gb|mb|ram|rom)|4g|5g)\b/i.test(message);
 }
 
 /** Answer delivery only from the exact product's published delivery field. */
@@ -872,6 +884,75 @@ export function isSimpleGreeting(message: string): boolean {
     .replace(/\s+/g, " ")
     .trim();
   return /^(?:(?:hola|ola)(?: buenas(?: tardes| noches)?| buenos dias)?|buenas(?: tardes| noches)?|buenos dias|saludos|hey|hello|hi|gracias|muchas gracias|ok|okay|perfecto)(?: 😊| 🙏)?$/.test(normalized);
+}
+
+/**
+ * Answers phone-specification questions from the exact current listing only.
+ * It reports RAM/ROM or an explicit network-generation label, but never
+ * infers 4G from the absence of 5G (or vice versa).
+ */
+export function buildPhoneTechnicalReply(
+  message: string,
+  productQuery: string,
+  context: RetrievedChunk[],
+  syncStatus: { stage?: string; updatedAt?: string } | null,
+  now = Date.now(),
+): string | null {
+  const question = normalizeBusinessText(message);
+  const asksTechnical = /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz)\b/.test(question);
+  if (!asksTechnical) return null;
+  if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
+  const syncedAt = Date.parse(syncStatus.updatedAt);
+  const ageMs = now - syncedAt;
+  if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
+
+  const normalizedQuery = normalizeBusinessText(productQuery);
+  const modelIds = [...normalizedQuery.matchAll(/\b([a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/g)]
+    .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
+    .filter((id) => !/^(?:4g|5g|\d+(?:gb|mb|ram|rom))$/.test(id));
+  if (modelIds.length === 0) return null;
+
+  const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
+  const matches = blocks.filter((block) => {
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
+    const compactTitle = normalizeBusinessText(title).replace(/[^a-z0-9]/g, "");
+    return modelIds.some((id) => compactTitle.includes(id));
+  });
+  const unique = new Map<string, string>();
+  for (const block of matches) {
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+    if (title) unique.set(normalizeBusinessText(title), block);
+  }
+  if (unique.size !== 1) return null;
+
+  const block = [...unique.values()][0];
+  const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+  if (!title || !/\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/i.test(title)) return null;
+
+  const ram = block.match(/\b(\d+)\s*GB\s*RAM\b/i)?.[1];
+  const rom = block.match(/\b(\d+)\s*GB\s*ROM\b/i)?.[1];
+  const network = block.match(/^(?:Conectividad|Redes? móviles?|Tecnología de red):\s*(.+)$/im)?.[1]?.trim()
+    ?? title.match(/\b(4G|5G)\b/i)?.[1]?.toUpperCase();
+  const asksNetwork = /\b(4g|5g|conectividad|red movil)\b/.test(question);
+  const asksMemory = /\b(memoria|almacenamiento|ram|rom)\b/.test(question);
+  const asksBroad = /\b(propiedades|caracteristicas|especificaciones|especificacion)\b/.test(question);
+  const details: string[] = [];
+  if ((asksMemory || asksBroad) && ram) details.push(ram + " GB de RAM");
+  if ((asksMemory || asksBroad) && rom) details.push(rom + " GB de almacenamiento interno");
+  if ((asksNetwork || asksBroad) && network) details.push("conectividad " + network);
+
+  if (details.length === 0) {
+    return asksNetwork
+      ? "La ficha publicada de " + title + " no especifica si es 4G o 5G. Prefiero no darte un dato sin confirmar; el vendedor puede verificarlo."
+      : "La ficha publicada de " + title + " no contiene suficientes especificaciones técnicas para responder con seguridad. El vendedor puede confirmarte esos detalles.";
+  }
+  const missingNetwork = asksNetwork && !network;
+  const missingMemory = asksMemory && (!ram || !rom);
+  let reply = "De " + title + ", la ficha publicada confirma " + details.join(" y ") + ".";
+  if (missingNetwork) reply += " No especifica si es 4G o 5G.";
+  if (missingMemory) reply += " No aparecen todos los datos de memoria en el anuncio.";
+  if (asksBroad) reply += " El anuncio no incluye otras especificaciones, así que no quiero inventarlas.";
+  return reply;
 }
 
 /**
