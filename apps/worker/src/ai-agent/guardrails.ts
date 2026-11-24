@@ -113,13 +113,13 @@ export function privateLocationReply(message: string): string | null {
   // A request to physically visit or pick up may share the seller's address,
   // but the customer must coordinate with the seller before going there.
   const asksToVisitSeller = /\\b(direccion|domicilio|ubicacion|donde|como llego|llegar|visitar|venir|ir|pasar|recoger|recogida|retirar|buscar)\\b/.test(m)
-    && /\\b(venir|ir|pasar|visitar|llegar|recoger|recogida|retirar|buscar|casa|vendedor|dueno|propietario|tienda|local|negocio|ustedes|radican|radicados)\\b/.test(m);
+    && /\\b(venir|ir|pasar|visitar|llegar|recoger|recogida|retirar|buscar)\\b/.test(m);
   if (asksToVisitSeller) {
     return "No tenemos tienda física. Si deseas pasar a recoger tu compra o visitarnos, nuestra dirección es: Edificio #5, Apartamento #1, Reparto 26 de Julio, Sagua la Grande, Villa Clara. Pregunta por Frank. Es importante que antes te pongas de acuerdo directamente con el vendedor para coordinar la visita o, si lo prefieres, organizar el domicilio del producto. Escríbele aquí: https://wa.me/5354590237.";
   }
 
   if (/\\b(tienda fisica|local fisico|establecimiento fisico|sucursal|showroom)\\b/.test(m) ||
-      ( /\\b(tienda|local|establecimiento|negocio)\\b/.test(m) &&
+      ( /\\b(tienda|local|establecimiento|negocio|radican|radicados)\\b/.test(m) &&
         /\\b(hay|tienen|tiene|donde|ubicacion|direccion|visitar|ir|abierta|abierto|fisica|fisico)\\b/.test(m))) {
     return "No tenemos tienda física. Somos un negocio que atiende por WhatsApp y mediante nuestros anuncios publicados. Si deseas visitarnos o coordinar una compra, puedes ponerte de acuerdo directamente con el vendedor: https://wa.me/5354590237.";
   }
