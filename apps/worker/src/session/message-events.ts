@@ -33,7 +33,7 @@ export interface MessageEventContext {
   broadcast: (data: Record<string, unknown>) => void;
   /** Anti-ban: per-contact auto-reply loop breaker + session pace. */
   allowAutoReply?: (jid: string) => boolean;
-  /** Any human outbound message pauses automatic replies store-wide for a short cooldown. */
+  /** A human outbound message pauses automatic replies only in that conversation for a short cooldown. */
   pauseAutoReply?: (jid: string) => Promise<void>;
   isAutoReplyPaused?: (jid: string) => Promise<boolean>;
   /** Prevent the bot's own outgoing echo from being mistaken for a human reply. */
@@ -95,9 +95,9 @@ export async function processLiveMessage(
     if (!botEcho) {
       try {
         await ctx.pauseAutoReply?.(parsed.remoteJid);
-        ctx.log("info", "Human activity detected; automatic replies paused");
+        ctx.log("info", "Human activity detected; automatic replies paused for this chat");
       } catch (err: any) {
-        ctx.log("warn", `Could not persist human takeover pause: ${err?.message || err}`);
+        ctx.log("warn", `Could not persist per-chat human takeover pause: ${err?.message || err}`);
       }
     }
   }
@@ -208,7 +208,7 @@ export async function processLiveMessage(
           if (await ctx.isAutoReplyPaused(parsed.remoteJid)) replyText = null;
         } catch (err: any) {
           replyText = null;
-          ctx.log("warn", `Could not re-check global human takeover pause; reply suppressed: ${err?.message || err}`);
+          ctx.log("warn", `Could not re-check per-chat human takeover pause; reply suppressed: ${err?.message || err}`);
         }
       }
       if (replyText) {
