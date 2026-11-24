@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, resolveRecentProductQuery, isDeliveryQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, resolveRecentProductQuery, isDeliveryQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -282,6 +282,29 @@ describe("payment policy replies", () => {
   });
 });
 
+describe("additional payment language", () => {
+  it("does not invent acceptance of USD cash or USD bank transfers", () => {
+    expect(buildPaymentPolicyReply("¿Aceptas USD?")).toContain("No puedo confirmar efectivo ni otras modalidades");
+    expect(buildPaymentPolicyReply("¿Aceptas transferencias en USD?")).toContain("no tengo confirmada la aceptación");
+    expect(buildPaymentPolicyReply("¿Cuánto sería eso en transferencia?")).toContain("transferencias en USD no están confirmadas");
+  });
+  it("answers dollar-rate questions without estimating a conversion", () => {
+    expect(buildPaymentPolicyReply("¿A cómo valoras el dólar?")).toContain("No ofrecemos una tasa fija");
+  });
+});
+
+describe("category-level delivery replies", () => {
+  it("recognizes requests to bring a product to the customer's address", () => {
+    expect(isDeliveryQuestion("Tráeme un teléfono a esta dirección")).toBe(true);
+    expect(buildGeneralDeliveryPolicyReply("Tráeme un teléfono a esta dirección")).toContain("no puedo recibir, guardar ni reenviar direcciones");
+  });
+  it("answers delivery questions without inventing a fee", () => {
+    expect(buildGeneralDeliveryPolicyReply("¿Cuánto cuesta el domicilio de los teléfonos?")).toContain("es gratuita");
+    expect(buildGeneralDeliveryPolicyReply("¿Cómo es el domicilio de las EcoFlow?")).toContain("gratuita");
+    expect(buildGeneralDeliveryPolicyReply("¿Cuánto cuesta el domicilio?")).toContain("depende del producto");
+  });
+});
+
 describe("store policy-only replies", () => {
   it("answers EcoFlow inclusion questions without claiming a model is listed", () => {
     const reply = buildStorePolicyOnlyReply("¿Qué incluye la EcoFlow DELTA 2?");
@@ -299,6 +322,16 @@ describe("store policy-only replies", () => {
     const reply = buildStorePolicyOnlyReply("¿Qué garantía tienen las motocicletas?");
     expect(reply).toContain("corresponde al fabricante");
     expect(reply).toContain("transporte podría correr por cuenta del cliente");
+  });
+
+  it("explains the motorcycle order process without inventing deposits or dates", () => {
+    const reply = buildStorePolicyOnlyReply("¿Cómo es el proceso de encargo de las motos?");
+    expect(reply).toContain("a nombre del propio cliente");
+    expect(reply).toContain("No puedo confirmar un pedido, anticipo, plazo ni fecha de llegada");
+  });
+  it("declines customer sales and swaps", () => {
+    expect(buildStorePolicyOnlyReply("Te vendo este teléfono")).toContain("no compra artículos a clientes");
+    expect(buildStorePolicyOnlyReply("Te cambio esto y un vuelto por el F07")).toContain("no realizamos permutas");
   });
 
   it("does not answer availability or unrelated questions from policy alone", () => {
