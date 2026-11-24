@@ -751,8 +751,14 @@ export function buildCatalogLookupReply(
   const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   // Handle accessory policy before interpreting wattage or connector versions as model codes.
-  if (asksAccessoryCommerce) {
+  if (asksAccessoryCommerce && /\b(cables?|cargadores?)\b/.test(normalized)) {
     return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
+  }
+  if (asksAccessoryCommerce && /\b(micas?|covers?|fundas?)\b/.test(normalized)) {
+    return "El cover de fábrica y la mica protectora de cristal templado se incluyen con la compra de nuestros teléfonos. No tengo confirmación de que se vendan por separado; para evitar darte un dato incorrecto, consúltalo directamente con el vendedor.";
+  }
+  if (asksAccessoryCommerce && /\badaptadores?\b/.test(normalized)) {
+    return "No tengo un anuncio confirmado de adaptadores disponibles por separado. Puedes consultar directamente con el vendedor para confirmar si tiene alguno.";
   }
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const byTitle = new Map<string, { title: string; category: string; price: string; availability: string }>();
