@@ -104,24 +104,27 @@ export function keywordPrecheck(message: string): IntentLabel | null {
  * residence and pickup details are intentionally absent from the public catalog.
  */
 export function privateLocationReply(message: string): string | null {
-  const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  // A customer's own address for a requested delivery is not the seller's private location.
-  const customerDeliveryAddress = /\b(mi direccion|mi domicilio|mi casa|a esta direccion|esta direccion)\b/.test(m)
-    && /\b(traer|traiga|traigan|llevar|lleve|lleven|entrega|entregar|envio|enviar|mandar|pasar|pasas|pasarle|coordinar|disponible)\b/.test(m);
+  const m = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  // A customer's own address for a requested delivery is not the seller's location.
+  const customerDeliveryAddress = /\\b(mi direccion|mi domicilio|mi casa|a esta direccion|esta direccion)\\b/.test(m)
+    && /\\b(traer|traiga|traigan|llevar|lleve|lleven|entrega|entregar|envio|enviar|mandar|pasar|pasas|pasarle|coordinar|disponible)\\b/.test(m);
   if (customerDeliveryAddress) return null;
 
-  if (/\b(tienda fisica|local fisico|establecimiento fisico|sucursal|showroom)\b/.test(m) ||
-      (/\b(tienda|local|establecimiento)\b/.test(m) &&
-       /\b(hay|tienen|tiene|donde|ubicacion|direccion|visitar|ir|abierta|abierto)\b/.test(m))) {
-    return "No disponemos de una tienda física. Las consultas y ventas se realizan a través de los anuncios publicados en Revolico Sagua.";
+  // A request to physically visit or pick up may share the seller's address,
+  // but the customer must coordinate with the seller before going there.
+  const asksToVisitSeller = /\\b(direccion|domicilio|ubicacion|donde|como llego|llegar|visitar|venir|ir|pasar|recoger|recogida|retirar|buscar)\\b/.test(m)
+    && /\\b(venir|ir|pasar|visitar|llegar|recoger|recogida|retirar|buscar|casa|vendedor|dueno|propietario|tienda|local|negocio|ustedes|radican|radicados)\\b/.test(m);
+  if (asksToVisitSeller) {
+    return "No tenemos tienda física. Si deseas pasar a recoger tu compra o visitarnos, nuestra dirección es: Edificio #5, Apartamento #1, Reparto 26 de Julio, Sagua la Grande, Villa Clara. Pregunta por Frank. Es importante que antes te pongas de acuerdo directamente con el vendedor para coordinar la visita o, si lo prefieres, organizar el domicilio del producto. Escríbele aquí: https://wa.me/5354590237.";
   }
-  if (/\b(recoger|recogida|retirar|retiro|pasar a buscar|punto de encuentro|entrega personal|donde recojo|donde busco)\b/.test(m)) {
-    return "El asistente no dispone de un punto público de recogida. Cualquier coordinación debe acordarse directamente con el vendedor mediante el contacto publicado en el anuncio.";
+
+  if (/\\b(tienda fisica|local fisico|establecimiento fisico|sucursal|showroom)\\b/.test(m) ||
+      ( /\\b(tienda|local|establecimiento|negocio)\\b/.test(m) &&
+        /\\b(hay|tienen|tiene|donde|ubicacion|direccion|visitar|ir|abierta|abierto|fisica|fisico)\\b/.test(m))) {
+    return "No tenemos tienda física. Somos un negocio que atiende por WhatsApp y mediante nuestros anuncios publicados. Si deseas visitarnos o coordinar una compra, puedes ponerte de acuerdo directamente con el vendedor: https://wa.me/5354590237.";
   }
-  if (/\b(donde vives|donde vive|donde viven|donde puedo encontrarte|donde puedo ubicarte|donde pueden ubicarme|donde te pueden ubicar|donde puedo localizarte|donde puedo visitar(te)?|donde te encuentro|donde te ubico|donde se encuentra el dueno|donde esta el dueno|donde se encuentra el vendedor|direccion personal|direccion del dueno|direccion del vendedor|domicilio del dueno|domicilio del vendedor|residencia|casa del dueno|casa del vendedor|donde esta tu casa|donde queda tu casa|ubicacion personal|ubicacion del dueno|ubicacion del vendedor|localizar al dueno|donde estan ubicados|donde estan localizados)\b/.test(m) ||
-      (/\b(donde|direccion|domicilio|ubicacion|residencia|casa)\b/.test(m) &&
-       /\b(dueno|propietario|vendedor|vive|vives|viven|personal|ubicar|localizar|encontrar|visitar|encuentro|localizados|ubicados)\b/.test(m))) {
-    return "No puedo proporcionar ni confirmar domicilios, residencia o ubicación privada del vendedor. Esa información no está disponible públicamente.";
+  if (/\\b(donde vives|donde vive|donde viven|direccion personal|direccion del dueno|direccion del vendedor|domicilio del dueno|domicilio del vendedor|residencia|casa del dueno|casa del vendedor|donde esta tu casa|donde queda tu casa|ubicacion personal|ubicacion del dueno|ubicacion del vendedor|localizar al dueno)\\b/.test(m)) {
+    return "Si deseas visitarnos para coordinar una compra, primero ponte de acuerdo directamente con el vendedor por WhatsApp: https://wa.me/5354590237.";
   }
   return null;
 }
