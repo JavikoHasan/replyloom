@@ -64,9 +64,15 @@ describe("catalog price replies", () => {
       .toBe("El precio publicado de SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM es 150 USD. La disponibilidad física debe confirmarse directamente con el vendedor.");
   });
 
-  it("does not answer from an old or incomplete synchronization", () => {
+  it("accepts a completed sync within the six-hour catalog refresh interval", () => {
+    const syncFiveHoursAgo = { stage: "completed", updatedAt: "2026-11-23T05:00:00Z" };
+    expect(buildCatalogPriceReply("¿Cuánto cuesta el F07?", context, syncFiveHoursAgo, now))
+      .toContain("150 USD");
+  });
+
+  it("does not answer from an incomplete or excessively old synchronization", () => {
     expect(buildCatalogPriceReply("¿Cuánto cuesta el F07?", context, { stage: "homepage_read", updatedAt: freshSync.updatedAt }, now)).toBeNull();
-    expect(buildCatalogPriceReply("¿Cuánto cuesta el F07?", context, { stage: "completed", updatedAt: "2026-11-23T09:00:00Z" }, now)).toBeNull();
+    expect(buildCatalogPriceReply("¿Cuánto cuesta el F07?", context, { stage: "completed", updatedAt: "2026-11-23T02:59:00Z" }, now)).toBeNull();
   });
 
   it("does not guess when the requested product or price is absent", () => {
