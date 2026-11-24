@@ -171,6 +171,28 @@ describe("payment policy replies", () => {
     expect(reply).toContain("total exacto");
   });
 
+  it("recognizes natural Zelle payment paraphrases", () => {
+    for (const question of [
+      "¿Aceptan pago por Zelle?",
+      "¿Puedo pagar usando Zelle?",
+      "¿Se puede pagar con Zelle?",
+      "Quiero pagar por Zelle",
+      "¿Reciben Zelle como forma de pago?",
+    ]) {
+      expect(buildPaymentPolicyReply(question), question).toContain("10%");
+    }
+  });
+
+  it("recognizes CUP payment paraphrases", () => {
+    for (const question of [
+      "¿Puedo pagar en moneda nacional?",
+      "¿Reciben pesos cubanos?",
+      "¿Aceptan transferencia en CUP?",
+    ]) {
+      expect(buildPaymentPolicyReply(question), question).toContain("No aceptamos");
+    }
+  });
+
   it("answers general payment questions only with approved terms", () => {
     expect(buildPaymentPolicyReply("¿Qué formas de pago aceptan?")).toContain("Zelle");
     expect(buildPaymentPolicyReply("¿Cuánto es el cambio?")).toBeNull();
