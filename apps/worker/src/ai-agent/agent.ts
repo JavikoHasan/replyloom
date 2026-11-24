@@ -19,7 +19,7 @@ const THREAD_MESSAGE_LIMIT = 12;
 const NO_INFO_REPLY =
   "Soy el asistente virtual de Cell Phone Store. Solo estoy autorizado para informar sobre los productos publicados y datos que estén verificados. No tengo información confirmada sobre esa consulta; para evitar errores, puedes consultarlo directamente con el vendedor.";
 const CLARIFY_REPLY =
-  "¡Hola! Soy el asistente virtual de Cell Phone Store. Puedo ayudarte con información sobre los productos de nuestro catálogo.";
+  "¡Hola! 👋 Soy el asistente virtual de Cell Phone Store - Sagua la Grande. Estoy aquí para atenderte cuando el vendedor no esté disponible y ayudarte con información sobre nuestros productos, precios publicados, formas de pago y condiciones de entrega. Si deseas hablar directamente con el vendedor o confirmar una compra, puedes escribirle por WhatsApp aquí: https://wa.me/5354590237. ¡Con gusto te ayudo!";
 
 /**
  * The full agent pipeline for one inbound customer message:
