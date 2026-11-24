@@ -59,7 +59,7 @@ export async function classifyIntent(
     );
     const base = toResult(label ?? "SUPPORT", config.businessName);
     const searchQuery = config.businessName === "Cell Phone Store - Sagua la Grande"
-      ? raw.match(/^(?:SEARCH|BUSQUEDA|QUERY)\\s*:\\s*(.+)$/im)?.[1]?.trim().replace(/[\\r\\n]+/g, " ").slice(0, 180)
+      ? raw.match(/^(?:SEARCH|BUSQUEDA|QUERY)\s*:\s*(.+)$/im)?.[1]?.trim().replace(/[\r\n]+/g, " ").slice(0, 180)
       : undefined;
     return { ...base, ...(base.allowed && searchQuery ? { searchQuery } : {}) };
   } catch {
