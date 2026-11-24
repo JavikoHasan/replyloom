@@ -680,6 +680,13 @@ export function buildCatalogDeliveryReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalized = normalizeBusinessText(message);
+  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
+  const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
+  // Wattage and connector tokens such as 25W or 3A are not product model IDs.
+  if (asksAccessoryCommerce) {
+    return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
+  }
+
   const modelIds = [...normalized.matchAll(/\b([a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/g)]
     .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
     .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/.test(key));
@@ -784,8 +791,6 @@ export function buildCatalogLookupReply(
   const isEnergyQuery = /\bestacion(?:es)? de energia\b|\benergia portatil\b/.test(normalized);
   const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
-  const isAccessoryQuery = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
-  const asksAccessoryCommerce = isAccessoryQuery && /\b(tienes|tienen|hay|venden|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   let filtered = products;
   if (isPhoneQuery) {
     filtered = products.filter((product) => {
@@ -798,8 +803,6 @@ export function buildCatalogLookupReply(
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(brand));
   } else if (isEnergyQuery) {
     filtered = products.filter((product) => /\bestacion(?:es)? de energia\b|\benergia\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
-  } else if (isAccessoryQuery) {
-    return "No vendemos cables ni cargadores por separado. Se incluyen con la compra de cualquiera de nuestros teléfonos, junto con cover de fábrica, mica protectora de cristal templado y 15 días de garantía.";
   }
   if (filtered.length === 0) {
     const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : "productos";
