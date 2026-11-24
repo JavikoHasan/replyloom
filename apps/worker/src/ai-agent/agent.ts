@@ -594,7 +594,7 @@ export function isDeliveryQuestion(message: string): boolean {
 export function buildGeneralDeliveryPolicyReply(message: string): string | null {
   const normalized = normalizeBusinessText(message);
   const asksToSendAddress = /\b(direccion|direcciones|mi casa|mi domicilio|esta direccion|a esta direccion)\b/.test(normalized)
-    && /\b(traeme|traer|traiga|traigan|llevar|lleve|lleven|entrega|entregar|envio|enviar|mandar|manda|pasar|pasas|pasarle|coordinar|disponible|domicilio|reparto)\b/.test(normalized);
+    && /\b(traeme|traer|traiga|traigan|llevar|lleve|lleven|lleves|entrega|entregar|envio|enviar|mandar|manda|pasar|pasas|pasarle|coordinar|disponible|domicilio|reparto)\b/.test(normalized);
   if (asksToSendAddress) {
     return "No envíes tu dirección a este asistente: no recibe, guarda ni reenvía direcciones. Para coordinar la entrega, escríbele directamente al vendedor por WhatsApp: https://wa.me/5354590237. Indícale el modelo o producto que deseas comprar, tu nombre, un número de teléfono para contactarte y, si necesitas que lleven cambio o vuelto, la cantidad exacta. Cuando el vendedor esté conectado, te atenderá y coordinará contigo los detalles.";
   }
