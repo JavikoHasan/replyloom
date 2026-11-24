@@ -30,7 +30,7 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           set +e
-          timeout --signal=INT 240s pnpm exec wrangler tail cell-phone-store-whatsapp-ai --format json --search "[catalog-agent]" --sampling-rate 1
+          timeout --signal=INT 240s pnpm exec wrangler tail cell-phone-store-whatsapp-ai --format json --search "[catalog-agent]"
           result=$?
           if [ "$result" -ne 0 ] && [ "$result" -ne 124 ] && [ "$result" -ne 130 ]; then
             exit "$result"
