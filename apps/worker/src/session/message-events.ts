@@ -33,6 +33,8 @@ export interface MessageEventContext {
   broadcast: (data: Record<string, unknown>) => void;
   /** Anti-ban: per-contact auto-reply loop breaker + session pace. */
   allowAutoReply?: (jid: string) => boolean;
+  /** Suppress identical replies to the same chat during a short burst. */
+  allowAutoReplyContent?: (jid: string, text: string) => boolean;
   /** A human outbound message pauses automatic replies only in that conversation for a short cooldown. */
   pauseAutoReply?: (jid: string) => Promise<void>;
   isAutoReplyPaused?: (jid: string) => Promise<boolean>;
@@ -200,6 +202,10 @@ export async function processLiveMessage(
       });
       if (replyText && ctx.allowAutoReply && !ctx.allowAutoReply(parsed.remoteJid)) {
         replyText = null; // loop breaker / pace: skip this auto-reply
+      }
+      if (replyText && ctx.allowAutoReplyContent && !ctx.allowAutoReplyContent(parsed.remoteJid, replyText)) {
+        ctx.log("info", "Identical auto-reply suppressed for this chat during duplicate-response window");
+        replyText = null;
       }
       // Re-check immediately before sending: a human may have taken over
       // while the AI was generating this response. Fail closed on read errors.
