@@ -805,7 +805,7 @@ export function resolveRecentProductQuery(message: string, conversationThread: s
   for (const previous of customerMessages.reverse()) {
     // A newer category/catalog lookup is a context boundary too. Do not skip
     // it and accidentally revive an older phone model from earlier in the chat.
-    if (isCatalogLookupQuestion(previous) || hasProductReference(previous)) return previous;
+    if (isCatalogLookupQuestion(previous) || hasProductReference(previous) || isShortCatalogProductSelection(previous)) return previous;
   }
   return message;
 }
