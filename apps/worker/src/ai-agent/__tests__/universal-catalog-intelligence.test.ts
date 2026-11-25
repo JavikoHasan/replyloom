@@ -47,7 +47,7 @@ describe("universal catalog intelligence", () => {
   it("answers a phone using only specs present in its product title", () => {
     const context = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\nCategoría: Telefonía\nPrecio publicado: 190 USD" }];
     const reply = buildUniversalCatalogTechnicalReply("¿Qué propiedades tiene?", "Un A16", context, sync, now);
-    expect(reply).toContain("4 GB de RAM");
+    expect(reply).toContain("RAM: 4 GB");
     expect(reply).toContain("Almacenamiento: 128 GB");
     expect(reply).not.toMatch(/procesador|cámara|batería/i);
   });
