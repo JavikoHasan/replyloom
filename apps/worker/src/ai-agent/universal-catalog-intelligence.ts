@@ -101,8 +101,6 @@ export function buildUniversalCatalogTechnicalReply(
     const hasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalize(candidateQuery));
     const matches = blocks.filter((block) => {
       const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim() ?? "";
-      const category = block.match(/^Categor[ií]a:\s*(.+)$/im)?.[1]?.trim() ?? "";
-      const description = block.match(/^Descripción y características publicadas:\s*(.+)$/im)?.[1]?.trim() ?? "";
       const searchableText = hasSpecificModel ? title : block;
       return title && queryMatchesTitle(candidateQuery, searchableText);
     });
