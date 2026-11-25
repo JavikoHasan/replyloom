@@ -53,6 +53,13 @@ describe("store phone bundle intent", () => {
   });
 });
 
+describe("motorcycle technical support intent", () => {
+  it("routes model-specific motorcycle characteristics to catalog-grounded support", () => {
+    expect(isPhoneTechnicalSupportQuestion("Características de la moto XMX")).toBe(true);
+    expect(isPhoneTechnicalSupportQuestion("Propiedades de la moto isuki")).toBe(true);
+  });
+});
+
 describe("store motorcycle support intent", () => {
   it("allows commercial inventory, delivery and warranty questions about listed motorcycles", () => {
     expect(isMotorcycleStoreQuestion("¿Tienes motos?")).toBe(true);
