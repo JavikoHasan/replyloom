@@ -108,14 +108,14 @@ export function isMotorcycleStoreQuestion(message: string): boolean {
  * requests for private/internal information. The answer still requires sources.
  */
 export function isPhoneTechnicalSupportQuestion(message: string): boolean {
-  const m = message.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase();
+  const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const asksTechnical =
-    /\\b(propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|como es|que trae|que tiene|consumo|amperaje|dimensiones|peso|material|autonomia|voltaje|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|cilindrada|cc|motor|velocidad|transmision|frenos|suspension|potencia|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|entrada solar|dimensiones|peso|material|autonomia|voltaje)\\b/.test(m);
+    /\b(propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|como es|que trae|que tiene|consumo|amperaje|dimensiones|peso|material|autonomia|voltaje|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|cilindrada|cc|motor|velocidad|transmision|frenos|suspension|potencia|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|entrada solar)\b/.test(m);
   // Any published product/category can trigger the commercial technical path;
   // it is not restricted to phone brands or a hard-coded model family.
   const hasCatalogProductOrModel =
-    /\\b(telefono|telefonos|celular|celulares|smartphone|estacion(?:es)?|energia|ecoflow|bluetti|delta|river|moto|motocicleta|motocicletas|izuki|xmx|huracan|nevera|refrigerador|aire acondicionado|lavadora|televisor|televisores|laptop|computadora|tablet|bicicleta|generador|inversor|bateria|herramienta|electrodomestico|producto|equipo)\\b/.test(m) ||
-    /\\b[a-z]{1,8}\\s*\\d{1,5}[a-z0-9]*\\b/.test(m);
+    /\b(telefono|telefonos|celular|celulares|smartphone|estacion(?:es)?|energia|ecoflow|bluetti|delta|river|moto|motocicleta|motocicletas|izuki|xmx|huracan|nevera|refrigerador|aire acondicionado|lavadora|televisor|televisores|laptop|computadora|tablet|bicicleta|generador|inversor|bateria|herramienta|electrodomestico|producto|equipo)\b/.test(m) ||
+    /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(m);
   return asksTechnical && hasCatalogProductOrModel;
 }
 
