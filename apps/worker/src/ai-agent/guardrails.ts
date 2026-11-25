@@ -110,9 +110,9 @@ export function isMotorcycleStoreQuestion(message: string): boolean {
 export function isPhoneTechnicalSupportQuestion(message: string): boolean {
   const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const asksTechnical =
-    /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz)\b/.test(m);
+    /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|cilindrada|cc|motor|velocidad|transmision|frenos|suspension)\b/.test(m);
   const hasPhoneOrModel =
-    /\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(m) ||
+    /\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo|izuki|isuki|xmx|huracan|moto|motocicleta)\b/.test(m) ||
     /\b[a-z]{1,6}\s*\d{1,4}[a-z0-9]*\b/.test(m);
   return asksTechnical && hasPhoneOrModel;
 }
