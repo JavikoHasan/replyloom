@@ -142,15 +142,13 @@ export async function handleAgentMessage(
       if (technicalReply) {
         return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
       }
-      if (!hasProductReference(contextualProductQuery)) {
-        return {
-          text: "Con gusto te ayudo. ¿De qué producto o modelo quieres conocer las características? Dime su nombre o selecciónalo del catálogo y revisaré la ficha publicada.",
-          usedTools: [],
-          usedContext: technicalContext,
-          blocked: false,
-          cached: false,
-        };
-      }
+      return {
+        text: "No pude identificar una ficha única y verificable para responder esa pregunta. Dime el nombre o modelo exacto del producto y volveré a revisar el catálogo; prefiero no inventar especificaciones.",
+        usedTools: [],
+        usedContext: technicalContext,
+        blocked: false,
+        cached: false,
+      };
     } catch (error) {
       console.warn("[catalog-agent] deterministic-technical-error", { errorType: error instanceof Error ? error.name : typeof error });
       return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
