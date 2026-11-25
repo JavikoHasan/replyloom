@@ -175,6 +175,17 @@ describe("universal catalog intelligence", () => {
     expect(buildUniversalCatalogTechnicalReply("¿Qué potencia tiene?", "EcoFlow Delta 2", context, stale, now)).toBeNull();
   });
 
+  it("keeps an elliptical 5G question attached to the active product instead of matching another 5G listing", () => {
+    const context = [
+      { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
+      { text: "PRODUCTO: SAMSUNG GALAXY A56 5G — 8GB RAM / 256GB ROM" },
+    ];
+    const reply = buildUniversalCatalogTechnicalReply("¿Es 5G?", "Un A16", context, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY A16");
+    expect(reply).toContain("no especifica la conectividad de red");
+    expect(reply).not.toContain("A56");
+  });
+
   it("does not confuse a short model code with a longer one", () => {
     const context = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" }];
     const reply = buildUniversalCatalogTechnicalReply("¿Qué características tiene?", "A1", context, sync, now);
