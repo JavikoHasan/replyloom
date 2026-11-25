@@ -9,7 +9,7 @@ const STATE_PREFIX = "revolico:catalog-sync:";
 const CATALOG_DOC_ID = "revolico-sagua-public-catalog";
 const BATCH_SIZE = 10;
 const STATE_TTL_SECONDS = 6 * 3600;
-const SYNC_COOLDOWN_SECONDS = 6 * 3600;
+const SYNC_COOLDOWN_SECONDS = 30 * 60;
 const MAX_LISTINGS = 60;
 const STATUS_KEY = `${STATE_PREFIX}status`;
 const STATUS_REFRESH_INTERVAL_SECONDS = 6 * 3600;
@@ -123,7 +123,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
   const key = `${STATE_PREFIX}${workspaceId}`;
   const lastCompletedKey = `${STATE_PREFIX}last-completed:${workspaceId}`;
   const lastCompleted = Number(await env.REPLY_CACHE.get(lastCompletedKey));
-  // A complete public-catalog scan stays fresh for six hours. Without this
+  // A complete public-catalog scan is refreshed every 30 minutes. Without this
   // guard the 5-minute cron restarted the entire scan immediately after every
   // completion, needlessly writing progress/status keys all day.
   if (Number.isFinite(lastCompleted) && lastCompleted > 0 &&
