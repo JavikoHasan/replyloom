@@ -12,7 +12,7 @@ const STATE_TTL_SECONDS = 6 * 3600;
 const SYNC_COOLDOWN_SECONDS = 30 * 60;
 const MAX_LISTINGS = 60;
 const STATUS_KEY = `${STATE_PREFIX}status`;
-const STATUS_REFRESH_INTERVAL_SECONDS = 6 * 3600;
+const STATUS_REFRESH_INTERVAL_SECONDS = 30 * 60;
 export interface CatalogSyncStatus {
   stage: string;
   message: string;
