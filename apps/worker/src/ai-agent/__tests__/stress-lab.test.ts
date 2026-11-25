@@ -5,6 +5,7 @@ import {
   buildPaymentPolicyReply,
   isCatalogLookupQuestion,
   isDeliveryQuestion,
+  buildPhoneTechnicalReply,
   resolveRecentProductQuery,
 } from "../agent";
 import { generateCatalogQueryVariants, normalizeStoreCatalogQuery } from "../catalog-query-normalization";
@@ -166,6 +167,69 @@ describe("Cell Phone Store query stress laboratory", () => {
       expect(reply, question).toContain("Se incluyen con la compra de cualquiera de nuestros teléfonos");
       expect(reply, question).not.toContain("ECOFLOW");
     }
+  });
+
+
+  it("recognizes a customer selecting a model with a natural article after the catalog list", () => {
+    const a16 = [{
+      id: "a16",
+      source: "catalog",
+      score: 1,
+      text: [
+        "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM",
+        "Categoría: Telefonía",
+        "Precio publicado: 190 USD",
+        "Disponibilidad publicada: Disponible",
+      ].join("\n"),
+    }];
+    for (const question of ["Un A16", "El A16", "Ese A16", "Una A16"]) {
+      expect(isCatalogLookupQuestion(question), question).toBe(true);
+      const reply = buildCatalogLookupReply(question, a16, sync, now);
+      expect(reply, question).toContain("SAMSUNG GALAXY A16");
+      expect(reply, question).toContain("190 USD");
+      expect(reply, question).not.toContain("F07");
+    }
+  });
+
+  it("treats a generic phone selection as a category request but not an exact model", () => {
+    expect(isCatalogLookupQuestion("Un teléfono")).toBe(true);
+    expect(isCatalogLookupQuestion("Ese")).toBe(false);
+    expect(isCatalogLookupQuestion("La quiero")).toBe(false);
+  });
+
+
+  it("keeps the last exact phone as context for a short technical follow-up", () => {
+    const thread = "[Previous messages]\nCustomer: ¿Hay A17?\nAgent: Sí, aparece en el catálogo.";
+    const query = resolveRecentProductQuery("Dime sus propiedades", thread);
+    expect(query).toBe("¿Hay A17?");
+    const a17 = [{
+      id: "a17",
+      source: "catalog",
+      score: 1,
+      text: [
+        "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM",
+        "Categoría: Telefonía",
+        "Precio publicado: 200 USD",
+        "Disponibilidad publicada: Disponible",
+      ].join("\n"),
+    }];
+    const reply = buildPhoneTechnicalReply("Dime sus propiedades", query, a17, sync, now);
+    expect(reply).toContain("4 GB de RAM");
+    expect(reply).toContain("128 GB de almacenamiento interno");
+    expect(reply).toContain("no quiero inventar");
+    expect(reply).not.toMatch(/procesador|cámara|batería/i);
+  });
+
+  it("does not infer 5G when the current phone listing does not publish its network", () => {
+    const a17 = [{
+      id: "a17",
+      source: "catalog",
+      score: 1,
+      text: "PRODUCTO: SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM\nCategoría: Telefonía\nPrecio publicado: 200 USD",
+    }];
+    const reply = buildPhoneTechnicalReply("¿Es 5G?", "Hay A17", a17, sync, now);
+    expect(reply).toContain("no especifica si es 4G o 5G");
+    expect(reply).not.toMatch(/es 5G|tiene 5G/i);
   });
 
   it("does not fuzzy-match a short model code to a longer model", () => {
