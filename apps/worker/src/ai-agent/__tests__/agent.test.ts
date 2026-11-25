@@ -687,6 +687,14 @@ describe("Spanish catalog query normalization", () => {
     expect(queryTerms("¿Qué anuncios tienen publicados?")).toContain("anuncio");
     expect(queryTerms("¿Tienen teléfonos disponibles?")).toContain("telefono");
   });
+  it("normalizes the common IZUKI typo without fuzzy-matching product codes", () => {
+    expect(resolveRecentProductQuery("Características de la moto isuki", "")).toContain("isuki");
+    expect(buildCatalogLookupReply("Me interesa la moto isuki", [{
+      id: "moto-1", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: "PRODUCTO: IZUKI HURACAN 250cc\nCategoría: Motocicletas\nPrecio publicado: 2700 USD",
+    }], { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" }, Date.parse("2026-11-24T12:00:00Z"))).toContain("IZUKI HURACAN 250cc");
+  });
+
 });
 
 describe("catalog fallback for natural-language wording", () => {
