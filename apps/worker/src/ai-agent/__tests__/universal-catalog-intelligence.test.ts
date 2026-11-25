@@ -67,7 +67,9 @@ describe("universal catalog intelligence", () => {
   it("does not revive an older product after the customer starts a new catalog search", () => {
     const context = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" }];
     const thread = "[Previous messages]\nCustomer: Un A16\nAgent: El A16 aparece en catálogo\nCustomer: ¿Qué tienes en venta?\nAgent: Tenemos varios productos";
-    const reply = buildUniversalCatalogTechnicalReply("¿Qué propiedades tiene?", "¿Qué tienes en venta?", context, sync, now, thread);
+    const productQuery = resolveRecentProductQuery("¿Qué propiedades tiene?", thread);
+    expect(productQuery).toBe("¿Qué tienes en venta?");
+    const reply = buildUniversalCatalogTechnicalReply("¿Qué propiedades tiene?", productQuery, context, sync, now);
     expect(reply).toBeNull();
   });
 
@@ -77,8 +79,7 @@ describe("universal catalog intelligence", () => {
       { text: "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh" },
       { text: "PRODUCTO: ECOFLOW RIVER 2 PRO — 768Wh" },
     ];
-    const thread = "[Previous messages]\\nCustomer: Un A16\\nAgent: El A16 aparece en catálogo";
-    const reply = buildUniversalCatalogTechnicalReply("¿Qué potencia tiene la EcoFlow?", "¿Qué potencia tiene la EcoFlow?", context, sync, now, thread);
+    const reply = buildUniversalCatalogTechnicalReply("¿Qué potencia tiene la EcoFlow?", "¿Qué potencia tiene la EcoFlow?", context, sync, now);
     expect(reply).toBeNull();
   });
 
