@@ -14,7 +14,7 @@ const STOP_WORDS = new Set([
   "de", "del", "para", "por", "con", "que", "quiero", "interesa", "me",
   "tienes", "tienen", "hay", "dime", "sus", "caracteristicas", "propiedades",
   "especificaciones", "telefono", "telefonos", "celular", "celulares",
-  "producto", "productos", "equipo", "equipos", "modelo",
+  "producto", "productos", "equipo", "equipos", "modelo", "tiene", "tienen", "es", "son", "como", "cual", "cuales", "cuanto", "cuanta", "del", "al", "su", "sus",
 ]);
 
 function productBlocks(context: CatalogChunk[]): string[] {
@@ -55,7 +55,7 @@ function extractTechnicalFacts(block: string): string[] {
   }
 
   const ignored = /^(producto|categoria|precio publicado|condicion|disponibilidad publicada|vigencia de la publicacion hasta|entrega publicada|ficha publica|nota|contacto|whatsapp):/i;
-  const allowedLabel = /^(?:capacidad(?: de bateria| de energia)?|potencia(?: de salida)?|salida nominal|entrada solar|quimica(?: de bateria)?|tipo de bateria|capacidad ampliable|expansion maxima|ampliacion|voltaje|motor|cilindrada|transmision|frenos|suspension|velocidad maxima|combustible|ram|rom|memoria|almacenamiento|pantalla|camara|bateria|conectividad|redes? moviles?|tecnologia de red|procesador|sistema operativo|material|dimensiones|peso|color|autonomia|resolucion|frecuencia|puertos?|conexiones?):/i;
+  const allowedLabel = /^(?:capacidad(?: de bateria| de energia)?|potencia(?: de salida)?|salida nominal|entrada solar|quimica(?: de bateria)?|tipo de bateria|capacidad ampliable|expansion maxima|ampliacion|voltaje|motor|cilindrada|transmision|frenos|suspension|velocidad maxima|combustible|ram|rom|memoria|almacenamiento|pantalla|camara|bateria|conectividad|redes? moviles?|tecnologia de red|procesador|sistema operativo|material|dimensiones|peso|color|talla|tejido|composicion|longitud|ancho|alto|profundidad|compatibilidad|impermeabilidad|resistencia|presion|temperatura|autonomia|resolucion|frecuencia|puertos?|conexiones?):/i;
   for (const rawLine of block.split(/\r?\n/)) {
     const line = rawLine.trim().replace(/^[-•*]\s*/, "");
     if (!line || ignored.test(line) || !allowedLabel.test(normalize(line))) continue;
@@ -77,7 +77,7 @@ function extractTechnicalFacts(block: string): string[] {
 }
 
 export function isUniversalCatalogTechnicalQuestion(message: string): boolean {
-  return /\b(consumo|amperaje|propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|que tiene|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar|dimensiones|peso|material|autonomia|voltaje|motor)\b/.test(normalize(message));
+  return /\b(consumo|amperaje|propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|que tiene|potencia|cilindrada|cc|talla|tejido|composicion|medidas|compatibilidad|impermeabilidad|resistencia|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar|dimensiones|peso|material|autonomia|voltaje|motor)\b/.test(normalize(message));
 }
 
 export function buildUniversalCatalogTechnicalReply(
