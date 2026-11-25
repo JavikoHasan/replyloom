@@ -134,7 +134,7 @@ export async function handleAgentMessage(
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
       const technicalContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const universalTechnicalReply = buildUniversalCatalogTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus, Date.now(), recentThread);
+      const universalTechnicalReply = buildUniversalCatalogTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
       const technicalReply = universalTechnicalReply
         ?? (hasProductReference(contextualProductQuery)
           ? buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus)
