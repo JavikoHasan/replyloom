@@ -43,6 +43,18 @@ function queryMatchesTitle(query: string, title: string): boolean {
 
 function extractTechnicalFacts(block: string): string[] {
   const facts: string[] = [];
+  const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
+  for (const [pattern, label] of [
+    [/\\b(\\d+)\\s*GB\\s*RAM\\b/i, "RAM"],
+    [/\\b(\\d+)\\s*GB\\s*ROM\\b/i, "Almacenamiento"],
+    [/\\b(\\d+(?:[.,]\\d+)?)\\s*(kWh|Wh)\\b/i, "Capacidad"],
+    [/\\b(\\d+(?:[.,]\\d+)?)\\s*(kW|W)\\b/i, "Potencia"],
+    [/\\b(\\d{2,4})\\s*cc\\b/i, "Cilindrada"],
+    [/\\b(4G|5G)\\b/i, "Red móvil"],
+  ] as Array<[RegExp, string]>) {
+    const match = title.match(pattern);
+    if (match) facts.push(label + ": " + match[1] + (match[2] ? " " + match[2] : ""));
+  }
   const ignored = /^(producto|categoria|precio publicado|condicion|disponibilidad publicada|vigencia de la publicacion hasta|entrega publicada|ficha publica|nota|contacto|whatsapp):/i;
   const allowedLabel = /^(?:capacidad(?: de bateria| de energia)?|potencia(?: de salida)?|salida nominal|entrada solar|quimica(?: de bateria)?|tipo de bateria|capacidad ampliable|expansion maxima|ampliacion|voltaje|motor|cilindrada|transmision|frenos|suspension|velocidad maxima|combustible|ram|rom|memoria|almacenamiento|pantalla|camara|bateria|conectividad|redes? moviles?|tecnologia de red|procesador|sistema operativo|material|dimensiones|peso|color|autonomia|resolucion|frecuencia|puertos?|conexiones?):/i;
   for (const rawLine of block.split(/\r?\n/)) {
