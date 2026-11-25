@@ -42,11 +42,11 @@ function extractTechnicalFacts(block: string): string[] {
   const facts: string[] = [];
   const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
   const titlePatterns: Array<[RegExp, string]> = [
-    [/\b(\d+)\s*GB\s*RAM\b/i, "RAM"],
-    [/\b(\d+)\s*GB\s*ROM\b/i, "Almacenamiento"],
+    [/\b(\d+)\s*(GB)\s*RAM\b/i, "RAM"],
+    [/\b(\d+)\s*(GB)\s*ROM\b/i, "Almacenamiento"],
     [/\b(\d+(?:[.,]\d+)?)\s*(kWh|Wh)\b/i, "Capacidad"],
     [/\b(\d+(?:[.,]\d+)?)\s*(kW|W)\b/i, "Potencia"],
-    [/\b(\d{2,4})\s*cc\b/i, "Cilindrada"],
+    [/\b(\d{2,4})\s*(cc)\b/i, "Cilindrada"],
     [/\b(4G|5G)\b/i, "Red móvil"],
   ];
   for (const [pattern, label] of titlePatterns) {
