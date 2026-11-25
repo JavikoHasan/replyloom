@@ -110,7 +110,7 @@ export function isMotorcycleStoreQuestion(message: string): boolean {
 export function isPhoneTechnicalSupportQuestion(message: string): boolean {
   const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const asksTechnical =
-    /\b(propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|que trae|que tiene|consumo|amperaje|dimensiones|peso|material|autonomia|voltaje|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|cilindrada|cc|motor|velocidad|transmision|frenos|suspension|potencia|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|entrada solar)\b/.test(m);
+    /\b(propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|que trae|que tiene|consumo|amperaje|dimensiones|peso|material|talla|tejido|composicion|medidas|longitud|ancho|alto|profundidad|compatibilidad|impermeabilidad|resistencia|presion|temperatura|autonomia|voltaje|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|cilindrada|cc|motor|velocidad|transmision|frenos|suspension|potencia|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|entrada solar)\b/.test(m);
   // Any published product/category can trigger the commercial technical path;
   // it is not restricted to phone brands or a hard-coded model family.
   const hasCatalogProductOrModel =
