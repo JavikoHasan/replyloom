@@ -732,7 +732,7 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
   if (/\b(ecoflow|delta\s*\d|river\s*\d)\b/.test(normalized)) {
     return "La entrega a domicilio de las estaciones EcoFlow anunciadas es gratuita. La fecha y la hora se coordinan directamente con el vendedor según la disponibilidad y la carga del vehículo. Confirma el modelo y su publicación vigente antes de coordinar.";
   }
-  if (/\b(estacion(?:es)? de energia|energia portatil)\b/.test(normalized)) {
+  if (/\b(estacion(?:es)?(?: de energia)?|energia portatil|bluetti)\b/.test(normalized)) {
     return "La entrega gratuita está confirmada para las estaciones EcoFlow anunciadas. Para la Bluetti Elite 100 V2 no tengo una modalidad de entrega confirmada; el vendedor debe indicarte si hay entrega, su costo y la fecha posible.";
   }
   if (/\b(telefono|telefonos|celular|celulares|movil|moviles|smartphone)\b/.test(normalized)) {
@@ -1089,18 +1089,22 @@ export function buildPhoneTechnicalReply(
   const ageMs = now - syncedAt;
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
-  const normalizedQuery = normalizeBusinessText(productQuery);
+  const normalizedQuery = normalizeStoreCatalogQuery(productQuery);
   const modelIds = [...normalizedQuery.matchAll(/\b([a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/g)]
     .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
     .filter((id) => !/^(?:4g|5g|\d+(?:gb|mb|ram|rom))$/.test(id));
-  if (modelIds.length === 0) return null;
+  const requestedMoto = normalizedQuery.match(/\b(izuki|xmx|huracan)\b/)?.[1];
+  if (modelIds.length === 0 && !requestedMoto) return null;
 
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = blocks.filter((block) => {
     const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
-    // Match the complete model token: A1 must never resolve to A16 or A160.
     const normalizedTitle = normalizeBusinessText(title);
-    return modelIds.some((id) => new RegExp("(^|[^a-z0-9])" + id + "([^a-z0-9]|$)").test(normalizedTitle));
+    const matchesModelCode = modelIds.some((id) => new RegExp("(^|[^a-z0-9])" + id + "([^a-z0-9]|$)").test(normalizedTitle));
+    const matchesMoto = requestedMoto
+      ? requestedMoto === "xmx" ? /\bxmx\b/.test(normalizedTitle) : /\b(izuki|huracan)\b/.test(normalizedTitle)
+      : false;
+    return matchesModelCode || matchesMoto;
   });
   const unique = new Map<string, string>();
   for (const block of matches) {
@@ -1111,7 +1115,22 @@ export function buildPhoneTechnicalReply(
 
   const block = [...unique.values()][0];
   const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
-  if (!title || !/\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/i.test(title)) return null;
+  if (!title) return null;
+  const isMotorcycle = /\b(izuki|xmx|huracan|motocicleta|moto)\b/i.test(title);
+  if (!isMotorcycle && !/\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/i.test(title)) return null;
+  if (isMotorcycle) {
+    const cc = title.match(/\b(\d{2,4})\s*cc\b/i)?.[1] ?? block.match(/^(?:Cilindrada|Motor):\s*(\d{2,4})\s*cc/im)?.[1];
+    const labels = ["Motor", "Cilindrada", "Potencia", "Transmisión", "Frenos", "Suspensión", "Velocidad máxima", "Combustible"];
+    const fields = labels.map((label) => {
+      const value = block.match(new RegExp("^" + label + ":\\s*(.+)$", "im"))?.[1]?.trim();
+      return value ? label + ": " + value : "";
+    }).filter(Boolean);
+    if (cc && !fields.some((field) => /Cilindrada|Motor/.test(field))) fields.unshift("Cilindrada: " + cc + " cc");
+    if (fields.length === 0) {
+      return "La ficha publicada de " + title + " no contiene especificaciones técnicas verificadas. Solo puedo confirmar lo que aparece en el anuncio; el vendedor debe facilitarte los datos del motor, potencia, transmisión y demás características antes del encargo.";
+    }
+    return "De " + title + ", la ficha publicada confirma: " + fields.join("; ") + ". No aparecen otras especificaciones verificadas en el anuncio. Para ampliar los detalles técnicos, puedes consultar al vendedor: https://wa.me/5354590237.";
+  }
 
   const ram = block.match(/\b(\d+)\s*GB\s*RAM\b/i)?.[1];
   const rom = block.match(/\b(\d+)\s*GB\s*ROM\b/i)?.[1];
