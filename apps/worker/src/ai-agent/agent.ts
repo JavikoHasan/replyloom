@@ -351,9 +351,10 @@ export async function handleAgentMessage(
     const syncStatus = await env.REPLY_CACHE
       .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
       .catch(() => null);
-    const technicalReply = buildPhoneTechnicalReply(message, contextualProductQuery, context, syncStatus);
+    const technicalContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev").catch(() => context);
+    const technicalReply = buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
     if (technicalReply) {
-      return { text: technicalReply, usedTools: [], usedContext: context, blocked: false, cached: false };
+      return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
     }
   }
 
@@ -745,7 +746,7 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
   // An explicit category or model in the current question is a context boundary,
   // even when the customer phrases it as a follow-up ("and the stations' delivery?").
-  if (isCatalogLookupQuestion(message) || hasProductReference(message) || /\b(telefono|telefonos|celular|celulares|estacion(?:es)?|energia|ecoflow|bluetti|moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/i.test(normalizeStoreCatalogQuery(message))) return message;
+  if (isCatalogLookupQuestion(message) || hasProductReference(message) || /\b(telefono|telefonos|celular|celulares|estacion(?:es)?|energia|ecoflow|bluetti|delta\s*\d|river\s*\d|moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/i.test(normalizeStoreCatalogQuery(message))) return message;
   if (!conversationThread) return message;
   const customerMessages = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]);
   for (const previous of customerMessages.reverse()) {
@@ -758,7 +759,7 @@ export function resolveRecentProductQuery(message: string, conversationThread: s
 
 export function hasProductReference(message: string): boolean {
   const candidate = normalizeStoreCatalogQuery(message).replace(/\b(?:4g|5g|\d+(?:gb|mb|ram|rom))\b/gi, " ");
-  return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4}|izuki|isuki|xmx|huracan)\b/i.test(candidate);
+  return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4}|izuki|isuki|xmx|huracan|ecoflow|bluetti|delta\s*\d|river\s*\d)\b/i.test(candidate);
 }
 
 /** Answer delivery only from the exact product's published delivery field. */
@@ -823,10 +824,11 @@ export function isCatalogLookupQuestion(message: string): boolean {
   const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estacion(?:es)? de energia|motocicletas?|motos?|productos?|equipos?|catalogo|que hay|que tienes|que tienen|que cosas tienes|que cosas tienen|que venden|que vendes|que cosas venden|que cosas vendes|que ofrecen|a la venta)\b/.test(normalized);
   const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\b/.test(normalized);
   const asksKnownBrand = /\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/.test(normalized);
+  const asksTechnical = /\b(propiedades|caracteristicas|especificaciones|especificacion|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|lifepo4)\b/.test(normalized);
   const asksAccessory = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const asksAccessoryCommerce = asksAccessory && /\b(tienes|tienen|hay|venden|vendes|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   const bareModel = /^(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
-  return asksInventory || (asksAvailability && asksKnownBrand) || asksAccessoryCommerce || (hasModelCode && (asksAvailability || bareModel));
+  return (asksInventory && !asksTechnical) || (asksAvailability && asksKnownBrand && !asksTechnical) || asksAccessoryCommerce || (hasModelCode && (asksAvailability || bareModel));
 }
 
 /** Deterministic answers for current catalog inventory and exact-model lookups. */
@@ -1082,7 +1084,7 @@ export function buildPhoneTechnicalReply(
   now = Date.now(),
 ): string | null {
   const question = normalizeBusinessText(message);
-  const asksTechnical = /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz)\b/.test(question);
+  const asksTechnical = /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(question);
   if (!asksTechnical) return null;
   if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
   const syncedAt = Date.parse(syncStatus.updatedAt);
@@ -1094,7 +1096,8 @@ export function buildPhoneTechnicalReply(
     .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
     .filter((id) => !/^(?:4g|5g|\d+(?:gb|mb|ram|rom))$/.test(id));
   const requestedMoto = normalizedQuery.match(/\b(izuki|xmx|huracan)\b/)?.[1];
-  if (modelIds.length === 0 && !requestedMoto) return null;
+  const requestedEnergyBrand = normalizedQuery.match(/\b(ecoflow|bluetti)\b/)?.[1];
+  if (modelIds.length === 0 && !requestedMoto && !requestedEnergyBrand) return null;
 
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
   const matches = blocks.filter((block) => {
@@ -1104,7 +1107,10 @@ export function buildPhoneTechnicalReply(
     const matchesMoto = requestedMoto
       ? requestedMoto === "xmx" ? /\bxmx\b/.test(normalizedTitle) : /\b(izuki|huracan)\b/.test(normalizedTitle)
       : false;
-    return matchesModelCode || matchesMoto;
+    const matchesEnergyBrand = requestedEnergyBrand
+      ? new RegExp("\\b" + requestedEnergyBrand + "\\b").test(normalizedTitle)
+      : false;
+    return matchesModelCode || matchesMoto || matchesEnergyBrand;
   });
   const unique = new Map<string, string>();
   for (const block of matches) {
@@ -1117,7 +1123,9 @@ export function buildPhoneTechnicalReply(
   const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
   if (!title) return null;
   const isMotorcycle = /\b(izuki|xmx|huracan|motocicleta|moto)\b/i.test(title);
-  if (!isMotorcycle && !/\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/i.test(title)) return null;
+  const isEnergyStation = /\b(ecoflow|bluetti|delta|river|estacion)\b/i.test(title);
+  const isPhone = /\b(samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/i.test(title);
+  if (!isMotorcycle && !isEnergyStation && !isPhone) return null;
   if (isMotorcycle) {
     const cc = title.match(/\b(\d{2,4})\s*cc\b/i)?.[1] ?? block.match(/^(?:Cilindrada|Motor):\s*(\d{2,4})\s*cc/im)?.[1];
     const labels = ["Motor", "Cilindrada", "Potencia", "Transmisión", "Frenos", "Suspensión", "Velocidad máxima", "Combustible"];
@@ -1132,7 +1140,38 @@ export function buildPhoneTechnicalReply(
     return "De " + title + ", la ficha publicada confirma: " + fields.join("; ") + ". No aparecen otras especificaciones verificadas en el anuncio. Para ampliar los detalles técnicos, puedes consultar al vendedor: https://wa.me/5354590237.";
   }
 
-  const ram = block.match(/\b(\d+)\s*GB\s*RAM\b/i)?.[1];
+  if (isEnergyStation) {
+    const capacity = title.match(/\b(\d+(?:[.,]\d+)?)\s*(Wh|kWh)\b/i)
+      ?? block.match(/^(?:Capacidad(?: de (?:bateria|energia))?|Energia):\\s*(\\d+(?:[.,]\\d+)?\\s*(?:Wh|kWh))$/im);
+    const fields: string[] = [];
+    if (capacity) {
+      const value = capacity.length > 2 ? capacity[2] : capacity[1] + " " + capacity[2];
+      fields.push("Capacidad: " + value.replace(/\\s+/g, " ").trim());
+    }
+    const fieldPatterns: Array<[string, RegExp]> = [
+      ["Potencia", /^(?:Potencia(?: de salida)?|Salida nominal):\\s*(.+)$/im],
+      ["Química de batería", /^(?:Quimica|Tipo de bateria):\\s*(.+)$/im],
+      ["Capacidad ampliable", /^(?:Capacidad ampliable|Expansion maxima|Ampliacion):\\s*(.+)$/im],
+      ["Entrada solar", /^(?:Entrada solar|Potencia solar maxima):\\s*(.+)$/im],
+      ["Voltaje", /^Voltaje:\\s*(.+)$/im],
+    ];
+    for (const [label, pattern] of fieldPatterns) {
+      const value = block.match(pattern)?.[1]?.trim();
+      if (value && !fields.some((field) => field.startsWith(label + ":"))) fields.push(label + ": " + value);
+    }
+    const freeTextPower = block.match(/(?:potencia(?: de salida)?|salida nominal)[^\\n.]{0,35}?((?:\\d+(?:[.,]\\d+)?\\s*(?:W|kW)))/i)?.[1];
+    if (freeTextPower && !fields.some((field) => field.startsWith("Potencia:"))) fields.push("Potencia: " + freeTextPower.trim());
+    const chemistry = block.match(/\\b(LiFePO4|LFP|NMC)\\b/i)?.[1];
+    if (chemistry && !fields.some((field) => field.startsWith("Química de batería:"))) fields.push("Química de batería: " + chemistry);
+    const expandable = block.match(/(?:ampliable|expandible|expansion)[^\\n.]{0,45}?((?:\\d+(?:[.,]\\d+)?\\s*(?:Wh|kWh)))/i)?.[1];
+    if (expandable && !fields.some((field) => field.startsWith("Capacidad ampliable:"))) fields.push("Capacidad ampliable: " + expandable.trim());
+    if (fields.length === 0) {
+      return "La ficha publicada de " + title + " no contiene especificaciones técnicas verificadas. Para evitar errores, el vendedor puede confirmarte la capacidad, potencia y demás características.";
+    }
+    return "De " + title + ", la ficha publicada confirma: " + fields.join("; ") + ". No aparecen otras especificaciones verificadas en el anuncio. Para ampliar los detalles técnicos, puedes consultar al vendedor: https://wa.me/5354590237.";
+  }
+
+  const ram = block.match(/\\b(\\d+)\\s*GB\\s*RAM\\b/i)?.[1];
   const rom = block.match(/\b(\d+)\s*GB\s*ROM\b/i)?.[1];
   const network = block.match(/^(?:Conectividad|Redes? móviles?|Tecnología de red):\s*(.+)$/im)?.[1]?.trim()
     ?? title.match(/\b(4G|5G)\b/i)?.[1]?.toUpperCase();
