@@ -279,7 +279,11 @@ export async function handleAgentMessage(
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
       const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const catalogLookupReply = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      const exactArticleSelection = isShortCatalogProductSelection(message) && hasProductReference(message)
+        ? buildShortCatalogProductSelectionReply(message, allCatalogChunks, syncStatus)
+        : null;
+      const catalogLookupReply = exactArticleSelection
+        ?? buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
       const zelleAwareReply = catalogLookupReply
         ? buildZelleTotalReply(catalogLookupReply, recentThread)
           ?? (asksZelleNow ? buildZelleTotalReply(catalogLookupReply, recentThread, true) : null)
