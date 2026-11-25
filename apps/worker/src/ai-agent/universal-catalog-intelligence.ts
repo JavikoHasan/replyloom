@@ -31,8 +31,12 @@ function productBlocks(context: CatalogChunk[]): string[] {
 function queryMatchesTitle(query: string, title: string): boolean {
   const q = normalize(query);
   const t = normalize(title);
+  // Network generations such as 4G/5G are technical attributes, not product
+  // identifiers. Treating them as model codes can switch an elliptical follow-up
+  // to an unrelated listing that happens to advertise the same network.
   const ids = [...q.matchAll(/\b([a-z]{1,10}\s*\d{1,5}[a-z0-9]*|\d{1,4}[a-z]{1,5})\b/g)]
-    .map((match) => match[1].trim());
+    .map((match) => match[1].trim())
+    .filter((id) => !/^[45]g$/i.test(id));
   if (ids.length) {
     return ids.some((id) =>
       new RegExp("(^|[^a-z0-9])" + id.replace(/\s+/g, "\\s*") + "([^a-z0-9]|$)").test(t)
