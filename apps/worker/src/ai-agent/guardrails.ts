@@ -92,7 +92,7 @@ export async function classifyIntent(
 export function isMotorcycleStoreQuestion(message: string): boolean {
   const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const mentionsMotorcycle = /\b(moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/.test(m);
-  const asksCommercial = /\b(tienes|tienen|hay|venden|venta|precio|cuesta|cuanto|disponible|disponibilidad|catalogo|modelo|modelos|encargo|encargar|pedido|comprar|compra|entrega|entregan|entregar|domicilio|garantia|garantias|reservar|reserva)\b/.test(m);
+  const asksCommercial = /\b(tienes|tienen|hay|venden|venta|precio|cuesta|cuanto|disponible|disponibilidad|catalogo|modelo|modelos|encargo|encargar|pedido|comprar|compra|entrega|entregan|entregar|domicilio|garantia|garantias|reservar|reserva|caracteristicas|propiedades|especificaciones|cilindrada|potencia|transmision|frenos|suspension)\b/.test(m);
   return mentionsMotorcycle && asksCommercial;
 }
 
