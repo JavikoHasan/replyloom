@@ -29,9 +29,9 @@ function queryMatchesTitle(query: string, title: string): boolean {
   const q = normalize(query);
   const t = normalize(title);
   const ids = [...q.matchAll(/\b([a-z]{1,10}\s*\d{1,5}[a-z0-9]*|\d{1,4}[a-z]{1,5})\b/g)]
-    .map((m) => m[1].replace(/\s+/g, ""));
+    .map((m) => m[1].trim());
   if (ids.length) {
-    return ids.some((id) => new RegExp("(^|[^a-z0-9])" + id.replace(/\\s+/g, "\\\\s*") + "([^a-z0-9]|$)").test(t));
+    return ids.some((id) => new RegExp("(^|[^a-z0-9])" + id.replace(/\s+/g, "\\s*") + "([^a-z0-9]|$)").test(t));
   }
   const tokens = q.split(/[^a-z0-9]+/).filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
   if (!tokens.length) return false;
