@@ -103,7 +103,7 @@ describe("universal catalog intelligence", () => {
   it("switches to a newly named catalog product even when its brand was never hard-coded", () => {
     const context = [
       { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
-      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\\nCategoría: Equipos\\nPotencia: 3000W" },
+      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\nCategoría: Equipos\nPotencia: 3000W" },
     ];
     const reply = buildUniversalCatalogTechnicalReply(
       "¿Qué potencia tiene la Midea?",
@@ -120,7 +120,7 @@ describe("universal catalog intelligence", () => {
   it("keeps the active product for a technical follow-up that does not repeat its name", () => {
     const context = [
       { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
-      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\\nPotencia: 3000W" },
+      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\nPotencia: 3000W" },
     ];
     const reply = buildUniversalCatalogTechnicalReply(
       "¿Qué potencia tiene?",
