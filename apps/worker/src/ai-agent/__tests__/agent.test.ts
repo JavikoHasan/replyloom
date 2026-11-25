@@ -102,6 +102,39 @@ describe("catalog inventory and model availability replies", () => {
     expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
   });
 
+  it("answers a specific motorcycle model lookup instead of listing every motorcycle", () => {
+    const motorcycleCatalog = [{
+      id: "moto-1", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: ["PRODUCTO: IZUKI HURACAN 250cc", "Categoría: Motocicletas", "Precio publicado: 2700 USD", "Disponibilidad publicada: Por encargo"].join("\n"),
+    }, {
+      id: "moto-2", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: ["PRODUCTO: XMX 250cc", "Categoría: Motocicletas", "Precio publicado: 3000 USD", "Disponibilidad publicada: Por encargo"].join("\n"),
+    }];
+    const reply = buildCatalogLookupReply("Me interesa la moto izuki", motorcycleCatalog, sync, now);
+    expect(reply).toContain("IZUKI HURACAN 250cc");
+    expect(reply).toContain("2700 USD");
+    expect(reply).not.toContain("XMX");
+    expect(buildPurchaseInterestReply("Me interesa la moto izuki", reply)).toContain("WhatsApp");
+  });
+
+  it("recognizes the common misspelling isuki as IZUKI", () => {
+    const query = resolveRecentProductQuery("Características de la moto isuki", "Customer: ¿Tienes teléfonos?");
+    expect(query).toContain("isuki");
+    expect(buildPhoneTechnicalReply("Características de la moto isuki", query, [{
+      id: "moto-1", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: "PRODUCTO: IZUKI HURACAN 250cc\nCategoría: Motocicletas",
+    }], sync, now)).toContain("IZUKI HURACAN 250cc");
+  });
+
+  it("does not mix previous phone context into an energy-station delivery follow-up", () => {
+    const message = "¿Y la entrega de las estaciones cómo es?";
+    const thread = "Customer: ¿Cómo se realiza la entrega de los celulares?\nCustomer: ¿Tienes estaciones de energía?";
+    expect(resolveRecentProductQuery(message, thread)).toBe(message);
+    const reply = buildGeneralDeliveryPolicyReply(message, "¿Tienes estaciones de energía?");
+    expect(reply).toContain("Bluetti Elite 100 V2");
+    expect(reply).not.toContain("motorina eléctrica");
+  });
+
   it("lists only the motorcycles present in the published catalog", () => {
     const motorcycleCatalog = [{
       id: "moto-1",
@@ -201,6 +234,30 @@ describe("exact catalog model matching", () => {
   it("still matches the exact model in a longer product title", () => {
     const a16 = [{ id: "a16", source: "catalog", score: 1, text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\\nCategoría: Telefonía\\nPrecio publicado: 190 USD\\nDisponibilidad publicada: Disponible" }];
     expect(buildCatalogLookupReply("¿Tienes A16?", a16, sync, now)).toContain("SAMSUNG GALAXY A16");
+  });
+});
+
+describe("grounded motorcycle technical replies", () => {
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
+  it("reports only the verified 250cc title detail and does not invent specifications", () => {
+    const reply = buildPhoneTechnicalReply("Características de la moto XMX", "Características de la moto XMX", [{
+      id: "moto-2", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: "PRODUCTO: XMX 250cc\nCategoría: Motocicletas",
+    }], sync, now);
+    expect(reply).toContain("XMX 250cc");
+    expect(reply).toContain("250 cc");
+    expect(reply).toContain("No aparecen otras especificaciones verificadas");
+    expect(reply).not.toContain("potencia de");
+  });
+
+  it("uses explicit technical fields from the matching motorcycle listing", () => {
+    const reply = buildPhoneTechnicalReply("Características de la moto XMX", "Características de la moto XMX", [{
+      id: "moto-2", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: "PRODUCTO: XMX 250cc\nPotencia: 18 HP\nTransmisión: 5 velocidades",
+    }], sync, now);
+    expect(reply).toContain("Potencia: 18 HP");
+    expect(reply).toContain("Transmisión: 5 velocidades");
   });
 });
 
