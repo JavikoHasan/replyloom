@@ -9,6 +9,7 @@ import { gatewayRunOptions, FALLBACK_GENERATOR } from "./gateway";
 import { executeTool, buildDefaultRegistry, listWorkspaceWebhookTools, workspaceToolToSchema } from "./tools";
 import { customerPhoneFromJid } from "./util";
 import { normalizeStoreCatalogQuery } from "./catalog-query-normalization";
+import { buildUniversalCatalogTechnicalReply } from "./universal-catalog-intelligence";
 
 const registry = buildDefaultRegistry();
 const MAX_TURNS = 2; // generation loop depth, not conversation turns
@@ -133,7 +134,8 @@ export async function handleAgentMessage(
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
       const technicalContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const technicalReply = buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
+      const technicalReply = buildUniversalCatalogTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus)
+        ?? buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
       if (technicalReply) {
         return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
       }
