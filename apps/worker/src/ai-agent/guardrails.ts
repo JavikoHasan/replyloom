@@ -91,7 +91,7 @@ export async function classifyIntent(
 /** Commercial questions about the store's listed motorcycles; unrelated bike chat stays blocked. */
 export function isMotorcycleStoreQuestion(message: string): boolean {
   const m = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const mentionsMotorcycle = /\b(moto|motos|motocicleta|motocicletas|izuki|xmx|huracan)\b/.test(m);
+  const mentionsMotorcycle = /\b(moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/.test(m);
   const asksCommercial = /\b(tienes|tienen|hay|venden|venta|precio|cuesta|cuanto|disponible|disponibilidad|catalogo|modelo|modelos|encargo|encargar|pedido|comprar|compra|entrega|entregan|entregar|domicilio|garantia|garantias|reservar|reserva)\b/.test(m);
   return mentionsMotorcycle && asksCommercial;
 }
