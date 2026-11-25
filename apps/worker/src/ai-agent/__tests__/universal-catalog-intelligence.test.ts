@@ -103,24 +103,24 @@ describe("universal catalog intelligence", () => {
   it("switches to a newly named catalog product even when its brand was never hard-coded", () => {
     const context = [
       { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
-      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\nCategoría: Equipos\nPotencia: 3000W" },
+      { text: "PRODUCTO: BLUETTI ELITE 100 V2 – ESTACIÓN DE ENERGÍA PORTÁTIL DE 1024Wh / 1800W\nCategoría: Energía\nCapacidad de batería: 1024Wh\nPotencia nominal: 1800W\nPotencia pico: 3600W" },
     ];
     const reply = buildUniversalCatalogTechnicalReply(
-      "¿Qué potencia tiene la Midea?",
+      "¿Qué potencia tiene la Bluetti?",
       "Un A16",
       context,
       sync,
       now,
     );
-    expect(reply).toContain("MIDEA GENERADOR INVERTER 3000W");
-    expect(reply).toContain("3000W");
+    expect(reply).toContain("BLUETTI ELITE 100 V2");
+    expect(reply).toContain("1800W");
     expect(reply).not.toContain("SAMSUNG GALAXY A16");
   });
 
   it("keeps the active product for a technical follow-up that does not repeat its name", () => {
     const context = [
       { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
-      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\nPotencia: 3000W" },
+      { text: "PRODUCTO: BLUETTI ELITE 100 V2\nPotencia: 1800W" },
     ];
     const reply = buildUniversalCatalogTechnicalReply(
       "¿Qué potencia tiene?",
