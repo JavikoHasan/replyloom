@@ -21,6 +21,18 @@ describe("universal catalog intelligence", () => {
     expect(isShortCatalogProductSelection("Gracias")).toBe(false);
     expect(isShortCatalogProductSelection("¿Qué tienes en venta?")).toBe(false);
     expect(isShortCatalogProductSelection("A16")).toBe(true);
+    expect(isShortCatalogProductSelection("Un A16")).toBe(true);
+    expect(isShortCatalogProductSelection("El Samsung A16")).toBe(true);
+  });
+
+  it("resolves a natural short phone selection such as 'Un A16' from the exact listing", () => {
+    const context = [{
+      text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\nCategoría: Telefonía\nPrecio publicado: 190 USD\nDisponibilidad publicada: Disponible",
+    }];
+    const reply = buildShortCatalogProductSelectionReply("Un A16", context, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY A16");
+    expect(reply).toContain("190 USD");
+    expect(reply).toContain("existencia física debe confirmarse");
   });
 
   it("resolves a generic new product selection against its own catalog title", () => {
