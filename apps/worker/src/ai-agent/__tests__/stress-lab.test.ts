@@ -168,6 +168,34 @@ describe("Cell Phone Store query stress laboratory", () => {
     }
   });
 
+
+  it("recognizes a customer selecting a model with a natural article after the catalog list", () => {
+    const a16 = [{
+      id: "a16",
+      source: "catalog",
+      score: 1,
+      text: [
+        "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM",
+        "Categoría: Telefonía",
+        "Precio publicado: 190 USD",
+        "Disponibilidad publicada: Disponible",
+      ].join("\n"),
+    }];
+    for (const question of ["Un A16", "El A16", "Ese A16", "Una A16"]) {
+      expect(isCatalogLookupQuestion(question), question).toBe(true);
+      const reply = buildCatalogLookupReply(question, a16, sync, now);
+      expect(reply, question).toContain("SAMSUNG GALAXY A16");
+      expect(reply, question).toContain("190 USD");
+      expect(reply, question).not.toContain("F07");
+    }
+  });
+
+  it("does not turn a vague article-only reply into an exact model selection", () => {
+    for (const question of ["Un teléfono", "Ese", "La quiero"]) {
+      expect(isCatalogLookupQuestion(question), question).toBe(false);
+    }
+  });
+
   it("does not fuzzy-match a short model code to a longer model", () => {
     const a16 = [{
       id: "a16",
