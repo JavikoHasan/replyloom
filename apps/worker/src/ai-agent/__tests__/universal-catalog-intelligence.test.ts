@@ -36,7 +36,7 @@ describe("universal catalog intelligence", () => {
   });
 
   it("resolves a short selection for a real non-phone listing from its own catalog title", () => {
-    const context = [{ text: "PRODUCTO: BLUETTI ELITE 100 V2 – ESTACIÓN DE ENERGÍA PORTÁTIL DE 1024Wh / 1800W\\nCategoría: Energía\\nPrecio publicado: 600 USD\\nDisponibilidad publicada: Disponible" }];
+    const context = [{ text: "PRODUCTO: BLUETTI ELITE 100 V2 – ESTACIÓN DE ENERGÍA PORTÁTIL DE 1024Wh / 1800W\nCategoría: Energía\nPrecio publicado: 600 USD\nDisponibilidad publicada: Disponible" }];
     const reply = buildShortCatalogProductSelectionReply("Una Bluetti", context, sync, now);
     expect(reply).toContain("BLUETTI ELITE 100 V2");
     expect(reply).toContain("600 USD");
