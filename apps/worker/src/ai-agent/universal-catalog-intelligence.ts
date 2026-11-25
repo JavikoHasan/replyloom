@@ -137,3 +137,56 @@ export function buildUniversalCatalogTechnicalReply(
   reply += " No aparecen otras características verificadas en la ficha.";
   return reply;
 }
+
+
+const NON_PRODUCT_SELECTIONS = new Set(["momento", "pregunta", "segundo", "segundos", "favor", "rato", "poco", "minuto", "minutos"]);
+
+export function isShortCatalogProductSelection(message: string): boolean {
+  const normalized = normalize(message).replace(/[¿?¡!.,;:]+/g, " ").replace(/\s+/g, " ").trim();
+  const match = normalized.match(/^(?:un|una|el|la|ese|esa|este|esta)\s+(.+)$/);
+  if (!match) return false;
+  const words = match[1].split(" ").filter(Boolean);
+  return words.length >= 1 && words.length <= 4 && !words.some((word) => NON_PRODUCT_SELECTIONS.has(word));
+}
+
+export function buildShortCatalogProductSelectionReply(
+  message: string,
+  context: CatalogChunk[],
+  syncStatus: SyncStatus,
+  now = Date.now(),
+): string | null {
+  if (!isShortCatalogProductSelection(message)) return null;
+  if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
+  const syncedAt = Date.parse(syncStatus.updatedAt);
+  const age = now - syncedAt;
+  if (!Number.isFinite(syncedAt) || age < -5 * 60_000 || age > 7 * 60 * 60_000) return null;
+
+  const normalized = normalize(message).replace(/^(?:un|una|el|la|ese|esa|este|esta)\s+/, "").replace(/[¿?¡!.,;:]+/g, " ").trim();
+  const terms = normalized.split(/\s+/).filter((term) => term.length >= 2);
+  const matches = new Map<string, { title: string; price: string; availability: string }>();
+  for (const block of productBlocks(context)) {
+    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+    if (!title) continue;
+    const titleTokens = normalize(title).split(/[^a-z0-9]+/).filter(Boolean);
+    const allTermsMatch = terms.every((term) => titleTokens.includes(term));
+    if (!allTermsMatch) continue;
+    const key = normalize(title);
+    matches.set(key, {
+      title,
+      price: block.match(/^Precio publicado:\s*(.+)$/im)?.[1]?.trim() ?? "",
+      availability: block.match(/^Disponibilidad publicada:\s*(.+)$/im)?.[1]?.trim() ?? "",
+    });
+  }
+
+  const products = [...matches.values()];
+  if (products.length === 0) {
+    return "No encuentro una publicación vigente que coincida con «" + normalized + "» en nuestro catálogo. Si me indicas el nombre o modelo exacto, puedo buscarlo.";
+  }
+  if (products.length > 1) {
+    return "Encontré varios anuncios que podrían coincidir: " + products.slice(0, 5).map((item) => item.title).join("; ") + ". ¿Cuál de ellos te interesa?";
+  }
+  const product = products[0];
+  const price = product.price ? " El precio publicado es " + product.price + "." : "";
+  const status = product.availability ? " El anuncio indica: " + product.availability + "." : "";
+  return "Sí, " + product.title + " aparece en nuestro catálogo." + price + status + " La existencia física debe confirmarse directamente con el vendedor.";
+}
