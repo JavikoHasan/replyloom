@@ -119,7 +119,7 @@ export function buildUniversalCatalogTechnicalReply(
       break;
     }
     const normalizedCandidate = normalize(candidate);
-    const hasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalizedCandidate);
+    const candidateHasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalizedCandidate);
     const startsNewCatalogSearch =
       /\b(que tienes|que hay|que vendes|que venden|que ofrecen|catalogo|en venta|telefonos?|celulares?|estaciones? de energia|energia portatil|motocicletas?|motos?)\b/.test(normalizedCandidate) ||
       (/\b(tienes|tienen|hay|venden|vendemos)\b/.test(normalizedCandidate) &&
@@ -127,7 +127,7 @@ export function buildUniversalCatalogTechnicalReply(
       (/\b(me interesa|estoy interesado|estoy interesada|quiero)\b/.test(normalizedCandidate) &&
         /\b(telefono|celular|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador|ecoflow|bluetti)\b/.test(normalizedCandidate)) ||
       isShortCatalogProductSelection(candidate);
-    if (startsNewCatalogSearch && !hasSpecificModel) break;
+    if (startsNewCatalogSearch && !candidateHasSpecificModel) break;
   }
   if (!selected) return null;
 
