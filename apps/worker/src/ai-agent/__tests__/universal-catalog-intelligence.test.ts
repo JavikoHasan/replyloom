@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveRecentProductQuery } from "../agent";
 import {
   buildShortCatalogProductSelectionReply,
   isShortCatalogProductSelection,
@@ -56,7 +57,9 @@ describe("universal catalog intelligence", () => {
   it("recovers a product named earlier in the conversation when the current question is elliptical", () => {
     const context = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" }];
     const thread = "[Previous messages]\nCustomer: Me interesa un teléfono\nAgent: Tenemos varias opciones\nCustomer: Un A16\nAgent: El A16 aparece en catálogo";
-    const reply = buildUniversalCatalogTechnicalReply("¿Qué propiedades tiene?", "¿Qué propiedades tiene?", context, sync, now, thread);
+    const productQuery = resolveRecentProductQuery("Características del teléfono", thread);
+    expect(productQuery).toBe("Un A16");
+    const reply = buildUniversalCatalogTechnicalReply("Características del teléfono", productQuery, context, sync, now);
     expect(reply).toContain("SAMSUNG GALAXY A16");
     expect(reply).toContain("RAM: 4 GB");
   });
