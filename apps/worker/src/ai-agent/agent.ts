@@ -127,11 +127,12 @@ export async function handleAgentMessage(
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
-  // A short, explicit model selection (for example, "Un A16") is a
-  // commercial catalog lookup, not a request for private/internal data.
-  // Resolve it deterministically BEFORE the intent classifier so a false
-  // SENSITIVE label cannot block a legitimate product selection.
-  if (catalogOnlyBusiness && isShortCatalogProductSelection(message) && hasProductReference(message)) {
+  // A short product selection (for example, "Un A16", "la nevera" or
+  // "una bicicleta eléctrica") is a catalog lookup, not a request for
+  // private/internal data. Resolve it from listing titles BEFORE intent
+  // classification so future categories are supported without hard-coded
+  // model identifiers or category names.
+  if (catalogOnlyBusiness && isShortCatalogProductSelection(message)) {
     try {
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
