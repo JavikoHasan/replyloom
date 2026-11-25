@@ -127,6 +127,33 @@ export async function handleAgentMessage(
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
+  // A short, explicit model selection (for example, "Un A16") is a
+  // commercial catalog lookup, not a request for private/internal data.
+  // Resolve it deterministically BEFORE the intent classifier so a false
+  // SENSITIVE label cannot block a legitimate product selection.
+  if (catalogOnlyBusiness && isShortCatalogProductSelection(message) && hasProductReference(message)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const selectionContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const selectionReply = buildShortCatalogProductSelectionReply(message, selectionContext, syncStatus);
+      if (selectionReply) {
+        console.info("[catalog-agent] pre-classifier-product-selection", {
+          modelReferencePresent: true,
+          contextRows: selectionContext.length,
+          responsePresent: true,
+        });
+        return { text: selectionReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
+      }
+    } catch (error) {
+      console.warn("[catalog-agent] pre-classifier-product-selection-error", {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   const asksTechnicalProductQuestion = isUniversalCatalogTechnicalQuestion(message) || /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(normalizeStoreCatalogQuery(message));
   if (catalogOnlyBusiness && asksTechnicalProductQuestion) {
     try {
