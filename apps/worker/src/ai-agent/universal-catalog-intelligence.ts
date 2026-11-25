@@ -95,10 +95,9 @@ export function buildUniversalCatalogTechnicalReply(
   if (!Number.isFinite(syncedAt) || age < -5 * 60_000 || age > 7 * 60 * 60_000) return null;
 
   const blocks = productBlocks(context);
-  const candidates = [
-    productQuery,
-    ...[...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]).reverse(),
-  ];
+  const threadCustomers = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)]
+    .map((match) => match[1]).reverse();
+  const candidates = [productQuery, ...threadCustomers];
   let selected: string | null = null;
   for (const candidate of [...new Set(candidates)]) {
     const matches = blocks.filter((block) => {
@@ -114,6 +113,12 @@ export function buildUniversalCatalogTechnicalReply(
       selected = [...unique.values()][0];
       break;
     }
+    const normalizedCandidate = normalize(candidate);
+    const hasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalizedCandidate);
+    const startsNewCatalogSearch =
+      /\b(que tienes|que hay|que vendes|que venden|que ofrecen|catalogo|en venta|telefonos?|celulares?|estaciones? de energia|energia portatil|motocicletas?|motos?)\b/.test(normalizedCandidate) ||
+      isShortCatalogProductSelection(candidate);
+    if (startsNewCatalogSearch && !hasSpecificModel) break;
   }
   if (!selected) return null;
 
