@@ -77,7 +77,7 @@ function extractTechnicalFacts(block: string): string[] {
 }
 
 export function isUniversalCatalogTechnicalQuestion(message: string): boolean {
-  return /\b(consumo|amperaje|propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|como es|que trae|que tiene|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar|dimensiones|peso|material|autonomia|voltaje|motor)\b/.test(normalize(message));
+  return /\b(consumo|amperaje|propiedades|caracteristicas|especificaciones|especificacion|detalles tecnicos|como es|que tiene|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar|dimensiones|peso|material|autonomia|voltaje|motor)\b/.test(normalize(message));
 }
 
 export function buildUniversalCatalogTechnicalReply(
