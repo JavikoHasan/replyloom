@@ -12,13 +12,14 @@ const now = Date.parse("2026-11-25T14:10:00.000Z");
 describe("universal catalog intelligence", () => {
   it("recognizes short natural selections without hard-coding product models", () => {
     expect(isShortCatalogProductSelection("La nevera")).toBe(true);
+    expect(isShortCatalogProductSelection("Me interesa una nevera")).toBe(true);
     expect(isShortCatalogProductSelection("Una bicicleta eléctrica")).toBe(true);
     expect(isShortCatalogProductSelection("Un momento")).toBe(false);
   });
 
   it("resolves a generic new product selection against its own catalog title", () => {
     const context = [{ text: "PRODUCTO: NEVERA MIDEA 7 PIES\nCategoría: Hogar\nPrecio publicado: 450 USD\nDisponibilidad publicada: Disponible" }];
-    const reply = buildShortCatalogProductSelectionReply("La nevera", context, sync, now);
+    const reply = buildShortCatalogProductSelectionReply("Me interesa una nevera", context, sync, now);
     expect(reply).toContain("NEVERA MIDEA 7 PIES");
     expect(reply).toContain("450 USD");
   });
