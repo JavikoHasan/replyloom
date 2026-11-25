@@ -1141,29 +1141,31 @@ export function buildPhoneTechnicalReply(
   }
 
   if (isEnergyStation) {
-    const capacity = title.match(/\b(\d+(?:[.,]\d+)?)\s*(Wh|kWh)\b/i)
-      ?? block.match(/^(?:Capacidad(?: de (?:bateria|energia))?|Energia):\\s*(\\d+(?:[.,]\\d+)?\\s*(?:Wh|kWh))$/im);
+    const titleCapacity = title.match(/\b(\d+(?:[.,]\d+)?)\s*(Wh|kWh)\b/i);
+    const blockCapacity = block.match(/^(?:Capacidad(?: de (?:bateria|energia))?|Energia):\s*(\d+(?:[.,]\d+)?)\s*(Wh|kWh)$/im);
     const fields: string[] = [];
-    if (capacity) {
-      const value = capacity.length > 2 ? capacity[2] : capacity[1] + " " + capacity[2];
-      fields.push("Capacidad: " + value.replace(/\\s+/g, " ").trim());
-    }
+    const capacityValue = titleCapacity
+      ? titleCapacity[1] + " " + titleCapacity[2]
+      : blockCapacity
+        ? blockCapacity[1] + " " + blockCapacity[2]
+        : "";
+    if (capacityValue) fields.push("Capacidad: " + capacityValue);
     const fieldPatterns: Array<[string, RegExp]> = [
-      ["Potencia", /^(?:Potencia(?: de salida)?|Salida nominal):\\s*(.+)$/im],
-      ["Química de batería", /^(?:Quimica|Tipo de bateria):\\s*(.+)$/im],
-      ["Capacidad ampliable", /^(?:Capacidad ampliable|Expansion maxima|Ampliacion):\\s*(.+)$/im],
-      ["Entrada solar", /^(?:Entrada solar|Potencia solar maxima):\\s*(.+)$/im],
-      ["Voltaje", /^Voltaje:\\s*(.+)$/im],
+      ["Potencia", /^(?:Potencia(?: de salida)?|Salida nominal):\s*(.+)$/im],
+      ["Química de batería", /^(?:Quimica|Tipo de bateria):\s*(.+)$/im],
+      ["Capacidad ampliable", /^(?:Capacidad ampliable|Expansion maxima|Ampliacion):\s*(.+)$/im],
+      ["Entrada solar", /^(?:Entrada solar|Potencia solar maxima):\s*(.+)$/im],
+      ["Voltaje", /^Voltaje:\s*(.+)$/im],
     ];
     for (const [label, pattern] of fieldPatterns) {
       const value = block.match(pattern)?.[1]?.trim();
       if (value && !fields.some((field) => field.startsWith(label + ":"))) fields.push(label + ": " + value);
     }
-    const freeTextPower = block.match(/(?:potencia(?: de salida)?|salida nominal)[^\\n.]{0,35}?((?:\\d+(?:[.,]\\d+)?\\s*(?:W|kW)))/i)?.[1];
+    const freeTextPower = block.match(/(?:potencia(?: de salida)?|salida nominal)[^\n.]{0,35}?(\d+(?:[.,]\d+)?\s*(?:W|kW))/i)?.[1];
     if (freeTextPower && !fields.some((field) => field.startsWith("Potencia:"))) fields.push("Potencia: " + freeTextPower.trim());
-    const chemistry = block.match(/\\b(LiFePO4|LFP|NMC)\\b/i)?.[1];
+    const chemistry = block.match(/\b(LiFePO4|LFP|NMC)\b/i)?.[1];
     if (chemistry && !fields.some((field) => field.startsWith("Química de batería:"))) fields.push("Química de batería: " + chemistry);
-    const expandable = block.match(/(?:ampliable|expandible|expansion)[^\\n.]{0,45}?((?:\\d+(?:[.,]\\d+)?\\s*(?:Wh|kWh)))/i)?.[1];
+    const expandable = block.match(/(?:ampliable|expandible|expansion)[^\n.]{0,45}?(\d+(?:[.,]\d+)?\s*(?:Wh|kWh))/i)?.[1];
     if (expandable && !fields.some((field) => field.startsWith("Capacidad ampliable:"))) fields.push("Capacidad ampliable: " + expandable.trim());
     if (fields.length === 0) {
       return "La ficha publicada de " + title + " no contiene especificaciones técnicas verificadas. Para evitar errores, el vendedor puede confirmarte la capacidad, potencia y demás características.";
@@ -1171,7 +1173,7 @@ export function buildPhoneTechnicalReply(
     return "De " + title + ", la ficha publicada confirma: " + fields.join("; ") + ". No aparecen otras especificaciones verificadas en el anuncio. Para ampliar los detalles técnicos, puedes consultar al vendedor: https://wa.me/5354590237.";
   }
 
-  const ram = block.match(/\\b(\\d+)\\s*GB\\s*RAM\\b/i)?.[1];
+  const ram = block.match(/\b(\d+)\s*GB\s*RAM\b/i)?.[1];
   const rom = block.match(/\b(\d+)\s*GB\s*ROM\b/i)?.[1];
   const network = block.match(/^(?:Conectividad|Redes? móviles?|Tecnología de red):\s*(.+)$/im)?.[1]?.trim()
     ?? title.match(/\b(4G|5G)\b/i)?.[1]?.toUpperCase();
