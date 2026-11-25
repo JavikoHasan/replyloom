@@ -17,6 +17,10 @@ const STOP_WORDS = new Set([
   "tienes", "tienen", "hay", "dime", "sus", "caracteristicas", "propiedades",
   "especificaciones", "telefono", "telefonos", "celular", "celulares",
   "producto", "productos", "equipo", "equipos", "modelo", "tiene", "tienen", "es", "son", "como", "cual", "cuales", "cuanto", "cuanta", "del", "al", "su", "sus",
+  "que", "y", "o", "potencia", "capacidad", "consumo", "propiedades", "caracteristicas", "especificaciones",
+  "talla", "material", "color", "dimensiones", "medidas", "peso", "memoria", "almacenamiento", "procesador",
+  "pantalla", "camara", "bateria", "conectividad", "red", "movil", "cilindrada", "velocidad", "frenos",
+  "suspension", "autonomia", "voltaje", "quimica", "salida", "entrada", "tecnicas", "tecnicos",
 ]);
 
 function productBlocks(context: CatalogChunk[]): string[] {
@@ -94,34 +98,29 @@ export function buildUniversalCatalogTechnicalReply(
   if (!Number.isFinite(syncedAt) || age < -5 * 60_000 || age > 7 * 60 * 60_000) return null;
 
   const blocks = productBlocks(context);
-  const candidates = [productQuery];
+  // Prefer a product explicitly named in the current message. If the customer
+  // asks only an elliptical follow-up, the resolved conversation query supplies
+  // the active product. Matching is against listing titles, not a fixed brand list.
+  const candidates = [...new Set([message, productQuery])];
   let selected: string | null = null;
-  for (const candidate of [...new Set(candidates)]) {
+  for (const candidate of candidates) {
     const candidateQuery = isShortCatalogProductSelection(candidate) ? selectionPhrase(candidate) : candidate;
-    const hasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalize(candidateQuery));
     const matches = blocks.filter((block) => {
-      const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim() ?? "";
-      const searchableText = hasSpecificModel ? title : block;
-      return title && queryMatchesTitle(candidateQuery, searchableText);
+      const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim() ?? "";
+      return title && queryMatchesTitle(candidateQuery, title);
     });
     const unique = new Map<string, string>();
     for (const block of matches) {
-      const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+      const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
       if (title) unique.set(normalize(title), block);
     }
     if (unique.size === 1) {
       selected = [...unique.values()][0];
       break;
     }
-    const normalizedCandidate = normalize(candidate);
-    const candidateHasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalizedCandidate);
-    const namesBrandWithoutModel = /\b(ecoflow|bluetti|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo|izuki|xmx|huracan|ou?pes|anker|jackery)\b/.test(normalizedCandidate);
-    const startsNewCatalogSearch =      /\b(que tienes|que hay|que vendes|que venden|que ofrecen|catalogo|en venta|telefonos?|celulares?|estaciones? de energia|energia portatil|motocicletas?|motos?)\b/.test(normalizedCandidate) ||
-      (/\b(tienes|tienen|hay|venden|vendemos)\b/.test(normalizedCandidate) &&        /\b(ecoflow|bluetti|samsung|galaxy|redmi|iphone|izuki|xmx|huracan|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador)\b/.test(normalizedCandidate)) ||
-      (/\b(me interesa|estoy interesado|estoy interesada|quiero)\b/.test(normalizedCandidate) &&
-        /\b(telefono|celular|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador|ecoflow|bluetti)\b/.test(normalizedCandidate)) ||
-      isShortCatalogProductSelection(candidate);
-    if ((startsNewCatalogSearch || namesBrandWithoutModel) && !candidateHasSpecificModel) break;
+    // A named product matching multiple listings is ambiguous. Do not silently
+    // fall back to an older item from the conversation.
+    if (unique.size > 1) return null;
   }
   if (!selected) return null;
 
