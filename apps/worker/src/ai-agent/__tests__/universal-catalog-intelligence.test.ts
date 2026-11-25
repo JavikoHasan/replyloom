@@ -60,6 +60,13 @@ describe("universal catalog intelligence", () => {
     expect(reply).toContain("RAM: 4 GB");
   });
 
+  it("does not revive an older product after the customer starts a new catalog search", () => {
+    const context = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" }];
+    const thread = "[Previous messages]\nCustomer: Un A16\nAgent: El A16 aparece en catálogo\\nCustomer: ¿Qué tienes en venta?\\nAgent: Tenemos varios productos";
+    const reply = buildUniversalCatalogTechnicalReply("¿Qué propiedades tiene?", "¿Qué tienes en venta?", context, sync, now, thread);
+    expect(reply).toBeNull();
+  });
+
   it("answers an energy station from its published capacity and power fields", () => {
     const context = [{ text: "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh\nCategoría: Estaciones de energía\nPotencia: 1800W\nQuímica de batería: LiFePO4" }];
     const reply = buildUniversalCatalogTechnicalReply("¿Qué potencia y capacidad tiene?", "EcoFlow Delta 2", context, sync, now);
