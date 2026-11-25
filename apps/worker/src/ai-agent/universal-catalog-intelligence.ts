@@ -119,6 +119,8 @@ export function buildUniversalCatalogTechnicalReply(
       /\b(que tienes|que hay|que vendes|que venden|que ofrecen|catalogo|en venta|telefonos?|celulares?|estaciones? de energia|energia portatil|motocicletas?|motos?)\b/.test(normalizedCandidate) ||
       (/\b(tienes|tienen|hay|venden|vendemos)\b/.test(normalizedCandidate) &&
         /\b(ecoflow|bluetti|samsung|galaxy|redmi|iphone|izuki|xmx|huracan|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador)\b/.test(normalizedCandidate)) ||
+      (/\b(me interesa|estoy interesado|estoy interesada|quiero)\b/.test(normalizedCandidate) &&
+        /\b(telefono|celular|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador|ecoflow|bluetti)\b/.test(normalizedCandidate)) ||
       isShortCatalogProductSelection(candidate);
     if (startsNewCatalogSearch && !hasSpecificModel) break;
   }
