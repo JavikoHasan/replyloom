@@ -9,6 +9,7 @@ import { gatewayRunOptions, FALLBACK_GENERATOR } from "./gateway";
 import { executeTool, buildDefaultRegistry, listWorkspaceWebhookTools, workspaceToolToSchema } from "./tools";
 import { customerPhoneFromJid } from "./util";
 import { normalizeStoreCatalogQuery } from "./catalog-query-normalization";
+import { buildShortCatalogProductSelectionReply, buildUniversalCatalogTechnicalReply, isShortCatalogProductSelection, isUniversalCatalogTechnicalQuestion } from "./universal-catalog-intelligence";
 
 const registry = buildDefaultRegistry();
 const MAX_TURNS = 2; // generation loop depth, not conversation turns
@@ -126,17 +127,28 @@ export async function handleAgentMessage(
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
-  const asksTechnicalProductQuestion = /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(normalizeStoreCatalogQuery(message));
-  if (catalogOnlyBusiness && asksTechnicalProductQuestion && hasProductReference(contextualProductQuery)) {
+  const asksTechnicalProductQuestion = isUniversalCatalogTechnicalQuestion(message) || /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(normalizeStoreCatalogQuery(message));
+  if (catalogOnlyBusiness && asksTechnicalProductQuestion) {
     try {
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
       const technicalContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const technicalReply = buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
+      const universalTechnicalReply = buildUniversalCatalogTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
+      const technicalReply = universalTechnicalReply
+        ?? (hasProductReference(contextualProductQuery)
+          ? buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus)
+          : null);
       if (technicalReply) {
         return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
       }
+      return {
+        text: "No pude identificar una ficha única y verificable para responder esa pregunta. Dime el nombre o modelo exacto del producto y volveré a revisar el catálogo; prefiero no inventar especificaciones.",
+        usedTools: [],
+        usedContext: technicalContext,
+        blocked: false,
+        cached: false,
+      };
     } catch (error) {
       console.warn("[catalog-agent] deterministic-technical-error", { errorType: error instanceof Error ? error.name : typeof error });
       return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
@@ -274,7 +286,11 @@ export async function handleAgentMessage(
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
       const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const catalogLookupReply = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      const exactArticleSelection = isShortCatalogProductSelection(message) && hasProductReference(message)
+        ? buildShortCatalogProductSelectionReply(message, allCatalogChunks, syncStatus)
+        : null;
+      const catalogLookupReply = exactArticleSelection
+        ?? buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
       const zelleAwareReply = catalogLookupReply
         ? buildZelleTotalReply(catalogLookupReply, recentThread)
           ?? (asksZelleNow ? buildZelleTotalReply(catalogLookupReply, recentThread, true) : null)
@@ -299,6 +315,24 @@ export async function handleAgentMessage(
       console.warn("[catalog-agent] deterministic-catalog-lookup-error", {
         errorType: error instanceof Error ? error.name : typeof error,
       });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
+  // Any short article-led selection (for example, "la nevera" or "una bicicleta")
+  // is resolved against the live catalog, not against a hard-coded product list.
+  if (catalogOnlyBusiness && isShortCatalogProductSelection(message) && !isCatalogLookupQuestion(message)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const selectionContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const selectionReply = buildShortCatalogProductSelectionReply(message, selectionContext, syncStatus);
+      if (selectionReply) {
+        return { text: selectionReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
+      }
+    } catch (error) {
+      console.warn("[catalog-agent] deterministic-product-selection-error", { errorType: error instanceof Error ? error.name : typeof error });
       return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
     }
   }
@@ -765,13 +799,18 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
   // An explicit category or model in the current question is a context boundary,
   // even when the customer phrases it as a follow-up ("and the stations' delivery?").
-  if (isCatalogLookupQuestion(message) || hasProductReference(message) || /\b(telefono|telefonos|celular|celulares|estacion(?:es)?|energia|ecoflow|bluetti|delta\s*\d|river\s*\d|moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/i.test(normalizeStoreCatalogQuery(message))) return message;
+  const normalizedCurrent = normalizeStoreCatalogQuery(message);
+  const isTechnicalFollowUp = isUniversalCatalogTechnicalQuestion(message);
+  const namesDifferentProductCategory = /\b(nevera|refrigerador|refrigeradora|aire acondicionado|lavadora|televisor|laptop|computadora|tablet|bicicleta|generador|herramienta|electrodomestico)\b/i.test(normalizedCurrent);
+  const namesKnownCategoryOutsideTechnicalFollowUp =
+    !isTechnicalFollowUp && /\b(telefono|telefonos|celular|celulares|estacion(?:es)?|energia|ecoflow|bluetti|delta\s*\d|river\s*\d|moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/i.test(normalizedCurrent);
+  if (isCatalogLookupQuestion(message) || hasProductReference(message) || namesDifferentProductCategory || namesKnownCategoryOutsideTechnicalFollowUp) return message;
   if (!conversationThread) return message;
   const customerMessages = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]);
   for (const previous of customerMessages.reverse()) {
     // A newer category/catalog lookup is a context boundary too. Do not skip
     // it and accidentally revive an older phone model from earlier in the chat.
-    if (isCatalogLookupQuestion(previous) || hasProductReference(previous)) return previous;
+    if (isCatalogLookupQuestion(previous) || hasProductReference(previous) || isShortCatalogProductSelection(previous)) return previous;
   }
   return message;
 }
