@@ -799,7 +799,12 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
   // An explicit category or model in the current question is a context boundary,
   // even when the customer phrases it as a follow-up ("and the stations' delivery?").
-  if (isCatalogLookupQuestion(message) || hasProductReference(message) || /\b(telefono|telefonos|celular|celulares|estacion(?:es)?|energia|ecoflow|bluetti|delta\s*\d|river\s*\d|moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/i.test(normalizeStoreCatalogQuery(message))) return message;
+  const normalizedCurrent = normalizeStoreCatalogQuery(message);
+  const isTechnicalFollowUp = isUniversalCatalogTechnicalQuestion(message);
+  const namesDifferentProductCategory = /\b(nevera|refrigerador|refrigeradora|aire acondicionado|lavadora|televisor|laptop|computadora|tablet|bicicleta|generador|herramienta|electrodomestico)\b/i.test(normalizedCurrent);
+  const namesKnownCategoryOutsideTechnicalFollowUp =
+    !isTechnicalFollowUp && /\b(telefono|telefonos|celular|celulares|estacion(?:es)?|energia|ecoflow|bluetti|delta\s*\d|river\s*\d|moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/i.test(normalizedCurrent);
+  if (isCatalogLookupQuestion(message) || hasProductReference(message) || namesDifferentProductCategory || namesKnownCategoryOutsideTechnicalFollowUp) return message;
   if (!conversationThread) return message;
   const customerMessages = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]);
   for (const previous of customerMessages.reverse()) {
