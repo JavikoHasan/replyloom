@@ -91,6 +91,14 @@ describe("universal catalog intelligence", () => {
     expect(reply).toContain("LiFePO4");
   });
 
+  it("answers apparel questions from published size, material and color fields", () => {
+    const context = [{ text: "PRODUCTO: CAMISETA ALGODÓN\nCategoría: Ropa\nTalla: M\nMaterial: 100% algodón\nColor: Negro" }];
+    const reply = buildUniversalCatalogTechnicalReply("¿Qué talla y material tiene la camiseta?", "¿Qué talla y material tiene la camiseta?", context, sync, now);
+    expect(reply).toContain("Talla: M");
+    expect(reply).toContain("Material: 100% algodón");
+    expect(reply).toContain("Color: Negro");
+  });
+
   it("answers a motorcycle from its published displacement without inventing other specs", () => {
     const context = [{ text: "PRODUCTO: XMX 250cc\nCategoría: Motocicletas\nPrecio publicado: 3000 USD" }];
     const reply = buildUniversalCatalogTechnicalReply("¿Qué cilindrada tiene?", "XMX 250cc", context, sync, now);
