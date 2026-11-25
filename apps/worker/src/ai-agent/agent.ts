@@ -146,6 +146,16 @@ export async function handleAgentMessage(
         });
         return { text: selectionReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
       }
+      // The model selection is still legitimate when the catalog sync is
+      // stale or unavailable; explain the verification limitation instead
+      // of allowing a false privacy classification to reject the customer.
+      return {
+        text: "He identificado el modelo que mencionas, pero ahora mismo no puedo verificar una ficha de catálogo suficientemente actualizada. Para evitar darte un precio o una disponibilidad incorrectos, el vendedor puede confirmártelo directamente por WhatsApp: https://wa.me/5354590237.",
+        usedTools: [],
+        usedContext: selectionContext,
+        blocked: false,
+        cached: false,
+      };
     } catch (error) {
       console.warn("[catalog-agent] pre-classifier-product-selection-error", {
         errorType: error instanceof Error ? error.name : typeof error,
