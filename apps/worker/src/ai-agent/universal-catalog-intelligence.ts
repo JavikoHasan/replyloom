@@ -1,6 +1,7 @@
 /**
  * Product-agnostic technical answering for the Cell Phone Store catalog.
  * Listing text is the source of truth; no model/category-specific implementation is required.
+ * This module is part of the isolated Cell Phone Store WhatsApp Worker release.
  */
 type CatalogChunk = { text: string };
 type SyncStatus = { stage?: string; updatedAt?: string } | null;
