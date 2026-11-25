@@ -103,7 +103,7 @@ export function buildUniversalCatalogTechnicalReply(
       const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim() ?? "";
       const category = block.match(/^Categor[ií]a:\s*(.+)$/im)?.[1]?.trim() ?? "";
       const description = block.match(/^Descripción y características publicadas:\s*(.+)$/im)?.[1]?.trim() ?? "";
-      const searchableText = hasSpecificModel ? title : title + " " + category + " " + description;
+      const searchableText = hasSpecificModel ? title : block;
       return title && queryMatchesTitle(candidateQuery, searchableText);
     });
     const unique = new Map<string, string>();
