@@ -86,6 +86,7 @@ export function buildUniversalCatalogTechnicalReply(
   context: CatalogChunk[],
   syncStatus: SyncStatus,
   now = Date.now(),
+  conversationThread = "",
 ): string | null {
   if (!isUniversalCatalogTechnicalQuestion(message)) return null;
   if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
@@ -93,18 +94,30 @@ export function buildUniversalCatalogTechnicalReply(
   const age = now - syncedAt;
   if (!Number.isFinite(syncedAt) || age < -5 * 60_000 || age > 7 * 60 * 60_000) return null;
 
-  const matches = productBlocks(context).filter((block) => {
-    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim() ?? "";
-    return title && queryMatchesTitle(productQuery, title);
-  });
-  const unique = new Map<string, string>();
-  for (const block of matches) {
-    const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
-    if (title) unique.set(normalize(title), block);
+  const blocks = productBlocks(context);
+  const candidates = [
+    productQuery,
+    ...[...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]).reverse(),
+  ];
+  let selected: string | null = null;
+  for (const candidate of [...new Set(candidates)]) {
+    const matches = blocks.filter((block) => {
+      const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim() ?? "";
+      return title && queryMatchesTitle(candidate, title);
+    });
+    const unique = new Map<string, string>();
+    for (const block of matches) {
+      const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
+      if (title) unique.set(normalize(title), block);
+    }
+    if (unique.size === 1) {
+      selected = [...unique.values()][0];
+      break;
+    }
   }
-  if (unique.size !== 1) return null;
+  if (!selected) return null;
 
-  const block = [...unique.values()][0];
+  const block = selected;
   const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
   if (!title) return null;
   const facts = extractTechnicalFacts(block);
