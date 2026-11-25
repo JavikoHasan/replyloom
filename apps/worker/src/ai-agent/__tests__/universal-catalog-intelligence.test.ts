@@ -35,11 +35,11 @@ describe("universal catalog intelligence", () => {
     expect(reply).toContain("existencia física debe confirmarse");
   });
 
-  it("resolves a generic new product selection against its own catalog title", () => {
-    const context = [{ text: "PRODUCTO: NEVERA MIDEA 7 PIES\nCategoría: Hogar\nPrecio publicado: 450 USD\nDisponibilidad publicada: Disponible" }];
-    const reply = buildShortCatalogProductSelectionReply("Me interesa una nevera", context, sync, now);
-    expect(reply).toContain("NEVERA MIDEA 7 PIES");
-    expect(reply).toContain("450 USD");
+  it("resolves a short selection for a real non-phone listing from its own catalog title", () => {
+    const context = [{ text: "PRODUCTO: BLUETTI ELITE 100 V2 – ESTACIÓN DE ENERGÍA PORTÁTIL DE 1024Wh / 1800W\\nCategoría: Energía\\nPrecio publicado: 600 USD\\nDisponibilidad publicada: Disponible" }];
+    const reply = buildShortCatalogProductSelectionReply("Una Bluetti", context, sync, now);
+    expect(reply).toContain("BLUETTI ELITE 100 V2");
+    expect(reply).toContain("600 USD");
   });
 
   it("asks the customer to distinguish multiple products matching a broad brand selection", () => {
@@ -130,7 +130,7 @@ describe("universal catalog intelligence", () => {
       now,
     );
     expect(reply).toContain("SAMSUNG GALAXY A16");
-    expect(reply).not.toContain("MIDEA");
+    expect(reply).not.toContain("BLUETTI");
   });
 
   it("answers an energy station from its published capacity and power fields", () => {
