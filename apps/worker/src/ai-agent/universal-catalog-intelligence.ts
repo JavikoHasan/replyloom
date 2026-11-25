@@ -1,9 +1,6 @@
 /**
  * Product-agnostic technical answering for the Cell Phone Store catalog.
- *
- * The public listing is the source of truth. This module deliberately does not
- * know phone models, motorcycle brands, or energy-station brands: new products
- * can be answered from their own listing text without adding model-specific code.
+ * Listing text is the source of truth; no model/category-specific implementation is required.
  */
 type CatalogChunk = { text: string };
 type SyncStatus = { stage?: string; updatedAt?: string } | null;
@@ -29,32 +26,34 @@ function queryMatchesTitle(query: string, title: string): boolean {
   const q = normalize(query);
   const t = normalize(title);
   const ids = [...q.matchAll(/\b([a-z]{1,10}\s*\d{1,5}[a-z0-9]*|\d{1,4}[a-z]{1,5})\b/g)]
-    .map((m) => m[1].trim());
+    .map((match) => match[1].trim());
   if (ids.length) {
-    return ids.some((id) => new RegExp("(^|[^a-z0-9])" + id.replace(/\s+/g, "\\s*") + "([^a-z0-9]|$)").test(t));
+    return ids.some((id) =>
+      new RegExp("(^|[^a-z0-9])" + id.replace(/\s+/g, "\\s*") + "([^a-z0-9]|$)").test(t)
+    );
   }
   const tokens = q.split(/[^a-z0-9]+/).filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
   if (!tokens.length) return false;
   const matched = tokens.filter((word) => t.includes(word));
-  // One distinctive name (e.g. OUPES) is acceptable; otherwise require
-  // at least two matching words to avoid confusing similar catalog items.
   return matched.length >= 2 || (tokens.length === 1 && tokens[0].length >= 5 && matched.length === 1);
 }
 
 function extractTechnicalFacts(block: string): string[] {
   const facts: string[] = [];
-  const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1] ?? "";
-  for (const [pattern, label] of [
-    [/\\b(\\d+)\\s*GB\\s*RAM\\b/i, "RAM"],
-    [/\\b(\\d+)\\s*GB\\s*ROM\\b/i, "Almacenamiento"],
-    [/\\b(\\d+(?:[.,]\\d+)?)\\s*(kWh|Wh)\\b/i, "Capacidad"],
-    [/\\b(\\d+(?:[.,]\\d+)?)\\s*(kW|W)\\b/i, "Potencia"],
-    [/\\b(\\d{2,4})\\s*cc\\b/i, "Cilindrada"],
-    [/\\b(4G|5G)\\b/i, "Red móvil"],
-  ] as Array<[RegExp, string]>) {
+  const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1] ?? "";
+  const titlePatterns: Array<[RegExp, string]> = [
+    [/\b(\d+)\s*GB\s*RAM\b/i, "RAM"],
+    [/\b(\d+)\s*GB\s*ROM\b/i, "Almacenamiento"],
+    [/\b(\d+(?:[.,]\d+)?)\s*(kWh|Wh)\b/i, "Capacidad"],
+    [/\b(\d+(?:[.,]\d+)?)\s*(kW|W)\b/i, "Potencia"],
+    [/\b(\d{2,4})\s*cc\b/i, "Cilindrada"],
+    [/\b(4G|5G)\b/i, "Red móvil"],
+  ];
+  for (const [pattern, label] of titlePatterns) {
     const match = title.match(pattern);
     if (match) facts.push(label + ": " + match[1] + (match[2] ? " " + match[2] : ""));
   }
+
   const ignored = /^(producto|categoria|precio publicado|condicion|disponibilidad publicada|vigencia de la publicacion hasta|entrega publicada|ficha publica|nota|contacto|whatsapp):/i;
   const allowedLabel = /^(?:capacidad(?: de bateria| de energia)?|potencia(?: de salida)?|salida nominal|entrada solar|quimica(?: de bateria)?|tipo de bateria|capacidad ampliable|expansion maxima|ampliacion|voltaje|motor|cilindrada|transmision|frenos|suspension|velocidad maxima|combustible|ram|rom|memoria|almacenamiento|pantalla|camara|bateria|conectividad|redes? moviles?|tecnologia de red|procesador|sistema operativo|material|dimensiones|peso|color|autonomia|resolucion|frecuencia|puertos?|conexiones?):/i;
   for (const rawLine of block.split(/\r?\n/)) {
