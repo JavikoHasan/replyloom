@@ -12,6 +12,7 @@ const TYPO_ALIASES: Record<string, string> = {
   aseptan: "aceptan",
   aseptas: "aceptas",
   efectibo: "efectivo",
+  isuki: "izuki",
 };
 
 const VOCABULARY = [
@@ -20,6 +21,7 @@ const VOCABULARY = [
   "smartphones", "estacion", "estaciones", "energia", "producto", "productos", "equipo", "equipos", "catalogo",
   "cable", "cables", "cargador", "cargadores", "adaptador", "adaptadores", "mica", "micas", "cover", "covers", "funda", "fundas",
   "separado", "sueltos", "sueltas", "oupes", "ecoflow", "bluetti",
+  "moto", "motos", "motocicleta", "motocicletas", "izuki", "huracan", "xmx", "caracteristicas", "propiedades", "especificaciones",
   "anker", "jackery", "allpowers", "goal", "zero",
   "aceptan", "aceptas", "aceptamos", "pago", "pagos", "pagar", "pagarte",
   "transferencia", "transferencias", "transferir", "efectivo", "dolar", "dolares",
