@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildShortCatalogProductSelectionReply,
+  isShortCatalogProductSelection,
   buildUniversalCatalogTechnicalReply,
   isUniversalCatalogTechnicalQuestion,
 } from "../universal-catalog-intelligence";
@@ -8,6 +10,29 @@ const sync = { stage: "completed", updatedAt: "2026-11-25T14:00:00.000Z" };
 const now = Date.parse("2026-11-25T14:10:00.000Z");
 
 describe("universal catalog intelligence", () => {
+  it("recognizes short natural selections without hard-coding product models", () => {
+    expect(isShortCatalogProductSelection("La nevera")).toBe(true);
+    expect(isShortCatalogProductSelection("Una bicicleta eléctrica")).toBe(true);
+    expect(isShortCatalogProductSelection("Un momento")).toBe(false);
+  });
+
+  it("resolves a generic new product selection against its own catalog title", () => {
+    const context = [{ text: "PRODUCTO: NEVERA MIDEA 7 PIES\\nCategoría: Hogar\\nPrecio publicado: 450 USD\\nDisponibilidad publicada: Disponible" }];
+    const reply = buildShortCatalogProductSelectionReply("La nevera", context, sync, now);
+    expect(reply).toContain("NEVERA MIDEA 7 PIES");
+    expect(reply).toContain("450 USD");
+  });
+
+  it("asks the customer to distinguish multiple products matching a broad brand selection", () => {
+    const context = [
+      { text: "PRODUCTO: ECOFLOW DELTA 2\\nPrecio publicado: 800 USD" },
+      { text: "PRODUCTO: ECOFLOW RIVER 2 PRO\\nPrecio publicado: 630 USD" },
+    ];
+    const reply = buildShortCatalogProductSelectionReply("La EcoFlow", context, sync, now);
+    expect(reply).toContain("Encontré varios anuncios");
+    expect(reply).toContain("¿Cuál de ellos te interesa?");
+  });
+
   it("recognizes technical questions without restricting them to phones", () => {
     for (const q of [
       "¿Qué propiedades tiene?",
