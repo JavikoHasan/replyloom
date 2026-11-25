@@ -17,7 +17,7 @@ describe("universal catalog intelligence", () => {
   });
 
   it("resolves a generic new product selection against its own catalog title", () => {
-    const context = [{ text: "PRODUCTO: NEVERA MIDEA 7 PIES\\nCategoría: Hogar\\nPrecio publicado: 450 USD\\nDisponibilidad publicada: Disponible" }];
+    const context = [{ text: "PRODUCTO: NEVERA MIDEA 7 PIES\nCategoría: Hogar\nPrecio publicado: 450 USD\nDisponibilidad publicada: Disponible" }];
     const reply = buildShortCatalogProductSelectionReply("La nevera", context, sync, now);
     expect(reply).toContain("NEVERA MIDEA 7 PIES");
     expect(reply).toContain("450 USD");
@@ -25,8 +25,8 @@ describe("universal catalog intelligence", () => {
 
   it("asks the customer to distinguish multiple products matching a broad brand selection", () => {
     const context = [
-      { text: "PRODUCTO: ECOFLOW DELTA 2\\nPrecio publicado: 800 USD" },
-      { text: "PRODUCTO: ECOFLOW RIVER 2 PRO\\nPrecio publicado: 630 USD" },
+      { text: "PRODUCTO: ECOFLOW DELTA 2\nPrecio publicado: 800 USD" },
+      { text: "PRODUCTO: ECOFLOW RIVER 2 PRO\nPrecio publicado: 630 USD" },
     ];
     const reply = buildShortCatalogProductSelectionReply("La EcoFlow", context, sync, now);
     expect(reply).toContain("Encontré varios anuncios");
@@ -54,7 +54,7 @@ describe("universal catalog intelligence", () => {
 
   it("recovers a product named earlier in the conversation when the current question is elliptical", () => {
     const context = [{ text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" }];
-    const thread = "[Previous messages]\nCustomer: Me interesa un teléfono\nAgent: Tenemos varias opciones\\nCustomer: Un A16\\nAgent: El A16 aparece en catálogo";
+    const thread = "[Previous messages]\nCustomer: Me interesa un teléfono\nAgent: Tenemos varias opciones\nCustomer: Un A16\nAgent: El A16 aparece en catálogo";
     const reply = buildUniversalCatalogTechnicalReply("¿Qué propiedades tiene?", "¿Qué propiedades tiene?", context, sync, now, thread);
     expect(reply).toContain("SAMSUNG GALAXY A16");
     expect(reply).toContain("RAM: 4 GB");
