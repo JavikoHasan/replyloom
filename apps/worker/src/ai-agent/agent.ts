@@ -9,7 +9,7 @@ import { gatewayRunOptions, FALLBACK_GENERATOR } from "./gateway";
 import { executeTool, buildDefaultRegistry, listWorkspaceWebhookTools, workspaceToolToSchema } from "./tools";
 import { customerPhoneFromJid } from "./util";
 import { normalizeStoreCatalogQuery } from "./catalog-query-normalization";
-import { buildUniversalCatalogTechnicalReply, isUniversalCatalogTechnicalQuestion } from "./universal-catalog-intelligence";
+import { buildShortCatalogProductSelectionReply, buildUniversalCatalogTechnicalReply, isShortCatalogProductSelection, isUniversalCatalogTechnicalQuestion } from "./universal-catalog-intelligence";
 
 const registry = buildDefaultRegistry();
 const MAX_TURNS = 2; // generation loop depth, not conversation turns
@@ -304,6 +304,24 @@ export async function handleAgentMessage(
       console.warn("[catalog-agent] deterministic-catalog-lookup-error", {
         errorType: error instanceof Error ? error.name : typeof error,
       });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
+  // Any short article-led selection (for example, "la nevera" or "una bicicleta")
+  // is resolved against the live catalog, not against a hard-coded product list.
+  if (catalogOnlyBusiness && isShortCatalogProductSelection(message) && !isCatalogLookupQuestion(message)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const selectionContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const selectionReply = buildShortCatalogProductSelectionReply(message, selectionContext, syncStatus);
+      if (selectionReply) {
+        return { text: selectionReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
+      }
+    } catch (error) {
+      console.warn("[catalog-agent] deterministic-product-selection-error", { errorType: error instanceof Error ? error.name : typeof error });
       return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
     }
   }
