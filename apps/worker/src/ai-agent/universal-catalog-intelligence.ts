@@ -86,7 +86,6 @@ export function buildUniversalCatalogTechnicalReply(
   context: CatalogChunk[],
   syncStatus: SyncStatus,
   now = Date.now(),
-  conversationThread = "",
 ): string | null {
   if (!isUniversalCatalogTechnicalQuestion(message)) return null;
   if (syncStatus?.stage !== "completed" || !syncStatus.updatedAt) return null;
@@ -95,9 +94,7 @@ export function buildUniversalCatalogTechnicalReply(
   if (!Number.isFinite(syncedAt) || age < -5 * 60_000 || age > 7 * 60 * 60_000) return null;
 
   const blocks = productBlocks(context);
-  const threadCustomers = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)]
-    .map((match) => match[1]).reverse();
-  const candidates = [productQuery, ...threadCustomers];
+  const candidates = [productQuery];
   let selected: string | null = null;
   for (const candidate of [...new Set(candidates)]) {
     const candidateQuery = isShortCatalogProductSelection(candidate) ? selectionPhrase(candidate) : candidate;
