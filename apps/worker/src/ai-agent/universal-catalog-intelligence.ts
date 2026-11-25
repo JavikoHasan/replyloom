@@ -100,9 +100,14 @@ export function buildUniversalCatalogTechnicalReply(
   const candidates = [productQuery, ...threadCustomers];
   let selected: string | null = null;
   for (const candidate of [...new Set(candidates)]) {
+    const candidateQuery = isShortCatalogProductSelection(candidate) ? selectionPhrase(candidate) : candidate;
+    const hasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalize(candidateQuery));
     const matches = blocks.filter((block) => {
       const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim() ?? "";
-      return title && queryMatchesTitle(candidate, title);
+      const category = block.match(/^Categor[ií]a:\s*(.+)$/im)?.[1]?.trim() ?? "";
+      const description = block.match(/^Descripción y características publicadas:\s*(.+)$/im)?.[1]?.trim() ?? "";
+      const searchableText = hasSpecificModel ? title : title + " " + category + " " + description;
+      return title && queryMatchesTitle(candidateQuery, searchableText);
     });
     const unique = new Map<string, string>();
     for (const block of matches) {
