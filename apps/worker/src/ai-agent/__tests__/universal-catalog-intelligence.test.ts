@@ -100,6 +100,39 @@ describe("universal catalog intelligence", () => {
     expect(reply).toBeNull();
   });
 
+  it("switches to a newly named catalog product even when its brand was never hard-coded", () => {
+    const context = [
+      { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
+      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\\nCategoría: Equipos\\nPotencia: 3000W" },
+    ];
+    const reply = buildUniversalCatalogTechnicalReply(
+      "¿Qué potencia tiene la Midea?",
+      "Un A16",
+      context,
+      sync,
+      now,
+    );
+    expect(reply).toContain("MIDEA GENERADOR INVERTER 3000W");
+    expect(reply).toContain("3000W");
+    expect(reply).not.toContain("SAMSUNG GALAXY A16");
+  });
+
+  it("keeps the active product for a technical follow-up that does not repeat its name", () => {
+    const context = [
+      { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
+      { text: "PRODUCTO: MIDEA GENERADOR INVERTER 3000W\\nPotencia: 3000W" },
+    ];
+    const reply = buildUniversalCatalogTechnicalReply(
+      "¿Qué potencia tiene?",
+      "Un A16",
+      context,
+      sync,
+      now,
+    );
+    expect(reply).toContain("SAMSUNG GALAXY A16");
+    expect(reply).not.toContain("MIDEA");
+  });
+
   it("answers an energy station from its published capacity and power fields", () => {
     const context = [{ text: "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh\nCategoría: Estaciones de energía\nPotencia: 1800W\nQuímica de batería: LiFePO4" }];
     const reply = buildUniversalCatalogTechnicalReply("¿Qué potencia y capacidad tiene?", "EcoFlow Delta 2", context, sync, now);
