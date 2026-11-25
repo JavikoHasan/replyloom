@@ -56,6 +56,7 @@ describe("store phone bundle intent", () => {
 describe("store motorcycle support intent", () => {
   it("allows commercial inventory, delivery and warranty questions about listed motorcycles", () => {
     expect(isMotorcycleStoreQuestion("¿Tienes motos?")).toBe(true);
+    expect(isMotorcycleStoreQuestion("Características de la moto isuki")).toBe(true);
     expect(isMotorcycleStoreQuestion("¿Cómo es el servicio de entrega y garantía de las motos?")).toBe(true);
     expect(isMotorcycleStoreQuestion("¿Cómo puedo encargar una IZUKI HURACAN?")).toBe(true);
   });
