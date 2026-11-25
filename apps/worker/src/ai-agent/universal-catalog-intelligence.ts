@@ -2,6 +2,7 @@
  * Product-agnostic technical answering for the Cell Phone Store catalog.
  * Listing text is the source of truth; no model/category-specific implementation is required.
  * This module is part of the isolated Cell Phone Store WhatsApp Worker release.
+ * Deployment refresh: restore complete validated catalog selection guard.
  */
 type CatalogChunk = { text: string };
 type SyncStatus = { stage?: string; updatedAt?: string } | null;
@@ -57,8 +58,7 @@ function extractTechnicalFacts(block: string): string[] {
 
   const ignored = /^(producto|categoria|precio publicado|condicion|disponibilidad publicada|vigencia de la publicacion hasta|entrega publicada|ficha publica|nota|contacto|whatsapp):/i;
   const allowedLabel = /^(?:capacidad(?: de bateria| de energia)?|potencia(?: de salida)?|salida nominal|entrada solar|quimica(?: de bateria)?|tipo de bateria|capacidad ampliable|expansion maxima|ampliacion|voltaje|motor|cilindrada|transmision|frenos|suspension|velocidad maxima|combustible|ram|rom|memoria|almacenamiento|pantalla|camara|bateria|conectividad|redes? moviles?|tecnologia de red|procesador|sistema operativo|material|dimensiones|peso|color|talla|tejido|composicion|longitud|ancho|alto|profundidad|compatibilidad|impermeabilidad|resistencia|presion|temperatura|autonomia|resolucion|frecuencia|puertos?|conexiones?):/i;
-  for (const rawLine of block.split(/\r?\n/)) {    const line = rawLine.trim().replace(/^[-•*]\s*/, "");
-    if (!line || ignored.test(line) || !allowedLabel.test(normalize(line))) continue;
+  for (const rawLine of block.split(/\r?\n/)) {    const line = rawLine.trim().replace(/^[-•*]\s*/, "");    if (!line || ignored.test(line) || !allowedLabel.test(normalize(line))) continue;
     if (line.length <= 180 && !/https?:\/\/|\b\d{10,}\b|ignore|ignora|instruccion|system prompt/i.test(line)) {
       facts.push(line);
     }
@@ -117,8 +117,7 @@ export function buildUniversalCatalogTechnicalReply(
     const candidateHasSpecificModel = /\b[a-z]{1,8}\s*\d{1,5}[a-z0-9]*\b/.test(normalizedCandidate);
     const namesBrandWithoutModel = /\b(ecoflow|bluetti|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo|izuki|xmx|huracan|ou?pes|anker|jackery)\b/.test(normalizedCandidate);
     const startsNewCatalogSearch =      /\b(que tienes|que hay|que vendes|que venden|que ofrecen|catalogo|en venta|telefonos?|celulares?|estaciones? de energia|energia portatil|motocicletas?|motos?)\b/.test(normalizedCandidate) ||
-      (/\b(tienes|tienen|hay|venden|vendemos)\b/.test(normalizedCandidate) &&
-        /\b(ecoflow|bluetti|samsung|galaxy|redmi|iphone|izuki|xmx|huracan|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador)\b/.test(normalizedCandidate)) ||
+      (/\b(tienes|tienen|hay|venden|vendemos)\b/.test(normalizedCandidate) &&        /\b(ecoflow|bluetti|samsung|galaxy|redmi|iphone|izuki|xmx|huracan|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador)\b/.test(normalizedCandidate)) ||
       (/\b(me interesa|estoy interesado|estoy interesada|quiero)\b/.test(normalizedCandidate) &&
         /\b(telefono|celular|estacion|energia|moto|motocicleta|nevera|refrigerador|aire acondicionado|lavadora|televisor|laptop|computadora|bicicleta|generador|ecoflow|bluetti)\b/.test(normalizedCandidate)) ||
       isShortCatalogProductSelection(candidate);
@@ -177,7 +176,6 @@ export function isShortCatalogProductSelection(message: string): boolean {
   return words.length >= 1 && words.length <= 4 &&
     !words.some((word) => NON_PRODUCT_SELECTIONS.has(word)) &&    (hasSelectionLead || isStandaloneModel);
 }
-
 export function buildShortCatalogProductSelectionReply(
   message: string,
   context: CatalogChunk[],
