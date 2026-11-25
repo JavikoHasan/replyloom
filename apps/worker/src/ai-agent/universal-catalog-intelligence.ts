@@ -150,12 +150,21 @@ export function buildUniversalCatalogTechnicalReply(
 
 const NON_PRODUCT_SELECTIONS = new Set(["momento", "pregunta", "segundo", "segundos", "favor", "rato", "poco", "minuto", "minutos"]);
 
+function selectionPhrase(message: string): string {
+  return normalize(message)
+    .replace(/[¿?¡!.,;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:me interesa(?:ria)?|estoy interesado en|estoy interesada en|quiero|quisiera|me gustaria|me quedo con|me llevo|me gusta)\s+/, "")
+    .replace(/^(?:un|una|el|la|ese|esa|este|esta)\s+/, "")
+    .trim();
+}
+
 export function isShortCatalogProductSelection(message: string): boolean {
-  const normalized = normalize(message).replace(/[¿?¡!.,;:]+/g, " ").replace(/\s+/g, " ").trim();
-  const match = normalized.match(/^(?:un|una|el|la|ese|esa|este|esta)\s+(.+)$/);
-  if (!match) return false;
-  const words = match[1].split(" ").filter(Boolean);
-  return words.length >= 1 && words.length <= 4 && !words.some((word) => NON_PRODUCT_SELECTIONS.has(word));
+  const phrase = selectionPhrase(message);
+  const words = phrase.split(" ").filter(Boolean);
+  return words.length >= 1 && words.length <= 4 &&
+    !words.some((word) => NON_PRODUCT_SELECTIONS.has(word));
 }
 
 export function buildShortCatalogProductSelectionReply(
@@ -170,14 +179,22 @@ export function buildShortCatalogProductSelectionReply(
   const age = now - syncedAt;
   if (!Number.isFinite(syncedAt) || age < -5 * 60_000 || age > 7 * 60 * 60_000) return null;
 
-  const normalized = normalize(message).replace(/^(?:un|una|el|la|ese|esa|este|esta)\s+/, "").replace(/[¿?¡!.,;:]+/g, " ").trim();
+  const normalized = selectionPhrase(message);
   const terms = normalized.split(/\s+/).filter((term) => term.length >= 2);
   const matches = new Map<string, { title: string; price: string; availability: string }>();
   for (const block of productBlocks(context)) {
     const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
     if (!title) continue;
-    const titleTokens = normalize(title).split(/[^a-z0-9]+/).filter(Boolean);
-    const allTermsMatch = terms.every((term) => titleTokens.includes(term));
+    const category = block.match(/^Categor[ií]a:\s*(.+)$/im)?.[1]?.trim() ?? "";
+    const description = block.match(/^Descripción y características publicadas:\s*(.+)$/im)?.[1]?.trim() ?? "";
+    const listingTokens = normalize(title + " " + category + " " + description).split(/[^a-z0-9]+/).filter(Boolean);
+    const allTermsMatch = terms.every((term) => {
+      if (listingTokens.includes(term)) return true;
+      if (term === "moto") return listingTokens.some((token) => token.startsWith("motociclet"));
+      if (term === "telefono" || term === "celular") return listingTokens.some((token) => token === "telefonia" || token === "smartphone" || token === "smartphones");
+      if (term === "nevera") return listingTokens.includes("refrigerador") || listingTokens.includes("refrigeradora");
+      return false;
+    });
     if (!allTermsMatch) continue;
     const key = normalize(title);
     matches.set(key, {
