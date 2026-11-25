@@ -126,6 +126,25 @@ export async function handleAgentMessage(
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
+  const asksTechnicalProductQuestion = /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(normalizeStoreCatalogQuery(message));
+  if (catalogOnlyBusiness && asksTechnicalProductQuestion && hasProductReference(contextualProductQuery)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const technicalContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const technicalReply = buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
+      if (technicalReply) {
+        return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
+      }
+    } catch (error) {
+      console.warn("[catalog-agent] deterministic-technical-error", { errorType: error instanceof Error ? error.name : typeof error });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
+
+
   // Resolve short product-policy follow-ups before the generic intent classifier.
   if (catalogOnlyBusiness) {
     const phoneBundleReply = buildPhoneBundleReply(message, [], contextualProductQuery);
