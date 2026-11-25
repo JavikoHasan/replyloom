@@ -169,13 +169,13 @@ function selectionPhrase(message: string): string {
 }
 
 export function isShortCatalogProductSelection(message: string): boolean {
-  const normalized = normalize(message).replace(/[¿?¡!.,;:]+/g, " ").replace(/\\s+/g, " ").trim();
+  const normalized = normalize(message).replace(/[¿?¡!.,;:]+/g, " ").replace(/\s+/g, " ").trim();
   const phrase = selectionPhrase(message);
   const words = phrase.split(" ").filter(Boolean);
   const hasSelectionLead =
-    /^(?:me interesa(?:ria)?|estoy interesado en|estoy interesada en|quiero|quisiera|me gustaria|me quedo con|me llevo|me gusta|un|una|el|la|los|las|ese|esa|este|esta)\\s+/.test(normalized);
+    /^(?:me interesa(?:ria)?|estoy interesado en|estoy interesada en|quiero|quisiera|me gustaria|me quedo con|me llevo|me gusta|un|una|el|la|los|las|ese|esa|este|esta)\s+/.test(normalized);
   const isStandaloneModel =
-    /^(?:[a-z][a-z0-9-]*\\s+){0,3}[a-z]{1,8}\\s*\\d{1,5}[a-z0-9]*$/.test(normalized);
+    /^(?:[a-z][a-z0-9-]*\s+){0,3}[a-z]{1,8}\s*\d{1,5}[a-z0-9]*$/.test(normalized);
   return words.length >= 1 && words.length <= 4 &&
     !words.some((word) => NON_PRODUCT_SELECTIONS.has(word)) &&
     (hasSelectionLead || isStandaloneModel);
