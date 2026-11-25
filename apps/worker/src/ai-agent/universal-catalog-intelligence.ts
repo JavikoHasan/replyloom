@@ -106,12 +106,12 @@ export function buildUniversalCatalogTechnicalReply(
   for (const candidate of candidates) {
     const candidateQuery = isShortCatalogProductSelection(candidate) ? selectionPhrase(candidate) : candidate;
     const matches = blocks.filter((block) => {
-      const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim() ?? "";
+      const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim() ?? "";
       return title && queryMatchesTitle(candidateQuery, title);
     });
     const unique = new Map<string, string>();
     for (const block of matches) {
-      const title = block.match(/^PRODUCTO:\\s*(.+)$/im)?.[1]?.trim();
+      const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
       if (title) unique.set(normalize(title), block);
     }
     if (unique.size === 1) {
