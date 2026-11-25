@@ -9,7 +9,7 @@ import { gatewayRunOptions, FALLBACK_GENERATOR } from "./gateway";
 import { executeTool, buildDefaultRegistry, listWorkspaceWebhookTools, workspaceToolToSchema } from "./tools";
 import { customerPhoneFromJid } from "./util";
 import { normalizeStoreCatalogQuery } from "./catalog-query-normalization";
-import { buildUniversalCatalogTechnicalReply } from "./universal-catalog-intelligence";
+import { buildUniversalCatalogTechnicalReply, isUniversalCatalogTechnicalQuestion } from "./universal-catalog-intelligence";
 
 const registry = buildDefaultRegistry();
 const MAX_TURNS = 2; // generation loop depth, not conversation turns
@@ -127,15 +127,18 @@ export async function handleAgentMessage(
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
 
-  const asksTechnicalProductQuestion = /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(normalizeStoreCatalogQuery(message));
-  if (catalogOnlyBusiness && asksTechnicalProductQuestion && hasProductReference(contextualProductQuery)) {
+  const asksTechnicalProductQuestion = isUniversalCatalogTechnicalQuestion(message) || /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(normalizeStoreCatalogQuery(message));
+  if (catalogOnlyBusiness && asksTechnicalProductQuestion) {
     try {
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
         .catch(() => null);
       const technicalContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const technicalReply = buildUniversalCatalogTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus)
-        ?? buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
+      const universalTechnicalReply = buildUniversalCatalogTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus, Date.now(), recentThread);
+      const technicalReply = universalTechnicalReply
+        ?? (hasProductReference(contextualProductQuery)
+          ? buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus)
+          : null);
       if (technicalReply) {
         return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
       }
