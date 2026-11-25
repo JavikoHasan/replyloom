@@ -261,6 +261,67 @@ describe("grounded motorcycle technical replies", () => {
   });
 });
 
+describe("grounded energy station technical replies", () => {
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
+  const delta2 = [{
+    id: "energy-delta-2",
+    source: "revolico-sagua.pages.dev (catalog)",
+    score: 1,
+    text: [
+      "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh",
+      "Categoría: Estaciones de energía",
+      "Descripción: Potencia de salida 1800 W, batería LiFePO4 y capacidad ampliable hasta 2048Wh.",
+    ].join("\n"),
+  }];
+
+  it("routes EcoFlow characteristics to technical details instead of the inventory list", () => {
+    expect(isCatalogLookupQuestion("¿Qué características tiene la EcoFlow?")).toBe(false);
+    expect(isCatalogLookupQuestion("¿Tienes EcoFlow?")).toBe(true);
+    const reply = buildPhoneTechnicalReply("¿Qué características tiene la EcoFlow?", "¿Qué características tiene la EcoFlow?", delta2, sync, now);
+    expect(reply).toContain("ECOFLOW DELTA 2");
+    expect(reply).toContain("Capacidad: 1024 Wh");
+    expect(reply).toContain("Potencia: 1800 W");
+    expect(reply).toContain("Química de batería: LiFePO4");
+    expect(reply).toContain("Capacidad ampliable: 2048Wh");
+  });
+
+  it("keeps a generic characteristics follow-up attached to the most recent EcoFlow, not an older motorcycle", () => {
+    const thread = [
+      "[Previous messages]",
+      "Customer: ¿Qué características tiene la XMX?",
+      "Agent: La XMX 250cc...",
+      "Customer: ¿Qué características tiene la Isuki?",
+      "Agent: La IZUKI HURACAN 250cc...",
+      "Customer: ¿Qué características tiene la EcoFlow?",
+      "Agent: Estos son los productos ECOFLOW...",
+    ].join("\n");
+    expect(resolveRecentProductQuery("¿Qué características tiene?", thread)).toBe("¿Qué características tiene la EcoFlow?");
+    const reply = buildPhoneTechnicalReply(
+      "¿Qué características tiene?",
+      resolveRecentProductQuery("¿Qué características tiene?", thread),
+      delta2,
+      sync,
+      now,
+    );
+    expect(reply).toContain("ECOFLOW DELTA 2");
+    expect(reply).not.toContain("XMX");
+    expect(reply).not.toContain("IZUKI");
+  });
+
+  it("does not borrow specifications from another energy brand or model", () => {
+    const mixed = [...delta2, {
+      id: "energy-bluetti",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: "PRODUCTO: BLUETTI ELITE 100 V2\nCapacidad: 1024 Wh\nPotencia: 1800 W",
+    }];
+    const reply = buildPhoneTechnicalReply("¿Qué características tiene la EcoFlow?", "¿Qué características tiene la EcoFlow?", mixed, sync, now);
+    expect(reply).toContain("ECOFLOW DELTA 2");
+    expect(reply).not.toContain("BLUETTI");
+  });
+});
+
 describe("grounded phone technical replies", () => {
   const now = Date.parse("2026-11-24T12:00:00Z");
   const sync = { stage: "completed", updatedAt: "2026-11-24T11:55:00Z" };
