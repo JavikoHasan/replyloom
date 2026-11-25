@@ -16,6 +16,11 @@ describe("universal catalog intelligence", () => {
     expect(isShortCatalogProductSelection("Me interesa una nevera")).toBe(true);
     expect(isShortCatalogProductSelection("Una bicicleta eléctrica")).toBe(true);
     expect(isShortCatalogProductSelection("Un momento")).toBe(false);
+    expect(isShortCatalogProductSelection("¿Tiene garantía?")).toBe(false);
+    expect(isShortCatalogProductSelection("¿Cuánto cuesta?")).toBe(false);
+    expect(isShortCatalogProductSelection("Gracias")).toBe(false);
+    expect(isShortCatalogProductSelection("¿Qué tienes en venta?")).toBe(false);
+    expect(isShortCatalogProductSelection("A16")).toBe(true);
   });
 
   it("resolves a generic new product selection against its own catalog title", () => {
