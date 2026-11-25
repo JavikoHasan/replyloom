@@ -1038,7 +1038,7 @@ export function buildStorePolicyOnlyReply(message: string, productQuery = ""): s
     }
   }
 
-  if (/\b(moto|motos|motocicleta|motocicletas)\b/.test(normalized)) {
+  if (/\b(moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/.test(normalized)) {
     const asksMotoWarranty = /\b(garantia|garantía|devolucion|devolución|reparacion|reparación)\b/.test(normalized);
     const asksMotoDelivery = /\b(entrega|entregan|entregar|entregado|entregada|envio|envío|domicilio)\b/.test(normalized);
     if (asksMotoWarranty && asksMotoDelivery) {
