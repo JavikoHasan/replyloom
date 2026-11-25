@@ -743,9 +743,9 @@ export function buildGeneralDeliveryPolicyReply(message: string, contextualProdu
 
 /** Reuse the most recently named catalog model for elliptical follow-ups such as "¿y la entrega?" */
 export function resolveRecentProductQuery(message: string, conversationThread: string): string {
-  // A fresh inventory/category query must override an older product in the chat.
-  // Otherwise "¿Tienes EcoFlow?" can inherit a previous F07 lookup.
-  if (isCatalogLookupQuestion(message) || hasProductReference(message)) return message;
+  // An explicit category or model in the current question is a context boundary,
+  // even when the customer phrases it as a follow-up ("and the stations' delivery?").
+  if (isCatalogLookupQuestion(message) || hasProductReference(message) || /\b(telefono|telefonos|celular|celulares|estacion(?:es)?|energia|ecoflow|bluetti|moto|motos|motocicleta|motocicletas|izuki|isuki|xmx|huracan)\b/i.test(normalizeStoreCatalogQuery(message))) return message;
   if (!conversationThread) return message;
   const customerMessages = [...conversationThread.matchAll(/Customer:\s*([^\n]+)/g)].map((match) => match[1]);
   for (const previous of customerMessages.reverse()) {
@@ -757,8 +757,8 @@ export function resolveRecentProductQuery(message: string, conversationThread: s
 }
 
 export function hasProductReference(message: string): boolean {
-  const candidate = message.replace(/\b(?:4g|5g|\d+(?:gb|mb|ram|rom))\b/gi, " ");
-  return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(candidate);
+  const candidate = normalizeStoreCatalogQuery(message).replace(/\b(?:4g|5g|\d+(?:gb|mb|ram|rom))\b/gi, " ");
+  return /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4}|izuki|isuki|xmx|huracan)\b/i.test(candidate);
 }
 
 /** Answer delivery only from the exact product's published delivery field. */
@@ -875,6 +875,24 @@ export function buildCatalogLookupReply(
   const modelIds = [...normalized.matchAll(/\b([a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/g)]
     .map((match) => match[1].replace(/[^a-z0-9]/g, ""))
     .filter((key) => !/^\d+(?:gb|mb|ram|rom)$/.test(key));
+  const requestedMoto = normalized.match(/\b(izuki|xmx|huracan)\b/)?.[1];
+  if (requestedMoto) {
+    const matches = products.filter((product) => {
+      const title = normalizeBusinessText(product.title);
+      return requestedMoto === "izuki"
+        ? /\b(izuki|huracan)\b/.test(title)
+        : requestedMoto === "huracan"
+          ? /\b(izuki|huracan)\b/.test(title)
+          : /\bxmx\b/.test(title);
+    });
+    if (matches.length === 1) {
+      const product = matches[0];
+      const status = product.availability ? " El anuncio indica: " + product.availability + "." : "";
+      const price = product.price ? " El precio publicado es " + product.price + "." : "";
+      return "Sí, " + product.title + " aparece en nuestro catálogo." + price + status + " Se gestiona por encargo a nombre del cliente. Para continuar, el vendedor debe confirmar las condiciones concretas del pedido por WhatsApp: https://wa.me/5354590237.";
+    }
+    return "No encuentro una publicación vigente que coincida con ese modelo de motocicleta. Puedes confirmarlo directamente con el vendedor: https://wa.me/5354590237.";
+  }
   if (modelIds.length > 0) {
     const matches = products.filter((product) => {
       const title = product.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -918,7 +936,7 @@ export function buildCatalogLookupReply(
     const details = [product.price, product.availability].filter(Boolean).join(" · ");
     return "• " + product.title + (details ? " — " + details : "");
   });
-  const introduction = isEnergyQuery ? "Estas son las " : "Estos son los ";
+  const introduction = isEnergyQuery || isMotorcycleQuery ? "Estas son las " : "Estos son los ";
   return introduction + label + " que aparecen en nuestro catálogo publicado:\n" + lines.join("\n") + "\n\nLa disponibilidad física debe confirmarse directamente con el vendedor.";
 }
 
