@@ -101,6 +101,14 @@ export async function handleAgentMessage(
     return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
   }
 
+  // Answer brief questions about the assistant itself without opening general chat.
+  if (catalogOnlyBusiness) {
+    const identityReply = buildAssistantIdentityReply(message);
+    if (identityReply) {
+      return { text: identityReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   // Public business contact is a commercial FAQ, not an unknown/off-topic request.
   if (catalogOnlyBusiness) {
     const contactReply = buildBusinessContactReply(message);
@@ -1050,7 +1058,15 @@ export function buildCatalogLookupReply(
  * Answers payment questions directly from the approved store policy.
  * Never estimates exchange rates or implies CUP payment is accepted for USD ads.
  */
-export /** Resolve common ways customers ask for the store's public WhatsApp contact. */
+export /** Answer identity questions about the assistant without inviting unrelated conversation. */
+export function buildAssistantIdentityReply(message: string): string | null {
+  const normalized = normalizeStoreCatalogQuery(message);
+  const asksIdentity = /\b(eres una ia|eres ia|eres un robot|eres humano|quien eres|con quien hablo|hablo con una ia|hablo con un robot)\b/.test(normalized);
+  if (!asksIdentity) return null;
+  return "Sí, soy el asistente virtual de Cell Phone Store - Sagua la Grande. Soy una IA de apoyo comercial y puedo ayudarte con los productos publicados, sus precios, características verificadas, pagos y condiciones de compra. Si necesitas hablar directamente con el vendedor, puedes escribirle por WhatsApp: https://wa.me/5354590237.";
+}
+
+/** Resolve common ways customers ask for the store's public WhatsApp contact. */
 export function buildBusinessContactReply(message: string): string | null {
   const normalized = normalizeStoreCatalogQuery(message);
   const asksContact = /\b(contacto|contactarlos|contactarlas|contactarme|contactar|comunicarme|comunicarse|whatsapp|escribirles|escribirle|hablar con el vendedor|hablar con ustedes|como los contacto|como puedo contactarlos|como puedo comunicarme|numero de contacto|telefono de contacto|telefono del vendedor|numero del vendedor|su numero|su telefono)\b/.test(normalized);
