@@ -102,6 +102,43 @@ describe("catalog inventory and model availability replies", () => {
     expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
   });
 
+  it("recognizes availability questions for arbitrary brands and spaced product names", () => {
+    for (const question of [
+      "¿Te quedan MikroTik?",
+      "¿Te quedan Mikro tik?",
+      "¿Hay MikroTik?",
+      "¿Tienen Mikrotik?",
+    ]) expect(isCatalogLookupQuestion(question), question).toBe(true);
+    expect(isCatalogLookupQuestion("¿Te quedan dudas?")).toBe(false);
+    expect(isCatalogLookupQuestion("¿Qué potencia tiene MikroTik?")).toBe(false);
+  });
+
+  it("matches an unlisted brand spelling variant to the exact published product", () => {
+    const mikrotik = {
+      id: "network-1",
+      source: "revolico-sagua.pages.dev (catalog)",
+      score: 1,
+      text: [
+        "PRODUCTO: MIKROTIK ROUTERBOARD",
+        "Categoría: Redes y conectividad",
+        "Descripción y características publicadas: Equipo de red MikroTik.",
+        "Precio publicado: 85 USD",
+        "Disponibilidad publicada: Disponible",
+      ].join("\n"),
+    };
+    const reply = buildCatalogLookupReply("¿Te quedan Mikro tik?", [mikrotik], sync, now);
+    expect(reply).toContain("MIKROTIK ROUTERBOARD");
+    expect(reply).toContain("85 USD");
+    expect(reply).toContain("Disponible");
+  });
+
+  it("does not return unrelated listings for an unknown freeform brand", () => {
+    const reply = buildCatalogLookupReply("¿Te quedan MikroTik?", catalog, sync, now);
+    expect(reply).toContain("no encuentro anuncios vigentes");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+    expect(reply).not.toContain("ECOFLOW DELTA 2");
+  });
+
   it("recognizes searches across common marketplace categories", () => {
     for (const question of [
       "¿Tienes productos de limpieza?",
