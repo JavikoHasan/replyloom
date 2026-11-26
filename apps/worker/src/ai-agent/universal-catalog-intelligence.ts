@@ -72,7 +72,7 @@ function extractTechnicalFacts(block: string): string[] {
     }
   }
 
-  const descriptionMarker = block.match(/^Descripción y características publicadas:\\s*/im);
+  const descriptionMarker = block.match(/^Descripción y características publicadas:\s*/im);
   const descriptionStart = descriptionMarker?.index;
   const descriptionMarkerLength = descriptionMarker?.[0].length ?? 0;
   const description = descriptionStart === undefined
