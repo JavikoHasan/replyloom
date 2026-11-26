@@ -972,7 +972,7 @@ const FREEFORM_CATALOG_STOP_WORDS = new Set([
   "necesito", "interesa", "interesan", "quisiera", "un", "una", "el", "la", "los", "las",
   "de", "del", "que", "cual", "cuales", "por", "para", "con", "en", "a", "mi", "su",
   "producto", "productos", "equipo", "equipos", "marca", "modelo", "ahora", "todavia",
-  "duda", "dudas", "pregunta", "preguntas", "problema", "problemas",
+  "duda", "dudas", "pregunta", "preguntas", "problema", "problemas", "cosas", "moto", "motos", "motocicleta", "motocicletas",
 ]);
 
 function extractFreeformCatalogTerms(normalized: string): string[] {
@@ -1090,6 +1090,10 @@ export function buildCatalogLookupReply(
   const freeformProductTerms = extractFreeformCatalogTerms(normalized);
   const asksGalaxyS = /\b(galaxy|samsung)\b.*\bserie\s*s\b|\bserie\s*s\b.*\b(galaxy|samsung)\b|\bgalaxy\s+s\d*\b/.test(normalized);
   const hasProductCategory = /\b(lamparas?|linternas?|bombillos?|focos?|ventiladores?|abanicos?|neveras?|refrigeradores?|lavadoras?|televisores?|laptops?|computadoras?|tabletas?|tablets?|bicicletas?|generadores?|herramientas?|ropa|zapatos?|relojes?|audifonos?|bocinas?|altavoces?|parlantes?|mochilas?|maletas?|muebles?|sillas?|mesas?|camas?|colchones?|cocinas?|hornillas?|microondas?|licuadoras?|cafeteras?|taladros?|paneles? solares?|inversores?|baterias? externas?|power banks?|accesorios?|limpieza|detergentes?|jabones?|perfumes?|cosmeticos?|maquillaje|juguetes?|alimentos?|comida|bebidas?|repuestos?|piezas?|neumaticos?|llantas?|aceites?|joyas?|bolsos?|carteras?|decoracion|cortinas?|sabanas?|toallas?)\b/.test(normalized);
+  const isBroadInventoryQuestion = /\b(que hay|que tienes|que tienen|que cosas tienes|que cosas tienen|que vendes|que venden|que ofreces|que ofrecen|catalogo|productos?)\b/.test(normalized);
+  const useFreeformProductMatch = freeformProductTerms.length > 0
+    && !requestedBrand && !isPhoneQuery && !asksGalaxyS && !isEnergyQuery
+    && !isMotorcycleQuery && !isBroadInventoryQuestion && !hasProductCategory;
   const categoryTerms = normalized.split(/[^a-z0-9]+/).filter((term) =>
     term.length >= 4 && !/^(tienes?|tienen|tengo|hay|vendes?|venden|vendemos|quiero|busco|necesito|ofrecen|ofrecemos|precio|cuanto|cuesta|valen|disponible|disponibilidad|venta|publicado|publicada|recargable|recargables|electrica|electrico|portatil|portatiles|nueva|nuevo|usada|usado|que|cuales|cual|una|uno|unos|unas|los|las|del|para|con|por|en|de|el|la|un|me|interesa|interesan)$/.test(term)
   );
@@ -1119,7 +1123,7 @@ export function buildCatalogLookupReply(
         return words.some((word) => word === term || word === singular || word.startsWith(singular));
       });
     });
-  } else if (freeformProductTerms.length > 0) {
+  } else if (useFreeformProductMatch) {
     // Match arbitrary new brands and product names without a hard-coded brand
     // list. Compact matching also handles "Mikro tik" against "MikroTik".
     const compactQuery = freeformProductTerms.join("");
@@ -1136,10 +1140,10 @@ export function buildCatalogLookupReply(
   }
   if (filtered.length === 0) {
     const requestedPhrase = message.replace(/^[¿¡\s]*(?:tienes?|tienen|hay|vendes?|venden|vendemos|que|cuales|cual|me interesa|busco|quiero)\s+/i, "").replace(/[¿?¡!]/g, "").trim();
-    const label = hasProductCategory || freeformProductTerms.length > 0 ? "que coincidan con «" + requestedPhrase + "»" : asksGalaxyS ? "de la serie Galaxy S" : isPhoneQuery ? "de teléfonos" : requestedBrand ? "de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "de estaciones de energía" : isMotorcycleQuery ? "de motocicletas" : "de productos";
+    const label = hasProductCategory || useFreeformProductMatch ? "que coincidan con «" + requestedPhrase + "»" : asksGalaxyS ? "de la serie Galaxy S" : isPhoneQuery ? "de teléfonos" : requestedBrand ? "de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "de estaciones de energía" : isMotorcycleQuery ? "de motocicletas" : "de productos";
     return "Ahora mismo no encuentro anuncios vigentes " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
   }
-  const label = hasProductCategory || freeformProductTerms.length > 0 ? "productos que coinciden con la búsqueda" : isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : isAccessoryQuery ? "accesorios" : "productos";
+  const label = hasProductCategory || useFreeformProductMatch ? "productos que coinciden con la búsqueda" : isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : isAccessoryQuery ? "accesorios" : "productos";
   const lines = filtered.slice(0, 20).map((product) => {
     const details = [product.price, product.availability].filter(Boolean).join(" · ");
     return "• " + product.title + (details ? " — " + details : "");
