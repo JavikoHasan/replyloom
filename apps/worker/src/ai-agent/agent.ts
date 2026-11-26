@@ -940,7 +940,7 @@ export function isCatalogLookupQuestion(message: string): boolean {
   const asksTechnical = /\b(propiedades|caracteristicas|especificaciones|especificacion|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|lifepo4)\b/.test(normalized);
   const asksAccessory = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const asksAccessoryCommerce = asksAccessory && /\b(tienes|tienen|hay|venden|vendes|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
-  const bareModel = /^(?:(?:un|una|el|la|ese|esa)\\s+)?(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\\s+)*(?:[a-z]{1,8}\\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})[\\s?!.]*$/i.test(normalized.trim());
+  const bareModel = /^(?:(?:un|una|el|la|ese|esa)\s+)?(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\\d{1,4}[a-z0-9]*|\\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
   return (asksInventory && !asksTechnical)
     || (asksAvailability && asksKnownBrand && !asksTechnical)
     || (asksProductCategory && !asksTechnical)
