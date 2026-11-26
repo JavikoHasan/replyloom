@@ -349,16 +349,16 @@ function stripHtml(value: string): string {
 /** Preserve description paragraphs and list separators for technical extraction. */
 function stripHtmlPreservingLines(value: string): string {
   const withBoundaries = value
-    .replace(/<br\\s*\\/?\\s*>/gi, "\\n")
-    .replace(/<\\/\\s*(?:p|div|li|h[1-6])\\s*>/gi, "\\n")
-    .replace(/<li\\b[^>]*>/gi, "\\n- ")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/\s*(?:p|div|li|h[1-6])\s*>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<[^>]*>/g, " ");
   return decodeEntities(withBoundaries)
-    .replace(/\\r\\n?/g, "\\n")
-    .replace(/[ \\t]+/g, " ")
-    .replace(/\\s*·\\s*/g, "\\n- ")
-    .replace(/ *\\n */g, "\\n")
-    .replace(/\\n{3,}/g, "\\n\\n")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*·\s*/g, "\n- ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 function decodeEntities(value: string): string {
