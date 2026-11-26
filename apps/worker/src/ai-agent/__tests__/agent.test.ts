@@ -824,3 +824,38 @@ describe("normalizeGeneratorResult", () => {
     }).response).toBe("Hola mundo");
   });
 });
+
+
+describe("business contact and payment follow-ups", () => {
+  it("returns the official WhatsApp contact for short contact questions", () => {
+    expect(buildBusinessContactReply("Contacto")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Cómo puedo contactarlos?")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Cuál es el teléfono?")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Qué características tiene el F07?")).toBeNull();
+  });
+
+  it("does not claim that PayPal or cryptocurrencies are accepted", () => {
+    expect(buildPaymentPolicyReply("¿Aceptan PayPal?")).toContain("No tengo confirmación");
+    expect(buildPaymentPolicyReply("¿Aceptan criptomonedas?")).toContain("No tengo confirmación");
+    expect(buildPaymentPolicyReply("¿Aceptan Zelle?")).toContain("recargo del 10%");
+  });
+
+  it("calculates Zelle for a one-product catalogue list", () => {
+    const reply = buildZelleTotalReply(
+      "Estos son los productos ECOFLOW que aparecen en nuestro catálogo:\n• ECOFLOW DELTA 2 — 800 USD · Disponible",
+      "Customer: ¿Cuánto es por Zelle?\nAgent: Aceptamos Zelle",
+      true,
+    );
+    expect(reply).toContain("800 USD");
+    expect(reply).toContain("880 USD");
+  });
+
+  it("refuses to calculate Zelle when a catalogue list contains multiple prices", () => {
+    const reply = buildZelleTotalReply(
+      "Catálogo:\n• ECOFLOW DELTA 2 — 800 USD\n• RIVER 2 PRO — 630 USD",
+      "",
+      true,
+    );
+    expect(reply).toBeNull();
+  });
+});
