@@ -401,6 +401,62 @@ export async function handleAgentMessage(
   const query = thread ? `${thread}\n\n${message}` : message;
   // This store is a product-information-only assistant: do not expose CRM
   // customer/order tools or arbitrary workspace webhooks to its model.
+  // Resolve short price follow-ups against the full, fresh catalog and the
+  // most recent product context (e.g. "F07" followed by "Precio").
+  if (catalogOnlyBusiness && /\b(precio|cuanto(?:\s+(?:cuesta|es|sale|vale|seria))|cuesta|vale|valor|costo|coste)\b/.test(normalizeStoreCatalogQuery(message))) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const priceQuestion = message + " " + contextualProductQuery;
+      const exactPriceReply = buildCatalogPriceReply(priceQuestion, allCatalogChunks, syncStatus);
+      if (exactPriceReply) {
+        const exactProductListing = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+        const zelleTotal = exactProductListing
+          ? buildZelleTotalReply(exactProductListing, recentThread + "\nCustomer: " + message, asksZelleNow)
+          : null;
+        return { text: zelleTotal ?? exactPriceReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
+      }
+
+      const hasProductContext = hasProductReference(contextualProductQuery)
+        || isCatalogLookupQuestion(contextualProductQuery)
+        || isShortCatalogProductSelection(contextualProductQuery);
+      if (!hasProductContext) {
+        return {
+          text: "Claro. ¿De cuál producto quieres saber el precio? Puedes decirme el modelo o el nombre del artículo.",
+          usedTools: [],
+          usedContext: allCatalogChunks,
+          blocked: false,
+          cached: false,
+        };
+      }
+
+      const catalogPriceLookup = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      if (catalogPriceLookup) {
+        const zellePriceReply = buildZelleTotalReply(catalogPriceLookup, recentThread + "\nCustomer: " + message, asksZelleNow)
+          ?? (asksZelleNow ? buildZelleTotalReply(catalogPriceLookup, recentThread, true) : null);
+        return {
+          text: zellePriceReply ?? catalogPriceLookup,
+          usedTools: [],
+          usedContext: allCatalogChunks,
+          blocked: false,
+          cached: false,
+        };
+      }
+      return {
+        text: "Ahora mismo no puedo verificar un precio actualizado para ese producto en el catálogo. El vendedor puede confirmarlo directamente por WhatsApp: https://wa.me/5354590237.",
+        usedTools: [],
+        usedContext: allCatalogChunks,
+        blocked: false,
+        cached: false,
+      };
+    } catch (error) {
+      console.warn("[catalog-agent] contextual-price-lookup-error", { errorType: error instanceof Error ? error.name : typeof error });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   const [gate, workspaceTools, lexicalContext] = await Promise.all([
     classifyIntent(env, config, catalogOnlyBusiness ? query : message),
     catalogOnlyBusiness ? Promise.resolve([]) : listWorkspaceWebhookTools(env, config.workspaceId),
@@ -462,62 +518,6 @@ export async function handleAgentMessage(
     const technicalReply = buildPhoneTechnicalReply(message, contextualProductQuery, technicalContext, syncStatus);
     if (technicalReply) {
       return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
-    }
-  }
-
-  // Resolve short price follow-ups against the full, fresh catalog and the
-  // most recent product context (e.g. "F07" followed by "Precio").
-  if (catalogOnlyBusiness && /\b(precio|cuanto(?:\s+(?:cuesta|es|sale|vale|seria))|cuesta|vale|valor|costo|coste)\b/.test(normalizeStoreCatalogQuery(message))) {
-    try {
-      const syncStatus = await env.REPLY_CACHE
-        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
-        .catch(() => null);
-      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
-      const priceQuestion = message + " " + contextualProductQuery;
-      const exactPriceReply = buildCatalogPriceReply(priceQuestion, allCatalogChunks, syncStatus);
-      if (exactPriceReply) {
-        const exactProductListing = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
-        const zelleTotal = exactProductListing
-          ? buildZelleTotalReply(exactProductListing, recentThread + "\nCustomer: " + message, asksZelleNow)
-          : null;
-        return { text: zelleTotal ?? exactPriceReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
-      }
-
-      const hasProductContext = hasProductReference(contextualProductQuery)
-        || isCatalogLookupQuestion(contextualProductQuery)
-        || isShortCatalogProductSelection(contextualProductQuery);
-      if (!hasProductContext) {
-        return {
-          text: "Claro. ¿De cuál producto quieres saber el precio? Puedes decirme el modelo o el nombre del artículo.",
-          usedTools: [],
-          usedContext: allCatalogChunks,
-          blocked: false,
-          cached: false,
-        };
-      }
-
-      const catalogPriceLookup = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
-      if (catalogPriceLookup) {
-        const zellePriceReply = buildZelleTotalReply(catalogPriceLookup, recentThread + "\nCustomer: " + message, asksZelleNow)
-          ?? (asksZelleNow ? buildZelleTotalReply(catalogPriceLookup, recentThread, true) : null);
-        return {
-          text: zellePriceReply ?? catalogPriceLookup,
-          usedTools: [],
-          usedContext: allCatalogChunks,
-          blocked: false,
-          cached: false,
-        };
-      }
-      return {
-        text: "Ahora mismo no puedo verificar un precio actualizado para ese producto en el catálogo. El vendedor puede confirmarlo directamente por WhatsApp: https://wa.me/5354590237.",
-        usedTools: [],
-        usedContext: allCatalogChunks,
-        blocked: false,
-        cached: false,
-      };
-    } catch (error) {
-      console.warn("[catalog-agent] contextual-price-lookup-error", { errorType: error instanceof Error ? error.name : typeof error });
-      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
     }
   }
 
