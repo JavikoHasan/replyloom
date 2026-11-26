@@ -102,6 +102,29 @@ describe("catalog inventory and model availability replies", () => {
     expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
   });
 
+  it("recognizes searches across common marketplace categories", () => {
+    for (const question of [
+      "¿Tienes productos de limpieza?",
+      "¿Venden perfumes?",
+      "¿Tienes repuestos?",
+      "¿Hay accesorios?",
+      "¿Tienes lámparas recargables?",
+    ]) expect(isCatalogLookupQuestion(question), question).toBe(true);
+  });
+
+  it("uses recent product context when the customer asks only for the price", () => {
+    const reply = buildCatalogPriceReply("Precio Características del F07", catalog, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY F07");
+    expect(reply).toContain("150 USD");
+  });
+
+  it("returns only matching brand listings when the customer asks for an EcoFlow price", () => {
+    const reply = buildCatalogLookupReply("Precio de la EcoFlow", catalog, sync, now);
+    expect(reply).toContain("ECOFLOW DELTA 2");
+    expect(reply).toContain("800 USD");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+  });
+
   it("answers a specific motorcycle model lookup instead of listing every motorcycle", () => {
     const motorcycleCatalog = [{
       id: "moto-1", source: "revolico-sagua.pages.dev (catalog)", score: 1,
