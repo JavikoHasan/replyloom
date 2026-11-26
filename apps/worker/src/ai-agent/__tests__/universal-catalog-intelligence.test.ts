@@ -148,9 +148,9 @@ describe("universal catalog intelligence", () => {
       "Ideal para hogar y negocio:",
       "- Neveras y ventiladores",
       "- Equipos compatibles de hasta 1800 W",
-    ].join("\\n");
+    ].join("\n");
     const context = [{
-      text: "PRODUCTO: ECOFLOW DELTA 2 | Energía inteligente para tu hogar y negocio\\nCategoría: Energía\\nPrecio publicado: 800 USD\\nDescripción y características publicadas: " + description + "\\nFicha pública: https://revolico-sagua.pages.dev/anuncio/96981f24-b324-4a8e-9fd4-c218bd3db3f1",
+      text: "PRODUCTO: ECOFLOW DELTA 2 | Energía inteligente para tu hogar y negocio\nCategoría: Energía\nPrecio publicado: 800 USD\nDescripción y características publicadas: " + description + "\nFicha pública: https://revolico-sagua.pages.dev/anuncio/96981f24-b324-4a8e-9fd4-c218bd3db3f1",
     }];
     const reply = buildUniversalCatalogTechnicalReply("Dime las propiedades del EcoFlow", "Dime las propiedades del EcoFlow", context, sync, now);
     expect(reply).toContain("1024 Wh");
