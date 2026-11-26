@@ -57,6 +57,21 @@ describe("Revolico public catalog import safety", () => {
     expect(item?.description).toContain("batería de 5000 mAh.");
   });
 
+  it("accepts the current public MikroTik listing format for automatic catalog ingestion", () => {
+    const mikrotikUrl = "https://revolico-sagua.pages.dev/anuncio/1e9e09a5-301e-47fb-8c3a-b9254141d234";
+    const mikrotikHtml = validHtml
+      .replace("Telefonía", "Otros")
+      .replace("SAMSUNG GALAXY A17 — 4GB RAM / 128GB ROM", "MikroTik SXT Lite5 | Solución inalámbrica de exterior")
+      .replace("200 USD", "150 USD")
+      .replace("Pantalla AMOLED &amp; batería de 5000 mAh.", "Disponible MikroTik SXT Lite5, equipo inalámbrico de exterior para enlaces de red.")
+      .replace("23 de noviembre de 2026", "3 de diciembre de 2026");
+    const item = parseOwnedListingHtml(mikrotikUrl, mikrotikHtml, Date.parse("2026-11-26T18:00:00Z"));
+    expect(item?.title).toContain("MikroTik SXT Lite5");
+    expect(item?.price).toBe("150 USD");
+    expect(item?.status).toBe("Disponible");
+    expect(item?.description).toContain("MikroTik SXT Lite5");
+  });
+
   it("preserves bullet and line boundaries in a public listing description", () => {
     const ecoflowHtml = validHtml.replace(
       '<div class="desc">Pantalla AMOLED &amp; batería de 5000 mAh.</div>',
