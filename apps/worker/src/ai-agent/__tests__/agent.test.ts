@@ -214,6 +214,38 @@ describe("catalog inventory and model availability replies", () => {
     }
   });
 
+  it("recognizes product-category searches such as rechargeable lamps", () => {
+    expect(isCatalogLookupQuestion("¿Tienes lámparas recargables?")).toBe(true);
+    expect(isCatalogLookupQuestion("Lámparas recargables")).toBe(true);
+    expect(isCatalogLookupQuestion("¿Qué potencia tiene la lámpara?")).toBe(false);
+  });
+
+  it("does not return the whole catalog for an unlisted product category", () => {
+    const reply = buildCatalogLookupReply("¿Tienes lámparas recargables?", catalog, sync, now);
+    expect(reply).toContain("no encuentro anuncios vigentes");
+    expect(reply).toContain("lámparas recargables");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+    expect(reply).not.toContain("ECOFLOW DELTA 2");
+  });
+
+  it("filters new category searches against the product's published description", () => {
+    const lamp = {
+      id: "lamp-1", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: "PRODUCTO: LÁMPARA LED RECARGABLE\nCategoría: Hogar\nDescripción y características publicadas: Lámpara de emergencia con batería recargable y luz LED.\nPrecio publicado: 25 USD",
+    };
+    const reply = buildCatalogLookupReply("¿Tienes lámparas recargables?", [...catalog, lamp], sync, now);
+    expect(reply).toContain("LÁMPARA LED RECARGABLE");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+    expect(reply).not.toContain("ECOFLOW DELTA 2");
+  });
+
+  it("treats Samsung Galaxy S-series questions as a specific product family", () => {
+    expect(isCatalogLookupQuestion("¿Tienes Galaxy de la serie S?")).toBe(true);
+    const reply = buildCatalogLookupReply("¿Tienes Galaxy de la serie S?", catalog, sync, now);
+    expect(reply).toContain("no encuentro anuncios vigentes");
+    expect(reply).not.toContain("SAMSUNG GALAXY A17");
+  });
+
   it("does not make inventory claims from stale or incomplete catalog syncs", () => {
     expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "running", updatedAt: sync.updatedAt }, now)).toBeNull();
     expect(buildCatalogLookupReply("¿Tienes F07?", catalog, { stage: "completed", updatedAt: "2026-11-24T04:00:00Z" }, now)).toBeNull();
