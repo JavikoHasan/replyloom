@@ -57,6 +57,17 @@ describe("Revolico public catalog import safety", () => {
     expect(item?.description).toContain("batería de 5000 mAh.");
   });
 
+  it("preserves bullet and line boundaries in a public listing description", () => {
+    const ecoflowHtml = validHtml.replace(
+      '<div class="desc">Pantalla AMOLED &amp; batería de 5000 mAh.</div>',
+      '<div class="desc">Especificaciones destacadas: · Capacidad: 1024 Wh (1 kWh) · Potencia: 1800 W continuos / hasta 2700 W pico con X-Boost · Batería LiFePO4: más de 3000 ciclos de carga · Carga solar: admite hasta 500 W · Carga ultrarrápida: 0–80 % en aproximadamente 50 minutos · Control inteligente: Wi-Fi y Bluetooth con la app EcoFlow</div>',
+    );
+    const item = parseOwnedListingHtml(url, ecoflowHtml, Date.parse("2026-11-21T12:00:00Z"));
+    expect(item?.description).toContain("\n- Capacidad: 1024 Wh");
+    expect(item?.description).toContain("\n- Potencia: 1800 W continuos");
+    expect(item?.description).toContain("\n- Carga solar: admite hasta 500 W");
+    expect(item?.description).toContain("\n- Control inteligente: Wi-Fi y Bluetooth");
+  });
   it("never imports another seller's listing", () => {
     const foreign = validHtml.replace("wa.me/5354590237", "wa.me/5355555555");
     expect(parseOwnedListingHtml(url, foreign, Date.parse("2026-11-21T12:00:00Z"))).toBeNull();
