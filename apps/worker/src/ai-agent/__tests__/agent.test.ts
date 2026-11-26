@@ -830,7 +830,8 @@ describe("business contact and payment follow-ups", () => {
   it("returns the official WhatsApp contact for short contact questions", () => {
     expect(buildBusinessContactReply("Contacto")).toContain("https://wa.me/5354590237");
     expect(buildBusinessContactReply("¿Cómo puedo contactarlos?")).toContain("https://wa.me/5354590237");
-    expect(buildBusinessContactReply("¿Cuál es el teléfono?")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Cuál es el teléfono del vendedor?")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Qué teléfonos tienen?")).toBeNull();
     expect(buildBusinessContactReply("¿Qué características tiene el F07?")).toBeNull();
   });
 
