@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildBusinessContactReply, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, buildPurchaseInterestReply, isPurchaseInterestMessage, isPhoneFunctionalityQuestion, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildAssistantIdentityReply, buildBusinessContactReply, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, buildPurchaseInterestReply, isPurchaseInterestMessage, isPhoneFunctionalityQuestion, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -825,6 +825,14 @@ describe("normalizeGeneratorResult", () => {
   });
 });
 
+
+describe("assistant identity", () => {
+  it("answers who the assistant is without turning into a general-purpose chatbot", () => {
+    expect(buildAssistantIdentityReply("¿Eres una IA?")).toContain("Sí, soy el asistente virtual");
+    expect(buildAssistantIdentityReply("¿Con quién hablo?")).toContain("Cell Phone Store - Sagua la Grande");
+    expect(buildAssistantIdentityReply("Cuéntame un chiste")).toBeNull();
+  });
+});
 
 describe("business contact and payment follow-ups", () => {
   it("returns the official WhatsApp contact for short contact questions", () => {
