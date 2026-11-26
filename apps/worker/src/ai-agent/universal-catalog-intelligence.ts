@@ -65,21 +65,21 @@ function extractTechnicalFacts(block: string): string[] {
   }
 
   const ignored = /^(producto|categoria|precio publicado|condicion|disponibilidad publicada|vigencia de la publicacion hasta|entrega publicada|ficha publica|nota|contacto|whatsapp):/i;
-  const allowedLabel = /^(?:capacidad(?: de bateria| de energia)?|potencia(?: de salida)?|salida nominal|entrada solar|quimica(?: de bateria)?|tipo de bateria|capacidad ampliable|expansion maxima|ampliacion|voltaje|motor|cilindrada|transmision|frenos|suspension|velocidad maxima|combustible|ram|rom|memoria|almacenamiento|pantalla|camara|bateria|conectividad|redes? moviles?|tecnologia de red|procesador|sistema operativo|material|dimensiones|peso|color|talla|tejido|composicion|longitud|ancho|alto|profundidad|compatibilidad|impermeabilidad|resistencia|presion|temperatura|autonomia|resolucion|frecuencia|puertos?|conexiones?):/i;
+  const allowedLabel = /^(?:capacidad(?: de bateria| de energia)?|potencia(?: de salida)?|salida nominal|entrada solar|carga solar|carga rapida|carga ultrarapida|control inteligente|ciclos? de carga|quimica(?: de bateria)?|tipo de bateria|capacidad ampliable|expansion maxima|ampliacion|voltaje|motor|cilindrada|transmision|frenos|suspension|velocidad maxima|combustible|ram|rom|memoria|almacenamiento|pantalla|camara|bateria|conectividad|redes? moviles?|tecnologia de red|procesador|sistema operativo|material|dimensiones|peso|color|talla|tejido|composicion|longitud|ancho|alto|profundidad|compatibilidad|impermeabilidad|resistencia|presion|temperatura|autonomia|resolucion|frecuencia|puertos?|conexiones?):/i;
   for (const rawLine of block.split(/\r?\n/)) {    const line = rawLine.trim().replace(/^[-•*]\s*/, "");    if (!line || ignored.test(line) || !allowedLabel.test(normalize(line))) continue;
     if (line.length <= 180 && !/https?:\/\/|\b\d{10,}\b|ignore|ignora|instruccion|system prompt/i.test(line)) {
       facts.push(line);
     }
   }
 
-  const description = block.match(/^Descripción y características publicadas:\s*(.+)$/im)?.[1]?.trim();
+  const description = block.match(/^Descripción y características publicadas:\s*([\s\S]*?)(?=^Ficha pública:|^Nota:|$)/im)?.[1]?.trim();
   if (description) {
-    const sentences = description.split(/(?<=[.!?])\s+/).filter((sentence) =>
+    const sentences = description.split(/(?<=[.!?])\s+|\r?\n+/).map((sentence) => sentence.replace(/^[-•*]\s*/, "").trim()).filter((sentence) =>
       sentence.length <= 220 &&
-      /\b(\d+(?:[.,]\d+)?\s?(?:gb|tb|mb|wh|kwh|w|kw|v|a|mah|cc|mp|hz|km\/h|km|pulgadas?)|lifepo4|nmc|bluetooth|wi-?fi|gps|abs|usb-c|5g|4g|solar|inverter|inversor|litio|diesel|gasolina|electrico|electrica)\b/i.test(normalize(sentence)) &&
+      /\b(\d+(?:[.,]\d+)?\s?(?:gb|tb|mb|wh|kwh|w|kw|v|a|mah|cc|mp|hz|min(?:utos?)?|km\/h|km|pulgadas?)|lifepo4|nmc|bluetooth|wi-?fi|gps|abs|usb-c|5g|4g|solar|inverter|inversor|litio|diesel|gasolina|electrico|electrica)\b/i.test(normalize(sentence)) &&
       !/https?:\/\/|\b\d{10,}\b|ignore|ignora|instruccion|system prompt/i.test(sentence)
     );
-    facts.push(...sentences.slice(0, 4));
+    facts.push(...sentences.slice(0, 8));
   }
   return [...new Set(facts)].slice(0, 8);
 }
