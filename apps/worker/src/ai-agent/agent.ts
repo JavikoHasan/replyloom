@@ -1054,7 +1054,7 @@ export function buildCatalogLookupReply(
   } else if (isMotorcycleQuery) {
     filtered = products.filter((product) => /\b(motocicleta|moto|izuki|xmx|huracan)\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
   } else if (hasProductCategory) {
-    const stem = (term: string) => term.length > 5 && term.endsWith("s") ? term.slice(0, -1) : term;
+    const stem = (term: string) => term.length > 5 && term.endsWith("es") ? term.slice(0, -2) : term.length > 5 && term.endsWith("s") ? term.slice(0, -1) : term;
     filtered = products.filter((product) => {
       const value = normalizeBusinessText(product.title + " " + product.category + " " + product.description);
       const words = value.split(/[^a-z0-9]+/);
@@ -1065,7 +1065,7 @@ export function buildCatalogLookupReply(
     });
   }
   if (filtered.length === 0) {
-    const requestedPhrase = normalized.replace(/^(?:tienes?|tienen|hay|vendes?|venden|vendemos|que|cuales|cual|me interesa|busco|quiero)\s+/, "").replace(/[¿?¡!]/g, "").trim();
+    const requestedPhrase = message.replace(/^[¿¡\s]*(?:tienes?|tienen|hay|vendes?|venden|vendemos|que|cuales|cual|me interesa|busco|quiero)\s+/i, "").replace(/[¿?¡!]/g, "").trim();
     const label = hasProductCategory ? "que coincidan con «" + requestedPhrase + "»" : asksGalaxyS ? "de la serie Galaxy S" : isPhoneQuery ? "de teléfonos" : requestedBrand ? "de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "de estaciones de energía" : isMotorcycleQuery ? "de motocicletas" : "de productos";
     return "Ahora mismo no encuentro anuncios vigentes " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
   }
