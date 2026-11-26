@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, buildPurchaseInterestReply, isPurchaseInterestMessage, isPhoneFunctionalityQuestion, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildBusinessContactReply, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, buildPurchaseInterestReply, isPurchaseInterestMessage, isPhoneFunctionalityQuestion, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
