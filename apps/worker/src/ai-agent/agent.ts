@@ -467,7 +467,7 @@ export async function handleAgentMessage(
 
   // Resolve short price follow-ups against the full, fresh catalog and the
   // most recent product context (e.g. "F07" followed by "Precio").
-  if (catalogOnlyBusiness && /\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\b/.test(normalizeStoreCatalogQuery(message))) {
+  if (catalogOnlyBusiness && /\b(precio|cuanto(?:\s+(?:cuesta|es|sale|vale|seria))|cuesta|vale|valor|costo|coste)\b/.test(normalizeStoreCatalogQuery(message))) {
     try {
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
@@ -1440,7 +1440,7 @@ export function buildCatalogPriceReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (!/\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\b/.test(normalizedQuestion)) return null;
+  if (!/\b(precio|cuanto(?:\s+(?:cuesta|es|sale|vale|seria))|cuesta|vale|valor|costo|coste)\b/.test(normalizedQuestion)) return null;
 
   const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
   if (modelIds.length === 0) return null;
