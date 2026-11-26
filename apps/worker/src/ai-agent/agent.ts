@@ -965,22 +965,40 @@ export function buildCatalogDeliveryReply(
   return "La ficha de " + title + " indica esta condición de entrega: " + delivery + ". Para confirmar cómo se realiza y su disponibilidad, debes coordinarlo directamente con el vendedor.";
 }
 
+const FREEFORM_CATALOG_STOP_WORDS = new Set([
+  "te", "me", "tienes", "tienen", "tengo", "hay", "queda", "quedan", "disponible",
+  "disponibilidad", "venden", "vendemos", "venta", "ofrecen", "publicado", "publicada",
+  "precio", "cuanto", "cuesta", "vale", "valen", "costo", "coste", "busco", "quiero",
+  "necesito", "interesa", "interesan", "quisiera", "un", "una", "el", "la", "los", "las",
+  "de", "del", "que", "cual", "cuales", "por", "para", "con", "en", "a", "mi", "su",
+  "producto", "productos", "equipo", "equipos", "marca", "modelo", "ahora", "todavia",
+  "duda", "dudas", "pregunta", "preguntas", "problema", "problemas",
+]);
+
+function extractFreeformCatalogTerms(normalized: string): string[] {
+  return normalized.split(/[^a-z0-9]+/)
+    .filter((term) => term.length >= 3 && !FREEFORM_CATALOG_STOP_WORDS.has(term))
+    .slice(0, 5);
+}
+
 /** Detect a catalog lookup that can be answered without generative guessing. */
 export function isCatalogLookupQuestion(message: string): boolean {
   const normalized = normalizeStoreCatalogQuery(message);
   const hasModelCode = /\b(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})\b/i.test(normalized)
     && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(normalized);
   const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estacion(?:es)? de energia|motocicletas?|motos?|productos?|equipos?|catalogo|que hay|que tienes|que tienen|que cosas tienes|que cosas tienen|que venden|que vendes|que cosas venden|que cosas vendes|que ofrecen|a la venta)\b/.test(normalized);
-  const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\b/.test(normalized);
+  const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|te queda|te quedan|ofrecen|publicado|venta)\b/.test(normalized);
   const asksKnownBrand = /\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(normalized);
   const asksProductCategory = /\b(lamparas?|linternas?|bombillos?|focos?|ventiladores?|abanicos?|neveras?|refrigeradores?|lavadoras?|televisores?|laptops?|computadoras?|tabletas?|tablets?|bicicletas?|generadores?|herramientas?|ropa|zapatos?|relojes?|audifonos?|bocinas?|altavoces?|parlantes?|mochilas?|maletas?|muebles?|sillas?|mesas?|camas?|colchones?|cocinas?|hornillas?|microondas?|licuadoras?|cafeteras?|taladros?|paneles? solares?|inversores?|baterias? externas?|power banks?|accesorios?|limpieza|detergentes?|jabones?|perfumes?|cosmeticos?|maquillaje|juguetes?|alimentos?|comida|bebidas?|repuestos?|piezas?|neumaticos?|llantas?|aceites?|joyas?|bolsos?|carteras?|decoracion|cortinas?|sabanas?|toallas?)\b/.test(normalized);
   const asksTechnical = /\b(propiedades|caracteristicas|especificaciones|especificacion|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|lifepo4)\b/.test(normalized);
   const asksAccessory = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const asksAccessoryCommerce = asksAccessory && /\b(tienes|tienen|hay|venden|vendes|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   const bareModel = /^(?:(?:un|una|el|la|ese|esa)\s+)?(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
+  const freeformProductTerms = extractFreeformCatalogTerms(normalized);
   return (asksInventory && !asksTechnical)
     || (asksAvailability && asksKnownBrand && !asksTechnical)
     || (asksProductCategory && !asksTechnical)
+    || (asksAvailability && freeformProductTerms.length > 0 && !asksTechnical)
     || asksAccessoryCommerce
     || (hasModelCode && (asksAvailability || bareModel));
 }
@@ -1069,6 +1087,7 @@ export function buildCatalogLookupReply(
   const isMotorcycleQuery = /\b(motocicletas?|motos?)\b/.test(normalized);
   const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
+  const freeformProductTerms = extractFreeformCatalogTerms(normalized);
   const asksGalaxyS = /\b(galaxy|samsung)\b.*\bserie\s*s\b|\bserie\s*s\b.*\b(galaxy|samsung)\b|\bgalaxy\s+s\d*\b/.test(normalized);
   const hasProductCategory = /\b(lamparas?|linternas?|bombillos?|focos?|ventiladores?|abanicos?|neveras?|refrigeradores?|lavadoras?|televisores?|laptops?|computadoras?|tabletas?|tablets?|bicicletas?|generadores?|herramientas?|ropa|zapatos?|relojes?|audifonos?|bocinas?|altavoces?|parlantes?|mochilas?|maletas?|muebles?|sillas?|mesas?|camas?|colchones?|cocinas?|hornillas?|microondas?|licuadoras?|cafeteras?|taladros?|paneles? solares?|inversores?|baterias? externas?|power banks?|accesorios?|limpieza|detergentes?|jabones?|perfumes?|cosmeticos?|maquillaje|juguetes?|alimentos?|comida|bebidas?|repuestos?|piezas?|neumaticos?|llantas?|aceites?|joyas?|bolsos?|carteras?|decoracion|cortinas?|sabanas?|toallas?)\b/.test(normalized);
   const categoryTerms = normalized.split(/[^a-z0-9]+/).filter((term) =>
@@ -1100,13 +1119,27 @@ export function buildCatalogLookupReply(
         return words.some((word) => word === term || word === singular || word.startsWith(singular));
       });
     });
+  } else if (freeformProductTerms.length > 0) {
+    // Match arbitrary new brands and product names without a hard-coded brand
+    // list. Compact matching also handles "Mikro tik" against "MikroTik".
+    const compactQuery = freeformProductTerms.join("");
+    filtered = products.filter((product) => {
+      const value = normalizeBusinessText(product.title + " " + product.category + " " + product.description);
+      const compactValue = value.replace(/[^a-z0-9]/g, "");
+      const words = value.split(/[^a-z0-9]+/).filter(Boolean);
+      const compactMatch = compactQuery.length >= 5 && compactValue.includes(compactQuery);
+      const tokenMatch = freeformProductTerms.every((term) =>
+        words.some((word) => word === term || word.startsWith(term) || term.startsWith(word))
+      );
+      return compactMatch || tokenMatch;
+    });
   }
   if (filtered.length === 0) {
     const requestedPhrase = message.replace(/^[¿¡\s]*(?:tienes?|tienen|hay|vendes?|venden|vendemos|que|cuales|cual|me interesa|busco|quiero)\s+/i, "").replace(/[¿?¡!]/g, "").trim();
-    const label = hasProductCategory ? "que coincidan con «" + requestedPhrase + "»" : asksGalaxyS ? "de la serie Galaxy S" : isPhoneQuery ? "de teléfonos" : requestedBrand ? "de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "de estaciones de energía" : isMotorcycleQuery ? "de motocicletas" : "de productos";
+    const label = hasProductCategory || freeformProductTerms.length > 0 ? "que coincidan con «" + requestedPhrase + "»" : asksGalaxyS ? "de la serie Galaxy S" : isPhoneQuery ? "de teléfonos" : requestedBrand ? "de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "de estaciones de energía" : isMotorcycleQuery ? "de motocicletas" : "de productos";
     return "Ahora mismo no encuentro anuncios vigentes " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
   }
-  const label = hasProductCategory ? "productos que coinciden con la búsqueda" : isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : isAccessoryQuery ? "accesorios" : "productos";
+  const label = hasProductCategory || freeformProductTerms.length > 0 ? "productos que coinciden con la búsqueda" : isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : isAccessoryQuery ? "accesorios" : "productos";
   const lines = filtered.slice(0, 20).map((product) => {
     const details = [product.price, product.availability].filter(Boolean).join(" · ");
     return "• " + product.title + (details ? " — " + details : "");
