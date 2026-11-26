@@ -1,3 +1,4 @@
+// Release note: catalog category discovery and contextual pricing are validated for the store Worker.
 import type { AgentConfig, AgentContext, AgentEnv, AgentInput, AgentReply, RetrievedChunk, ToolSchema } from "./types";
 import { classifyIntent, privateLocationReply, redactSensitive, shouldEscalateToHuman } from "./guardrails";
 import { createDb, eq, desc, sql, messages } from "@workspace/db";
