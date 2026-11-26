@@ -102,6 +102,29 @@ describe("catalog inventory and model availability replies", () => {
     expect(isCatalogLookupQuestion("¿Qué cámara tiene el F07?")).toBe(false);
   });
 
+  it("recognizes searches across common marketplace categories", () => {
+    for (const question of [
+      "¿Tienes productos de limpieza?",
+      "¿Venden perfumes?",
+      "¿Tienes repuestos?",
+      "¿Hay accesorios?",
+      "¿Tienes lámparas recargables?",
+    ]) expect(isCatalogLookupQuestion(question), question).toBe(true);
+  });
+
+  it("uses recent product context when the customer asks only for the price", () => {
+    const reply = buildCatalogPriceReply("Precio Características del F07", catalog, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY F07");
+    expect(reply).toContain("150 USD");
+  });
+
+  it("returns only matching brand listings when the customer asks for an EcoFlow price", () => {
+    const reply = buildCatalogLookupReply("Precio de la EcoFlow", catalog, sync, now);
+    expect(reply).toContain("ECOFLOW DELTA 2");
+    expect(reply).toContain("800 USD");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+  });
+
   it("answers a specific motorcycle model lookup instead of listing every motorcycle", () => {
     const motorcycleCatalog = [{
       id: "moto-1", source: "revolico-sagua.pages.dev (catalog)", score: 1,
@@ -212,6 +235,38 @@ describe("catalog inventory and model availability replies", () => {
       expect(reply).not.toContain("anuncios independientes");
       expect(reply).not.toContain("ECOFLOW");
     }
+  });
+
+  it("recognizes product-category searches such as rechargeable lamps", () => {
+    expect(isCatalogLookupQuestion("¿Tienes lámparas recargables?")).toBe(true);
+    expect(isCatalogLookupQuestion("Lámparas recargables")).toBe(true);
+    expect(isCatalogLookupQuestion("¿Qué potencia tiene la lámpara?")).toBe(false);
+  });
+
+  it("does not return the whole catalog for an unlisted product category", () => {
+    const reply = buildCatalogLookupReply("¿Tienes lámparas recargables?", catalog, sync, now);
+    expect(reply).toContain("no encuentro anuncios vigentes");
+    expect(reply).toContain("lámparas recargables");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+    expect(reply).not.toContain("ECOFLOW DELTA 2");
+  });
+
+  it("filters new category searches against the product's published description", () => {
+    const lamp = {
+      id: "lamp-1", source: "revolico-sagua.pages.dev (catalog)", score: 1,
+      text: "PRODUCTO: LÁMPARA LED RECARGABLE\nCategoría: Hogar\nDescripción y características publicadas: Lámpara de emergencia con batería recargable y luz LED.\nPrecio publicado: 25 USD",
+    };
+    const reply = buildCatalogLookupReply("¿Tienes lámparas recargables?", [...catalog, lamp], sync, now);
+    expect(reply).toContain("LÁMPARA LED RECARGABLE");
+    expect(reply).not.toContain("SAMSUNG GALAXY F07");
+    expect(reply).not.toContain("ECOFLOW DELTA 2");
+  });
+
+  it("treats Samsung Galaxy S-series questions as a specific product family", () => {
+    expect(isCatalogLookupQuestion("¿Tienes Galaxy de la serie S?")).toBe(true);
+    const reply = buildCatalogLookupReply("¿Tienes Galaxy de la serie S?", catalog, sync, now);
+    expect(reply).toContain("no encuentro anuncios vigentes");
+    expect(reply).not.toContain("SAMSUNG GALAXY A17");
   });
 
   it("does not make inventory claims from stale or incomplete catalog syncs", () => {
@@ -394,6 +449,7 @@ describe("catalog price replies", () => {
   it("answers a specific model price from a fresh catalog chunk without model generation", () => {
     expect(buildCatalogPriceReply("¿Cuánto cuesta el F07?", context, freshSync, now))
       .toBe("El precio publicado de SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM es 150 USD. La disponibilidad física debe confirmarse directamente con el vendedor.");
+    expect(buildCatalogPriceReply("¿Cuánto es el F07?", context, freshSync, now)).toContain("150 USD");
   });
 
   it("accepts a completed sync within the six-hour catalog refresh interval", () => {

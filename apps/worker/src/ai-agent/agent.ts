@@ -401,6 +401,62 @@ export async function handleAgentMessage(
   const query = thread ? `${thread}\n\n${message}` : message;
   // This store is a product-information-only assistant: do not expose CRM
   // customer/order tools or arbitrary workspace webhooks to its model.
+  // Resolve short price follow-ups against the full, fresh catalog and the
+  // most recent product context (e.g. "F07" followed by "Precio").
+  if (catalogOnlyBusiness && /\b(precio|cuanto(?:\s+(?:cuesta|es|sale|vale|seria))|cuesta|vale|valor|costo|coste)\b/.test(normalizeStoreCatalogQuery(message))) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const priceQuestion = message + " " + contextualProductQuery;
+      const exactPriceReply = buildCatalogPriceReply(priceQuestion, allCatalogChunks, syncStatus);
+      if (exactPriceReply) {
+        const exactProductListing = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+        const zelleTotal = exactProductListing
+          ? buildZelleTotalReply(exactProductListing, recentThread + "\nCustomer: " + message, asksZelleNow)
+          : null;
+        return { text: zelleTotal ?? exactPriceReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
+      }
+
+      const hasProductContext = hasProductReference(contextualProductQuery)
+        || isCatalogLookupQuestion(contextualProductQuery)
+        || isShortCatalogProductSelection(contextualProductQuery);
+      if (!hasProductContext) {
+        return {
+          text: "Claro. ¿De cuál producto quieres saber el precio? Puedes decirme el modelo o el nombre del artículo.",
+          usedTools: [],
+          usedContext: allCatalogChunks,
+          blocked: false,
+          cached: false,
+        };
+      }
+
+      const catalogPriceLookup = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      if (catalogPriceLookup) {
+        const zellePriceReply = buildZelleTotalReply(catalogPriceLookup, recentThread + "\nCustomer: " + message, asksZelleNow)
+          ?? (asksZelleNow ? buildZelleTotalReply(catalogPriceLookup, recentThread, true) : null);
+        return {
+          text: zellePriceReply ?? catalogPriceLookup,
+          usedTools: [],
+          usedContext: allCatalogChunks,
+          blocked: false,
+          cached: false,
+        };
+      }
+      return {
+        text: "Ahora mismo no puedo verificar un precio actualizado para ese producto en el catálogo. El vendedor puede confirmarlo directamente por WhatsApp: https://wa.me/5354590237.",
+        usedTools: [],
+        usedContext: allCatalogChunks,
+        blocked: false,
+        cached: false,
+      };
+    } catch (error) {
+      console.warn("[catalog-agent] contextual-price-lookup-error", { errorType: error instanceof Error ? error.name : typeof error });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   const [gate, workspaceTools, lexicalContext] = await Promise.all([
     classifyIntent(env, config, catalogOnlyBusiness ? query : message),
     catalogOnlyBusiness ? Promise.resolve([]) : listWorkspaceWebhookTools(env, config.workspaceId),
@@ -464,26 +520,6 @@ export async function handleAgentMessage(
       return { text: technicalReply, usedTools: [], usedContext: technicalContext, blocked: false, cached: false };
     }
   }
-
-  // For the store's public catalog, answer exact price questions deterministically
-  // from a fresh completed Revolico sync. This avoids a language model turning a
-  // clearly grounded price into a generic human handoff or inventing a value.
-  if (catalogOnlyBusiness && context.length > 0) {
-    const syncStatus = await env.REPLY_CACHE
-      .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
-      .catch(() => null);
-    const catalogReply = buildCatalogPriceReply(message, context, syncStatus);
-    if (catalogReply) {
-      return {
-        text: catalogReply,
-        usedTools: [],
-        usedContext: context,
-        blocked: false,
-        cached: false,
-      };
-    }
-  }
-
 
   // Answer the store's fixed phone bundle directly from the permanent code policy.
   // This avoids dependence on a policy chunk being selected by RAG.
@@ -935,12 +971,17 @@ export function isCatalogLookupQuestion(message: string): boolean {
     && !/\b\d+(?:gb|mb|ram|rom)\b/i.test(normalized);
   const asksInventory = /\b(telefonos?|celulares?|moviles?|smartphones?|ecoflow|estacion(?:es)? de energia|motocicletas?|motos?|productos?|equipos?|catalogo|que hay|que tienes|que tienen|que cosas tienes|que cosas tienen|que venden|que vendes|que cosas venden|que cosas vendes|que ofrecen|a la venta)\b/.test(normalized);
   const asksAvailability = /\b(tienes|tienen|hay|disponible|disponibilidad|en venta|venden|vendemos|queda|quedan|ofrecen|publicado|venta)\b/.test(normalized);
-  const asksKnownBrand = /\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/.test(normalized);
+  const asksKnownBrand = /\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(normalized);
+  const asksProductCategory = /\b(lamparas?|linternas?|bombillos?|focos?|ventiladores?|abanicos?|neveras?|refrigeradores?|lavadoras?|televisores?|laptops?|computadoras?|tabletas?|tablets?|bicicletas?|generadores?|herramientas?|ropa|zapatos?|relojes?|audifonos?|bocinas?|altavoces?|parlantes?|mochilas?|maletas?|muebles?|sillas?|mesas?|camas?|colchones?|cocinas?|hornillas?|microondas?|licuadoras?|cafeteras?|taladros?|paneles? solares?|inversores?|baterias? externas?|power banks?|accesorios?|limpieza|detergentes?|jabones?|perfumes?|cosmeticos?|maquillaje|juguetes?|alimentos?|comida|bebidas?|repuestos?|piezas?|neumaticos?|llantas?|aceites?|joyas?|bolsos?|carteras?|decoracion|cortinas?|sabanas?|toallas?)\b/.test(normalized);
   const asksTechnical = /\b(propiedades|caracteristicas|especificaciones|especificacion|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|bateria|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|conectividad|4g|5g|wh|lifepo4)\b/.test(normalized);
   const asksAccessory = /\b(cables?|cargador(?:es)?|adaptador(?:es)?|micas?|covers?|fundas?)\b/.test(normalized);
   const asksAccessoryCommerce = asksAccessory && /\b(tienes|tienen|hay|venden|vendes|vendemos|venta|precio|cuanto cuesta|cuanto valen|disponible|separado|sueltos?|sueltas?)\b/.test(normalized);
   const bareModel = /^(?:(?:un|una|el|la|ese|esa)\s+)?(?:(?:samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\s+)*(?:[a-z]{1,8}\s*\d{1,4}[a-z0-9]*|\d{1,3}[a-z]{1,4})[\s?!.]*$/i.test(normalized.trim());
-  return (asksInventory && !asksTechnical) || (asksAvailability && asksKnownBrand && !asksTechnical) || asksAccessoryCommerce || (hasModelCode && (asksAvailability || bareModel));
+  return (asksInventory && !asksTechnical)
+    || (asksAvailability && asksKnownBrand && !asksTechnical)
+    || (asksProductCategory && !asksTechnical)
+    || asksAccessoryCommerce
+    || (hasModelCode && (asksAvailability || bareModel));
 }
 
 /** Deterministic answers for current catalog inventory and exact-model lookups. */
@@ -972,13 +1013,14 @@ export function buildCatalogLookupReply(
     return "No tengo un anuncio confirmado de adaptadores disponibles por separado. Puedes consultar directamente con el vendedor para confirmar si tiene alguno.";
   }
   const blocks = context.flatMap((chunk) => chunk.text.split(/(?=PRODUCTO:\s*)/));
-  const byTitle = new Map<string, { title: string; category: string; price: string; availability: string }>();
+  const byTitle = new Map<string, { title: string; category: string; description: string; price: string; availability: string }>();
   for (const block of blocks) {
     const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
     if (!title) continue;
     const key = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const entry = byTitle.get(key) ?? { title, category: "", price: "", availability: "" };
+    const entry = byTitle.get(key) ?? { title, category: "", description: "", price: "", availability: "" };
     entry.category ||= block.match(/^Categor[ií]a:\s*(.+)$/im)?.[1]?.trim() ?? "";
+    entry.description ||= block.match(/^(?:Descripción y características publicadas|Descripción):\s*(.+)$/im)?.[1]?.trim() ?? "";
     entry.price ||= block.match(/^Precio publicado:\s*(.+)$/im)?.[1]?.trim() ?? "";
     entry.availability ||= block.match(/^Disponibilidad publicada:\s*(.+)$/im)?.[1]?.trim() ?? "";
     byTitle.set(key, entry);
@@ -1024,14 +1066,21 @@ export function buildCatalogLookupReply(
   const isPhoneQuery = /\b(telefonos?|celulares?|moviles?|smartphones?)\b/.test(normalized);
   const isEnergyQuery = /\bestacion(?:es)? de energia\b|\benergia portatil\b/.test(normalized);
   const isMotorcycleQuery = /\b(motocicletas?|motos?)\b/.test(normalized);
-  const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/);
+  const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
+  const asksGalaxyS = /\b(galaxy|samsung)\b.*\bserie\s*s\b|\bserie\s*s\b.*\b(galaxy|samsung)\b|\bgalaxy\s+s\d*\b/.test(normalized);
+  const hasProductCategory = /\b(lamparas?|linternas?|bombillos?|focos?|ventiladores?|abanicos?|neveras?|refrigeradores?|lavadoras?|televisores?|laptops?|computadoras?|tabletas?|tablets?|bicicletas?|generadores?|herramientas?|ropa|zapatos?|relojes?|audifonos?|bocinas?|altavoces?|parlantes?|mochilas?|maletas?|muebles?|sillas?|mesas?|camas?|colchones?|cocinas?|hornillas?|microondas?|licuadoras?|cafeteras?|taladros?|paneles? solares?|inversores?|baterias? externas?|power banks?|accesorios?|limpieza|detergentes?|jabones?|perfumes?|cosmeticos?|maquillaje|juguetes?|alimentos?|comida|bebidas?|repuestos?|piezas?|neumaticos?|llantas?|aceites?|joyas?|bolsos?|carteras?|decoracion|cortinas?|sabanas?|toallas?)\b/.test(normalized);
+  const categoryTerms = normalized.split(/[^a-z0-9]+/).filter((term) =>
+    term.length >= 4 && !/^(tienes?|tienen|tengo|hay|vendes?|venden|vendemos|quiero|busco|necesito|ofrecen|ofrecemos|precio|cuanto|cuesta|valen|disponible|disponibilidad|venta|publicado|publicada|recargable|recargables|electrica|electrico|portatil|portatiles|nueva|nuevo|usada|usado|que|cuales|cual|una|uno|unos|unas|los|las|del|para|con|por|en|de|el|la|un|me|interesa|interesan)$/.test(term)
+  );
   let filtered = products;
   if (isPhoneQuery) {
     filtered = products.filter((product) => {
       const value = (product.title + " " + product.category).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
       return /\b(telefonia|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/.test(value);
     });
+  } else if (asksGalaxyS) {
+    filtered = products.filter((product) => /\b(galaxy\s+s\d*|samsung\s+s\d*)\b/i.test(normalizeBusinessText(product.title)));
   } else if (requestedBrand) {
     const brand = requestedBrand.toLowerCase();
     filtered = products.filter((product) => (product.title + " " + product.category)
@@ -1040,12 +1089,23 @@ export function buildCatalogLookupReply(
     filtered = products.filter((product) => /\bestacion(?:es)? de energia\b|\benergia\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
   } else if (isMotorcycleQuery) {
     filtered = products.filter((product) => /\b(motocicleta|moto|izuki|xmx|huracan)\b/i.test(normalizeBusinessText(product.category + " " + product.title)));
+  } else if (hasProductCategory) {
+    const stem = (term: string) => term.length > 5 && term.endsWith("es") ? term.slice(0, -2) : term.length > 5 && term.endsWith("s") ? term.slice(0, -1) : term;
+    filtered = products.filter((product) => {
+      const value = normalizeBusinessText(product.title + " " + product.category + " " + product.description);
+      const words = value.split(/[^a-z0-9]+/);
+      return categoryTerms.length > 0 && categoryTerms.every((term) => {
+        const singular = stem(term);
+        return words.some((word) => word === term || word === singular || word.startsWith(singular));
+      });
+    });
   }
   if (filtered.length === 0) {
-    const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : "productos";
-    return "Ahora mismo no encuentro anuncios vigentes de " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
+    const requestedPhrase = message.replace(/^[¿¡\s]*(?:tienes?|tienen|hay|vendes?|venden|vendemos|que|cuales|cual|me interesa|busco|quiero)\s+/i, "").replace(/[¿?¡!]/g, "").trim();
+    const label = hasProductCategory ? "que coincidan con «" + requestedPhrase + "»" : asksGalaxyS ? "de la serie Galaxy S" : isPhoneQuery ? "de teléfonos" : requestedBrand ? "de la marca " + requestedBrand.toUpperCase() : isEnergyQuery ? "de estaciones de energía" : isMotorcycleQuery ? "de motocicletas" : "de productos";
+    return "Ahora mismo no encuentro anuncios vigentes " + label + " en nuestro catálogo. El vendedor puede confirmar si hay alguna publicación nueva pendiente de sincronizar.";
   }
-  const label = isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : isAccessoryQuery ? "accesorios" : "productos";
+  const label = hasProductCategory ? "productos que coinciden con la búsqueda" : isPhoneQuery ? "teléfonos" : requestedBrand ? "productos " + requestedBrand.toUpperCase() : isEnergyQuery ? "estaciones de energía" : isMotorcycleQuery ? "motocicletas" : isAccessoryQuery ? "accesorios" : "productos";
   const lines = filtered.slice(0, 20).map((product) => {
     const details = [product.price, product.availability].filter(Boolean).join(" · ");
     return "• " + product.title + (details ? " — " + details : "");
@@ -1385,7 +1445,7 @@ export function buildCatalogPriceReply(
   if (!Number.isFinite(syncedAt) || ageMs < -5 * 60_000 || ageMs > 7 * 60 * 60_000) return null;
 
   const normalizedQuestion = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (!/\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\b/.test(normalizedQuestion)) return null;
+  if (!/\b(precio|cuanto(?:\s+(?:cuesta|es|sale|vale|seria))|cuesta|vale|valor|costo|coste)\b/.test(normalizedQuestion)) return null;
 
   const modelIds = [...normalizedQuestion.matchAll(/\b[a-z]{1,6}\d{1,4}[a-z0-9]*\b/g)].map((match) => match[0]);
   if (modelIds.length === 0) return null;
