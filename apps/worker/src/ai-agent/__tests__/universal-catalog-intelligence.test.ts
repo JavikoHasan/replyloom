@@ -133,6 +133,35 @@ describe("universal catalog intelligence", () => {
     expect(reply).not.toContain("BLUETTI");
   });
 
+  it("extracts EcoFlow Delta 2 specifications from the live listing description format", () => {
+    const description = [
+      "¿Los apagones ya no son un problema? La EcoFlow DELTA 2 combina potencia, carga ultrarrápida y batería de larga duración.",
+      "Especificaciones destacadas:",
+      "- Capacidad: 1024 Wh (1 kWh)",
+      "- Potencia: 1800 W continuos / hasta 2700 W pico con X-Boost",
+      "- Batería LiFePO4: más de 3000 ciclos de carga",
+      "- Carga solar: admite hasta 500 W",
+      "- Carga ultrarrápida: 0–80 % en aproximadamente 50 minutos",
+      "- Control inteligente: Wi-Fi y Bluetooth con la app EcoFlow",
+      "Amplía tu autonomía",
+      "Compatible con batería adicional de 1024 Wh, que permite alcanzar una capacidad total de 2048 Wh (2 kWh).",
+      "Ideal para hogar y negocio:",
+      "- Neveras y ventiladores",
+      "- Equipos compatibles de hasta 1800 W",
+    ].join("\\n");
+    const context = [{
+      text: "PRODUCTO: ECOFLOW DELTA 2 | Energía inteligente para tu hogar y negocio\\nCategoría: Energía\\nPrecio publicado: 800 USD\\nDescripción y características publicadas: " + description + "\\nFicha pública: https://revolico-sagua.pages.dev/anuncio/96981f24-b324-4a8e-9fd4-c218bd3db3f1",
+    }];
+    const reply = buildUniversalCatalogTechnicalReply("Dime las propiedades del EcoFlow", "Dime las propiedades del EcoFlow", context, sync, now);
+    expect(reply).toContain("1024 Wh");
+    expect(reply).toContain("1800 W continuos");
+    expect(reply).toContain("2700 W pico");
+    expect(reply).toContain("LiFePO4");
+    expect(reply).toContain("500 W");
+    expect(reply).toContain("50 minutos");
+    expect(reply).toContain("Wi-Fi y Bluetooth");
+    expect(reply).toContain("2048 Wh");
+  });
   it("answers an energy station from its published capacity and power fields", () => {
     const context = [{ text: "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh\nCategoría: Estaciones de energía\nPotencia: 1800W\nQuímica de batería: LiFePO4" }];
     const reply = buildUniversalCatalogTechnicalReply("¿Qué potencia y capacidad tiene?", "EcoFlow Delta 2", context, sync, now);
