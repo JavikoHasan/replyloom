@@ -465,25 +465,56 @@ export async function handleAgentMessage(
     }
   }
 
-  // For the store's public catalog, answer exact price questions deterministically
-  // from a fresh completed Revolico sync. This avoids a language model turning a
-  // clearly grounded price into a generic human handoff or inventing a value.
-  if (catalogOnlyBusiness && context.length > 0) {
-    const syncStatus = await env.REPLY_CACHE
-      .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
-      .catch(() => null);
-    const catalogReply = buildCatalogPriceReply(message, context, syncStatus);
-    if (catalogReply) {
+  // Resolve short price follow-ups against the full, fresh catalog and the
+  // most recent product context (e.g. "F07" followed by "Precio").
+  if (catalogOnlyBusiness && /\\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\\b/.test(normalizeStoreCatalogQuery(message))) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const allCatalogChunks = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const priceQuestion = message + " " + contextualProductQuery;
+      const exactPriceReply = buildCatalogPriceReply(priceQuestion, allCatalogChunks, syncStatus);
+      if (exactPriceReply) {
+        return { text: exactPriceReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
+      }
+
+      const hasProductContext = hasProductReference(contextualProductQuery)
+        || isCatalogLookupQuestion(contextualProductQuery)
+        || isShortCatalogProductSelection(contextualProductQuery);
+      if (!hasProductContext) {
+        return {
+          text: "Claro. ¿De cuál producto quieres saber el precio? Puedes decirme el modelo o el nombre del artículo.",
+          usedTools: [],
+          usedContext: allCatalogChunks,
+          blocked: false,
+          cached: false,
+        };
+      }
+
+      const catalogPriceLookup = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
+      if (catalogPriceLookup) {
+        const zellePriceReply = buildZelleTotalReply(catalogPriceLookup, recentThread);
+        return {
+          text: zellePriceReply ?? catalogPriceLookup,
+          usedTools: [],
+          usedContext: allCatalogChunks,
+          blocked: false,
+          cached: false,
+        };
+      }
       return {
-        text: catalogReply,
+        text: "Ahora mismo no puedo verificar un precio actualizado para ese producto en el catálogo. El vendedor puede confirmarlo directamente por WhatsApp: https://wa.me/5354590237.",
         usedTools: [],
-        usedContext: context,
+        usedContext: allCatalogChunks,
         blocked: false,
         cached: false,
       };
+    } catch (error) {
+      console.warn("[catalog-agent] contextual-price-lookup-error", { errorType: error instanceof Error ? error.name : typeof error });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
     }
   }
-
 
   // Answer the store's fixed phone bundle directly from the permanent code policy.
   // This avoids dependence on a policy chunk being selected by RAG.
