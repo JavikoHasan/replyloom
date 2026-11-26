@@ -217,7 +217,7 @@ async function syncWorkspaceCatalog(env: Env, workspaceId: string): Promise<void
     source: "revolico-sagua.pages.dev (información oficial y anuncios públicos del vendedor 5354590237)",
     docId: CATALOG_DOC_ID,
     text,
-    chunkSize: 1100,
+    chunkSize: 5000,
   });
 
   await saveStatus(env, { stage: "completed", message: "Catálogo guardado correctamente en Knowledge.", workspaceId, discoveredUrls: state.urls.length, processedUrls: end, acceptedListings: records.length, chunks: ingested.chunks });
@@ -308,7 +308,7 @@ export function parseOwnedListingHtml(url: string, html: string, now = Date.now(
   const category = extractElement(html, "div", "tag");
   const price = extractElement(html, "div", "price");
   const condition = extractElement(html, "div", "muted");
-  const description = extractElement(html, "div", "desc");
+  const description = extractElement(html, "div", "desc", true);
   const availability = extractFact(html, "Disponibilidad indicada");
   const publishedState = extractFact(html, "Estado");
   const expires = extractFact(html, "Vigencia del anuncio hasta");
@@ -330,10 +330,10 @@ export function parseOwnedListingHtml(url: string, html: string, now = Date.now(
   return { id, url, title, category, price, condition, description, status, expiresAt: expires, delivery };
 }
 
-function extractElement(html: string, tag: string, className: string): string {
+function extractElement(html: string, tag: string, className: string, preserveLines = false): string {
   const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = html.match(new RegExp(`<${tag}\\b[^>]*class=["'][^"']*\\b${escaped}\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return match ? stripHtml(match[1]) : "";
+  return match ? (preserveLines ? stripHtmlPreservingLines(match[1]) : stripHtml(match[1])) : "";
 }
 
 function extractFact(html: string, label: string): string {
@@ -346,6 +346,21 @@ function stripHtml(value: string): string {
   return decodeEntities(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ")).trim();
 }
 
+/** Preserve description paragraphs and list separators for technical extraction. */
+function stripHtmlPreservingLines(value: string): string {
+  const withBoundaries = value
+    .replace(/<br\\s*\\/?\\s*>/gi, "\\n")
+    .replace(/<\\/\\s*(?:p|div|li|h[1-6])\\s*>/gi, "\\n")
+    .replace(/<li\\b[^>]*>/gi, "\\n- ")
+    .replace(/<[^>]*>/g, " ");
+  return decodeEntities(withBoundaries)
+    .replace(/\\r\\n?/g, "\\n")
+    .replace(/[ \\t]+/g, " ")
+    .replace(/\\s*·\\s*/g, "\\n- ")
+    .replace(/ *\\n */g, "\\n")
+    .replace(/\\n{3,}/g, "\\n\\n")
+    .trim();
+}
 function decodeEntities(value: string): string {
   return value.replace(/&(#x[0-9a-f]+|#\d+|amp|quot|apos|lt|gt|nbsp);/gi, (_all, entity: string) => {
     const lower = entity.toLowerCase();
