@@ -1030,12 +1030,6 @@ export function buildCatalogLookupReply(
   const isPhoneQuery = /\b(telefonos?|celulares?|moviles?|smartphones?)\b/.test(normalized);
   const isEnergyQuery = /\bestacion(?:es)? de energia\b|\benergia portatil\b/.test(normalized);
   const isMotorcycleQuery = /\b(motocicletas?|motos?)\b/.test(normalized);
-  const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero)\b/);
-  const requestedBrand = brandMatch?.[1] ?? "";
-  let filtered = products;
-  const isPhoneQuery = /\b(telefonos?|celulares?|moviles?|smartphones?)\b/.test(normalized);
-  const isEnergyQuery = /\bestacion(?:es)? de energia\b|\benergia portatil\b/.test(normalized);
-  const isMotorcycleQuery = /\b(motocicletas?|motos?)\b/.test(normalized);
   const brandMatch = normalized.match(/\b(ou?pes|ecoflow|bluetti|anker|jackery|allpowers|goal zero|samsung|galaxy|redmi|xiaomi|iphone|itel|tecno|infinix|motorola|honor|realme|oppo|vivo)\b/);
   const requestedBrand = brandMatch?.[1] ?? "";
   const asksGalaxyS = /\b(galaxy|samsung)\b.*\bserie\s*s\b|\bserie\s*s\b.*\b(galaxy|samsung)\b|\bgalaxy\s+s\d*\b/.test(normalized);
