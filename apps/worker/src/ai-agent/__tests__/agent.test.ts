@@ -449,6 +449,7 @@ describe("catalog price replies", () => {
   it("answers a specific model price from a fresh catalog chunk without model generation", () => {
     expect(buildCatalogPriceReply("¿Cuánto cuesta el F07?", context, freshSync, now))
       .toBe("El precio publicado de SAMSUNG GALAXY F07 — 4GB RAM / 64GB ROM es 150 USD. La disponibilidad física debe confirmarse directamente con el vendedor.");
+    expect(buildCatalogPriceReply("¿Cuánto es el F07?", context, freshSync, now)).toContain("150 USD");
   });
 
   it("accepts a completed sync within the six-hour catalog refresh interval", () => {
