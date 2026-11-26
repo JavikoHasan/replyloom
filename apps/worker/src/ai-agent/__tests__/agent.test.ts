@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleAgentMessage, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, buildPurchaseInterestReply, isPurchaseInterestMessage, isPhoneFunctionalityQuestion, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
+import { handleAgentMessage, buildAssistantIdentityReply, buildBusinessContactReply, buildZelleTotalReply, buildCatalogLookupReply, buildCatalogPriceReply, buildPhoneBundleReply, buildPaymentPolicyReply, buildStorePolicyOnlyReply, buildCatalogDeliveryReply, buildGeneralDeliveryPolicyReply, buildPhoneTechnicalReply, buildReservationPolicyReply, buildPurchaseInterestReply, isPurchaseInterestMessage, isPhoneFunctionalityQuestion, resolveRecentProductQuery, isDeliveryQuestion, isDeliverySchedulingQuestion, isCatalogLookupQuestion, isSimpleGreeting, normalizeGeneratorResult, parseToolArgs } from "../agent";
 import { queryTerms, shouldFallbackToCatalog } from "../rag";
 
 describe("parseToolArgs", () => {
@@ -822,5 +822,49 @@ describe("normalizeGeneratorResult", () => {
     expect(normalizeGeneratorResult({
       choices: [{ message: { content: [{ type: "text", text: "Hola" }, { type: "text", text: " mundo" }] } }],
     }).response).toBe("Hola mundo");
+  });
+});
+
+
+describe("assistant identity", () => {
+  it("answers who the assistant is without turning into a general-purpose chatbot", () => {
+    expect(buildAssistantIdentityReply("¿Eres una IA?")).toContain("Sí, soy el asistente virtual");
+    expect(buildAssistantIdentityReply("¿Con quién hablo?")).toContain("Cell Phone Store - Sagua la Grande");
+    expect(buildAssistantIdentityReply("Cuéntame un chiste")).toBeNull();
+  });
+});
+
+describe("business contact and payment follow-ups", () => {
+  it("returns the official WhatsApp contact for short contact questions", () => {
+    expect(buildBusinessContactReply("Contacto")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Cómo puedo contactarlos?")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Cuál es el teléfono del vendedor?")).toContain("https://wa.me/5354590237");
+    expect(buildBusinessContactReply("¿Qué teléfonos tienen?")).toBeNull();
+    expect(buildBusinessContactReply("¿Qué características tiene el F07?")).toBeNull();
+  });
+
+  it("does not claim that PayPal or cryptocurrencies are accepted", () => {
+    expect(buildPaymentPolicyReply("¿Aceptan PayPal?")).toContain("No tengo confirmación");
+    expect(buildPaymentPolicyReply("¿Aceptan criptomonedas?")).toContain("No tengo confirmación");
+    expect(buildPaymentPolicyReply("¿Aceptan Zelle?")).toContain("recargo del 10%");
+  });
+
+  it("calculates Zelle for a one-product catalogue list", () => {
+    const reply = buildZelleTotalReply(
+      "Estos son los productos ECOFLOW que aparecen en nuestro catálogo:\n• ECOFLOW DELTA 2 — 800 USD · Disponible",
+      "Customer: ¿Cuánto es por Zelle?\nAgent: Aceptamos Zelle",
+      true,
+    );
+    expect(reply).toContain("800 USD");
+    expect(reply).toContain("880 USD");
+  });
+
+  it("refuses to calculate Zelle when a catalogue list contains multiple prices", () => {
+    const reply = buildZelleTotalReply(
+      "Catálogo:\n• ECOFLOW DELTA 2 — 800 USD\n• RIVER 2 PRO — 630 USD",
+      "",
+      true,
+    );
+    expect(reply).toBeNull();
   });
 });

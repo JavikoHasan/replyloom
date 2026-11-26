@@ -21,13 +21,25 @@ describe("universal catalog intelligence", () => {
     expect(isShortCatalogProductSelection("Gracias")).toBe(false);
     expect(isShortCatalogProductSelection("¿Qué tienes en venta?")).toBe(false);
     expect(isShortCatalogProductSelection("A16")).toBe(true);
+    expect(isShortCatalogProductSelection("Un A16")).toBe(true);
+    expect(isShortCatalogProductSelection("El Samsung A16")).toBe(true);
   });
 
-  it("resolves a generic new product selection against its own catalog title", () => {
-    const context = [{ text: "PRODUCTO: NEVERA MIDEA 7 PIES\nCategoría: Hogar\nPrecio publicado: 450 USD\nDisponibilidad publicada: Disponible" }];
-    const reply = buildShortCatalogProductSelectionReply("Me interesa una nevera", context, sync, now);
-    expect(reply).toContain("NEVERA MIDEA 7 PIES");
-    expect(reply).toContain("450 USD");
+  it("resolves a natural short phone selection such as 'Un A16' from the exact listing", () => {
+    const context = [{
+      text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM\nCategoría: Telefonía\nPrecio publicado: 190 USD\nDisponibilidad publicada: Disponible",
+    }];
+    const reply = buildShortCatalogProductSelectionReply("Un A16", context, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY A16");
+    expect(reply).toContain("190 USD");
+    expect(reply).toContain("existencia física debe confirmarse");
+  });
+
+  it("resolves a short selection for a real non-phone listing from its own catalog title", () => {
+    const context = [{ text: "PRODUCTO: BLUETTI ELITE 100 V2 – ESTACIÓN DE ENERGÍA PORTÁTIL DE 1024Wh / 1800W\nCategoría: Energía\nPrecio publicado: 600 USD\nDisponibilidad publicada: Disponible" }];
+    const reply = buildShortCatalogProductSelectionReply("Una Bluetti", context, sync, now);
+    expect(reply).toContain("BLUETTI ELITE 100 V2");
+    expect(reply).toContain("600 USD");
   });
 
   it("asks the customer to distinguish multiple products matching a broad brand selection", () => {
@@ -88,6 +100,39 @@ describe("universal catalog intelligence", () => {
     expect(reply).toBeNull();
   });
 
+  it("switches to a newly named catalog product even when its brand was never hard-coded", () => {
+    const context = [
+      { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
+      { text: "PRODUCTO: BLUETTI ELITE 100 V2 – ESTACIÓN DE ENERGÍA PORTÁTIL DE 1024Wh / 1800W\nCategoría: Energía\nCapacidad de batería: 1024Wh\nPotencia nominal: 1800W\nPotencia pico: 3600W" },
+    ];
+    const reply = buildUniversalCatalogTechnicalReply(
+      "¿Qué potencia tiene la Bluetti?",
+      "Un A16",
+      context,
+      sync,
+      now,
+    );
+    expect(reply).toContain("BLUETTI ELITE 100 V2");
+    expect(reply).toContain("1800W");
+    expect(reply).not.toContain("SAMSUNG GALAXY A16");
+  });
+
+  it("keeps the active product for a technical follow-up that does not repeat its name", () => {
+    const context = [
+      { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
+      { text: "PRODUCTO: BLUETTI ELITE 100 V2\nPotencia: 1800W" },
+    ];
+    const reply = buildUniversalCatalogTechnicalReply(
+      "¿Qué potencia tiene?",
+      "Un A16",
+      context,
+      sync,
+      now,
+    );
+    expect(reply).toContain("SAMSUNG GALAXY A16");
+    expect(reply).not.toContain("BLUETTI");
+  });
+
   it("answers an energy station from its published capacity and power fields", () => {
     const context = [{ text: "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh\nCategoría: Estaciones de energía\nPotencia: 1800W\nQuímica de batería: LiFePO4" }];
     const reply = buildUniversalCatalogTechnicalReply("¿Qué potencia y capacidad tiene?", "EcoFlow Delta 2", context, sync, now);
@@ -128,6 +173,17 @@ describe("universal catalog intelligence", () => {
     const context = [{ text: "PRODUCTO: ECOFLOW DELTA 2 — 1024Wh\nPotencia: 1800W" }];
     const stale = { stage: "completed", updatedAt: "2026-11-25T01:00:00.000Z" };
     expect(buildUniversalCatalogTechnicalReply("¿Qué potencia tiene?", "EcoFlow Delta 2", context, stale, now)).toBeNull();
+  });
+
+  it("keeps an elliptical 5G question attached to the active product instead of matching another 5G listing", () => {
+    const context = [
+      { text: "PRODUCTO: SAMSUNG GALAXY A16 — 4GB RAM / 128GB ROM" },
+      { text: "PRODUCTO: SAMSUNG GALAXY A56 5G — 8GB RAM / 256GB ROM" },
+    ];
+    const reply = buildUniversalCatalogTechnicalReply("¿Es 5G?", "Un A16", context, sync, now);
+    expect(reply).toContain("SAMSUNG GALAXY A16");
+    expect(reply).toContain("no especifica la conectividad de red");
+    expect(reply).not.toContain("A56");
   });
 
   it("does not confuse a short model code with a longer one", () => {

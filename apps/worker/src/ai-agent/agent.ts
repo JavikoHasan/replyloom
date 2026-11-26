@@ -19,7 +19,7 @@ const MAX_THREAD_CHARS = 1500;
 const THREAD_MESSAGE_LIMIT = 12;
 
 const NO_INFO_REPLY =
-  "Soy el asistente virtual de Cell Phone Store. Solo estoy autorizado para informar sobre los productos publicados y datos que estén verificados. No tengo información confirmada sobre esa consulta; para evitar errores, puedes consultarlo directamente con el vendedor.";
+  "¡Hola! 👋 Soy el asistente virtual de Cell Phone Store - Sagua la Grande. Soy una IA de apoyo comercial y, en ocasiones, puedo tener dificultades para interpretar alguna consulta o encontrar una respuesta confirmada en la información publicada. Para ayudarte mejor, intenta formularla de otra manera o dime qué producto te interesa. Mi prioridad es ofrecerte información correcta y no inventar datos. Si necesitas ayuda adicional, puedes contactar directamente con el vendedor por WhatsApp: https://wa.me/5354590237.";
 const CLARIFY_REPLY =
   "¡Hola! 👋 Soy el asistente virtual de Cell Phone Store - Sagua la Grande. Estoy aquí para atenderte cuando el vendedor no esté disponible y ayudarte con información sobre nuestros productos, precios publicados, formas de pago y condiciones de entrega. Si deseas hablar directamente con el vendedor o confirmar una compra, puedes escribirle por WhatsApp aquí: https://wa.me/5354590237. ¡Con gusto te ayudo!";
 
@@ -101,6 +101,22 @@ export async function handleAgentMessage(
     return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
   }
 
+  // Answer brief questions about the assistant itself without opening general chat.
+  if (catalogOnlyBusiness) {
+    const identityReply = buildAssistantIdentityReply(message);
+    if (identityReply) {
+      return { text: identityReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
+  // Public business contact is a commercial FAQ, not an unknown/off-topic request.
+  if (catalogOnlyBusiness) {
+    const contactReply = buildBusinessContactReply(message);
+    if (contactReply) {
+      return { text: contactReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   // ── 1) Cheap exact-match cache — zero model spend on repeat FAQs ──
   const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v3:" : ""}${normalize(message)}`;
   if (replyCacheTtlSeconds > 0) {
@@ -126,6 +142,44 @@ export async function handleAgentMessage(
     ? resolveRecentProductQuery(message, recentThread)
     : message;
   const asksZelleNow = /\bzelle\b/i.test(normalizeBusinessText(message));
+
+  // A short product selection (for example, "Un A16", "la nevera" or
+  // "una bicicleta eléctrica") is a catalog lookup, not a request for
+  // private/internal data. Resolve it from listing titles BEFORE intent
+  // classification so future categories are supported without hard-coded
+  // model identifiers or category names.
+  if (catalogOnlyBusiness && isShortCatalogProductSelection(message)) {
+    try {
+      const syncStatus = await env.REPLY_CACHE
+        .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
+        .catch(() => null);
+      const selectionContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
+      const selectionReply = buildShortCatalogProductSelectionReply(message, selectionContext, syncStatus);
+      if (selectionReply) {
+        console.info("[catalog-agent] pre-classifier-product-selection", {
+          modelReferencePresent: true,
+          contextRows: selectionContext.length,
+          responsePresent: true,
+        });
+        return { text: selectionReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
+      }
+      // The model selection is still legitimate when the catalog sync is
+      // stale or unavailable; explain the verification limitation instead
+      // of allowing a false privacy classification to reject the customer.
+      return {
+        text: "He identificado el modelo que mencionas, pero ahora mismo no puedo verificar una ficha de catálogo suficientemente actualizada. Para evitar darte un precio o una disponibilidad incorrectos, el vendedor puede confirmártelo directamente por WhatsApp: https://wa.me/5354590237.",
+        usedTools: [],
+        usedContext: selectionContext,
+        blocked: false,
+        cached: false,
+      };
+    } catch (error) {
+      console.warn("[catalog-agent] pre-classifier-product-selection-error", {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+      return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
 
   const asksTechnicalProductQuestion = isUniversalCatalogTechnicalQuestion(message) || /\b(propiedades|caracteristicas|especificaciones|especificacion|4g|5g|conectividad|red movil|memoria|almacenamiento|ram|rom|procesador|pantalla|camara|bateria|carga|nfc|sistema operativo|resolucion|hz|potencia|cilindrada|cc|transmision|frenos|suspension|velocidad|combustible|capacidad|wh|kwh|lifepo4|quimica|expandible|ampliable|salida|entrada solar)\b/.test(normalizeStoreCatalogQuery(message));
   if (catalogOnlyBusiness && asksTechnicalProductQuestion) {
@@ -1004,6 +1058,22 @@ export function buildCatalogLookupReply(
  * Answers payment questions directly from the approved store policy.
  * Never estimates exchange rates or implies CUP payment is accepted for USD ads.
  */
+/** Answer identity questions about the assistant without inviting unrelated conversation. */
+export function buildAssistantIdentityReply(message: string): string | null {
+  const normalized = normalizeStoreCatalogQuery(message);
+  const asksIdentity = /\b(eres una ia|eres ia|eres un robot|eres humano|quien eres|con quien hablo|hablo con una ia|hablo con un robot)\b/.test(normalized);
+  if (!asksIdentity) return null;
+  return "Sí, soy el asistente virtual de Cell Phone Store - Sagua la Grande. Soy una IA de apoyo comercial y puedo ayudarte con los productos publicados, sus precios, características verificadas, pagos y condiciones de compra. Si necesitas hablar directamente con el vendedor, puedes escribirle por WhatsApp: https://wa.me/5354590237.";
+}
+
+/** Resolve common ways customers ask for the store's public WhatsApp contact. */
+export function buildBusinessContactReply(message: string): string | null {
+  const normalized = normalizeStoreCatalogQuery(message);
+  const asksContact = /\b(contacto|contactarlos|contactarlas|contactarme|contactar|comunicarme|comunicarse|whatsapp|escribirles|escribirle|hablar con el vendedor|hablar con ustedes|como los contacto|como puedo contactarlos|como puedo comunicarme|numero de contacto|telefono de contacto|telefono del vendedor|numero del vendedor|su numero|su telefono)\b/.test(normalized);
+  if (!asksContact) return null;
+  return "Puedes contactar directamente con el vendedor de Cell Phone Store - Sagua la Grande por WhatsApp: https://wa.me/5354590237. Por ese medio puedes consultar productos y coordinar una compra.";
+}
+
 export function buildPaymentPolicyReply(message: string): string | null {
   const normalized = normalizeStoreCatalogQuery(message);
   const asksZelle = /\bzelle\b/.test(normalized);
@@ -1019,6 +1089,10 @@ export function buildPaymentPolicyReply(message: string): string | null {
   }
   if (asksZelle) {
     return "Sí, aceptamos Zelle para los anuncios publicados en USD. Se aplica un recargo del 10% sobre el precio publicado. Si me dices qué producto te interesa, puedo indicarte el total exacto por Zelle.";
+  }
+  const asksUnconfirmedPayment = /\b(paypal|cripto(?:monedas)?|criptomonedas|bitcoin|btc|ethereum|eth|usdt|usdc|crypto)\b/.test(normalized);
+  if (asksUnconfirmedPayment) {
+    return "No tengo confirmación de que aceptemos ese método de pago. El método confirmado para los anuncios en USD es Zelle, con un recargo del 10%. Para consultar PayPal, criptomonedas u otra modalidad, debes confirmarlo directamente con el vendedor: https://wa.me/5354590237.";
   }
   if (asksCup) {
     return "No aceptamos efectivo en CUP ni transferencias en CUP para los anuncios publicados en USD. Los precios se mantienen en la moneda indicada en cada anuncio.";
@@ -1054,9 +1128,14 @@ export function buildZelleTotalReply(catalogReply: string, conversationThread: s
     /Customer:[^\n]*\bzelle\b[\s\S]*Agent:[^\n]*aceptamos Zelle/i.test(normalizedThread);
   if (!hasZellePaymentExchange && !explicitCurrentZelleIntent) return null;
 
-  const priceMatch = catalogReply.match(/\bprecio publicado es\s+([\d,.]+)\s*USD\b/i);
-  if (!priceMatch) return null;
-  const publishedPrice = Number(priceMatch[1].replace(/,/g, ""));
+  const directPriceMatch = catalogReply.match(/\bprecio publicado es\s+([\d,.]+)\s*USD\b/i);
+  // A brand/category lookup may return a one-item catalogue list instead of
+  // the single-product sentence. Accept that format only when exactly one
+  // USD price appears, so we never calculate a total for an ambiguous list.
+  const listedPrices = [...catalogReply.matchAll(/(?:^|\n)\s*[•*-]?\s*[^\n]+?[—–-]\s*([\d,.]+)\s*USD\b/gm)];
+  const priceText = directPriceMatch?.[1] ?? (listedPrices.length === 1 ? listedPrices[0][1] : null);
+  if (!priceText) return null;
+  const publishedPrice = Number(priceText.replace(/,/g, ""));
   if (!Number.isFinite(publishedPrice) || publishedPrice <= 0) return null;
 
   const total = Math.round(publishedPrice * 1.1 * 100) / 100;
