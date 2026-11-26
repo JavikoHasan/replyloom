@@ -1053,7 +1053,7 @@ export function buildCatalogLookupReply(
 export /** Resolve common ways customers ask for the store's public WhatsApp contact. */
 export function buildBusinessContactReply(message: string): string | null {
   const normalized = normalizeStoreCatalogQuery(message);
-  const asksContact = /\b(contacto|contactarlos|contactarlas|contactarme|contactar|comunicarme|comunicarse|numero|telefono|whatsapp|escribirles|escribirle|hablar con el vendedor|hablar con ustedes|como los contacto|como puedo contactarlos|como puedo comunicarme)\b/.test(normalized);
+  const asksContact = /\b(contacto|contactarlos|contactarlas|contactarme|contactar|comunicarme|comunicarse|whatsapp|escribirles|escribirle|hablar con el vendedor|hablar con ustedes|como los contacto|como puedo contactarlos|como puedo comunicarme|numero de contacto|telefono de contacto|telefono del vendedor|numero del vendedor|su numero|su telefono)\b/.test(normalized);
   if (!asksContact) return null;
   return "Puedes contactar directamente con el vendedor de Cell Phone Store - Sagua la Grande por WhatsApp: https://wa.me/5354590237. Por ese medio puedes consultar productos y coordinar una compra.";
 }
