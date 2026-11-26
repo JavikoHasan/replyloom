@@ -1,0 +1,1 @@
+Temporary trigger for the validated Cell Phone Store Worker-only deployment.
