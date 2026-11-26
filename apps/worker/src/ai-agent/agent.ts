@@ -478,7 +478,7 @@ export async function handleAgentMessage(
       if (exactPriceReply) {
         const exactProductListing = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
         const zelleTotal = exactProductListing
-          ? buildZelleTotalReply(exactProductListing, recentThread + "\\nCustomer: " + message, asksZelleNow)
+          ? buildZelleTotalReply(exactProductListing, recentThread + "\nCustomer: " + message, asksZelleNow)
           : null;
         return { text: zelleTotal ?? exactPriceReply, usedTools: [], usedContext: allCatalogChunks, blocked: false, cached: false };
       }
@@ -498,7 +498,7 @@ export async function handleAgentMessage(
 
       const catalogPriceLookup = buildCatalogLookupReply(contextualProductQuery, allCatalogChunks, syncStatus);
       if (catalogPriceLookup) {
-        const zellePriceReply = buildZelleTotalReply(catalogPriceLookup, recentThread + "\\nCustomer: " + message, asksZelleNow)
+        const zellePriceReply = buildZelleTotalReply(catalogPriceLookup, recentThread + "\nCustomer: " + message, asksZelleNow)
           ?? (asksZelleNow ? buildZelleTotalReply(catalogPriceLookup, recentThread, true) : null);
         return {
           text: zellePriceReply ?? catalogPriceLookup,
