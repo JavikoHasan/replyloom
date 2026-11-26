@@ -467,7 +467,7 @@ export async function handleAgentMessage(
 
   // Resolve short price follow-ups against the full, fresh catalog and the
   // most recent product context (e.g. "F07" followed by "Precio").
-  if (catalogOnlyBusiness && /\\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\\b/.test(normalizeStoreCatalogQuery(message))) {
+  if (catalogOnlyBusiness && /\b(precio|cuanto cuesta|cuesta|vale|valor|costo|coste)\b/.test(normalizeStoreCatalogQuery(message))) {
     try {
       const syncStatus = await env.REPLY_CACHE
         .get<{ stage?: string; updatedAt?: string }>("revolico:catalog-sync:status", "json")
