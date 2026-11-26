@@ -1058,7 +1058,7 @@ export function buildCatalogLookupReply(
  * Answers payment questions directly from the approved store policy.
  * Never estimates exchange rates or implies CUP payment is accepted for USD ads.
  */
-export /** Answer identity questions about the assistant without inviting unrelated conversation. */
+/** Answer identity questions about the assistant without inviting unrelated conversation. */
 export function buildAssistantIdentityReply(message: string): string | null {
   const normalized = normalizeStoreCatalogQuery(message);
   const asksIdentity = /\b(eres una ia|eres ia|eres un robot|eres humano|quien eres|con quien hablo|hablo con una ia|hablo con un robot)\b/.test(normalized);
@@ -1074,7 +1074,7 @@ export function buildBusinessContactReply(message: string): string | null {
   return "Puedes contactar directamente con el vendedor de Cell Phone Store - Sagua la Grande por WhatsApp: https://wa.me/5354590237. Por ese medio puedes consultar productos y coordinar una compra.";
 }
 
-function buildPaymentPolicyReply(message: string): string | null {
+export function buildPaymentPolicyReply(message: string): string | null {
   const normalized = normalizeStoreCatalogQuery(message);
   const asksZelle = /\bzelle\b/.test(normalized);
   const asksCup = /\bcup\b|pesos? cubanos?|moneda nacional/.test(normalized);
