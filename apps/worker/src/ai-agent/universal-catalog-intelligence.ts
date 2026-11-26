@@ -72,7 +72,7 @@ function extractTechnicalFacts(block: string): string[] {
     }
   }
 
-  const description = block.match(/^Descripción y características publicadas:\s*([\s\S]*?)(?=^Ficha pública:|^Nota:|$)/im)?.[1]?.trim();
+  const description = block.match(/^Descripción y características publicadas:\s*([\s\S]*?)(?=^Ficha pública:|^Nota:|$(?![\\s\\S]))/im)?.[1]?.trim();
   if (description) {
     const sentences = description.split(/(?<=[.!?])\s+|\r?\n+/).map((sentence) => sentence.replace(/^[-•*]\s*/, "").trim()).filter((sentence) =>
       sentence.length <= 220 &&
