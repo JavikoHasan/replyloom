@@ -101,6 +101,14 @@ export async function handleAgentMessage(
     return { text: NO_INFO_REPLY, usedTools: [], usedContext: [], blocked: false, cached: false };
   }
 
+  // Public business contact is a commercial FAQ, not an unknown/off-topic request.
+  if (catalogOnlyBusiness) {
+    const contactReply = buildBusinessContactReply(message);
+    if (contactReply) {
+      return { text: contactReply, usedTools: [], usedContext: [], blocked: false, cached: false };
+    }
+  }
+
   // ── 1) Cheap exact-match cache — zero model spend on repeat FAQs ──
   const cacheKey = `${cachePrefixes.replies}${config.workspaceId}:${catalogOnlyBusiness ? "catalog-v3:" : ""}${normalize(message)}`;
   if (replyCacheTtlSeconds > 0) {
@@ -1042,7 +1050,15 @@ export function buildCatalogLookupReply(
  * Answers payment questions directly from the approved store policy.
  * Never estimates exchange rates or implies CUP payment is accepted for USD ads.
  */
-export function buildPaymentPolicyReply(message: string): string | null {
+export /** Resolve common ways customers ask for the store's public WhatsApp contact. */
+export function buildBusinessContactReply(message: string): string | null {
+  const normalized = normalizeStoreCatalogQuery(message);
+  const asksContact = /\b(contacto|contactarlos|contactarlas|contactarme|contactar|comunicarme|comunicarse|numero|telefono|whatsapp|escribirles|escribirle|hablar con el vendedor|hablar con ustedes|como los contacto|como puedo contactarlos|como puedo comunicarme)\b/.test(normalized);
+  if (!asksContact) return null;
+  return "Puedes contactar directamente con el vendedor de Cell Phone Store - Sagua la Grande por WhatsApp: https://wa.me/5354590237. Por ese medio puedes consultar productos y coordinar una compra.";
+}
+
+function buildPaymentPolicyReply(message: string): string | null {
   const normalized = normalizeStoreCatalogQuery(message);
   const asksZelle = /\bzelle\b/.test(normalized);
   const asksCup = /\bcup\b|pesos? cubanos?|moneda nacional/.test(normalized);
@@ -1057,6 +1073,10 @@ export function buildPaymentPolicyReply(message: string): string | null {
   }
   if (asksZelle) {
     return "Sí, aceptamos Zelle para los anuncios publicados en USD. Se aplica un recargo del 10% sobre el precio publicado. Si me dices qué producto te interesa, puedo indicarte el total exacto por Zelle.";
+  }
+  const asksUnconfirmedPayment = /\b(paypal|cripto(?:monedas)?|criptomonedas|bitcoin|btc|ethereum|eth|usdt|usdc|crypto)\b/.test(normalized);
+  if (asksUnconfirmedPayment) {
+    return "No tengo confirmación de que aceptemos ese método de pago. El método confirmado para los anuncios en USD es Zelle, con un recargo del 10%. Para consultar PayPal, criptomonedas u otra modalidad, debes confirmarlo directamente con el vendedor: https://wa.me/5354590237.";
   }
   if (asksCup) {
     return "No aceptamos efectivo en CUP ni transferencias en CUP para los anuncios publicados en USD. Los precios se mantienen en la moneda indicada en cada anuncio.";
@@ -1092,9 +1112,14 @@ export function buildZelleTotalReply(catalogReply: string, conversationThread: s
     /Customer:[^\n]*\bzelle\b[\s\S]*Agent:[^\n]*aceptamos Zelle/i.test(normalizedThread);
   if (!hasZellePaymentExchange && !explicitCurrentZelleIntent) return null;
 
-  const priceMatch = catalogReply.match(/\bprecio publicado es\s+([\d,.]+)\s*USD\b/i);
-  if (!priceMatch) return null;
-  const publishedPrice = Number(priceMatch[1].replace(/,/g, ""));
+  const directPriceMatch = catalogReply.match(/\bprecio publicado es\s+([\d,.]+)\s*USD\b/i);
+  // A brand/category lookup may return a one-item catalogue list instead of
+  // the single-product sentence. Accept that format only when exactly one
+  // USD price appears, so we never calculate a total for an ambiguous list.
+  const listedPrices = [...catalogReply.matchAll(/(?:^|\n)\s*[•*-]?\s*[^\n]+?[—–-]\s*([\d,.]+)\s*USD\b/gm)];
+  const priceText = directPriceMatch?.[1] ?? (listedPrices.length === 1 ? listedPrices[0][1] : null);
+  if (!priceText) return null;
+  const publishedPrice = Number(priceText.replace(/,/g, ""));
   if (!Number.isFinite(publishedPrice) || publishedPrice <= 0) return null;
 
   const total = Math.round(publishedPrice * 1.1 * 100) / 100;
