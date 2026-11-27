@@ -15,20 +15,14 @@
 //                                      point at a synced folder, e.g. Dropbox)
 // `node scripts/config.mjs --restore`  copy backup files back, only where the
 //                                      local file is missing
-// `... --backup --cloud` / `--restore --cloud`
-//                                      same, but encrypted client-side with
-//                                      AES-256-GCM (PBKDF2-SHA256, 600,000
-//                                      iterations via BACKUP_ENCRYPTION_KEY)
-//                                      and synced to a dedicated restricted R2
-//                                      bucket (`whatsapp-ai-backups`):
-//                                        r2://<CONFIG_R2_BUCKET>/config/config.json.enc
+// `--cloud` backup/restore is disabled in this zero-cost branch; R2 is not used.
 // `node scripts/config.mjs --encrypt-file <in> <out>`
 // `node scripts/config.mjs --decrypt-file <in> <out>`
 //                                      encrypt/decrypt arbitrary backup files
-//                                      (used by .github/workflows/d1-backup.yml)
+//                                      for local encrypted exports only
 // `node scripts/config.mjs --from-env` (re)write all three from the templates
 //                                      using env vars — for CI deploys:
-//     D1_DATABASE_ID, KV_NAMESPACE_ID, APP_URL, ENGINE_URL   (required)
+//     D1_DATABASE_ID, KV_NAMESPACE_ID, MEDIA_KV_NAMESPACE_ID, APP_URL, ENGINE_URL   (required)
 //     SENTRY_DSN                                             (optional)
 // `node scripts/config.mjs --check`    exit 1 if any placeholder is left
 import { spawnSync } from "node:child_process";
@@ -172,6 +166,13 @@ function runCli() {
   const allowUnencrypted = flags.includes("--allow-unencrypted");
   const positional = flags.filter((f) => f !== "--cloud" && f !== "--allow-unencrypted");
   const mode = positional[0] ?? "";
+
+  // This branch must remain strictly free: never let an optional legacy
+  // command create or write to an R2 bucket that requires a subscription.
+  if (cloud) {
+    console.error("Cloud R2 backups are disabled in the zero-cost profile. Use local config backups or D1 Free Time Travel.");
+    process.exit(1);
+  }
 
   if (mode === "--encrypt-file") {
     const [, inputPath, outputPath] = positional;
@@ -328,7 +329,7 @@ function runCli() {
   }
 
   if (mode === "--from-env") {
-    const need = ["D1_DATABASE_ID", "KV_NAMESPACE_ID", "APP_URL", "ENGINE_URL"];
+    const need = ["D1_DATABASE_ID", "KV_NAMESPACE_ID", "MEDIA_KV_NAMESPACE_ID", "APP_URL", "ENGINE_URL"];
     const missing = need.filter((k) => !process.env[k]);
     if (missing.length) {
       console.error(`Missing env: ${missing.join(", ")}`);
@@ -343,6 +344,7 @@ function runCli() {
       if (dst.endsWith(".jsonc")) {
         src = set(src, "database_id", process.env.D1_DATABASE_ID);
         src = src.replace(/("binding": "REPLY_CACHE", "id": )"[^"]*"/, `$1${JSON.stringify(process.env.KV_NAMESPACE_ID)}`);
+        src = src.replace(/("binding": "MEDIA_STORE", "id": )"[^"]*"/, `$1${JSON.stringify(process.env.MEDIA_KV_NAMESPACE_ID)}`);
         src = set(src, "BETTER_AUTH_URL", app);
         src = set(src, "VITE_ENGINE_URL", engine);
         src = set(src, "CORS_ORIGIN", app);

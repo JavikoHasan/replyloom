@@ -33,6 +33,8 @@ import { syncContactUpsert, syncContactsFromHistory, syncGroupsFromHistory, sync
 import { TtlCache } from "../ttl-cache";
 import {
   AutoReplyLimiter,
+  AutoReplyContentDeduper,
+  AutoReplyMessageDeduper,
   MAX_QUEUE_WAIT_MS,
   OUTBOUND_BURST,
   OUTBOUND_PER_SEC,
@@ -43,30 +45,6 @@ import {
   
 } from "./outbound-guard";
 import type {SendKind} from "./outbound-guard";
-
-// Pretty-prints a Baileys pino-logger argument for our own log stream.
-// Was `String(x)` for every arg, which turns any object Baileys logs
-// (which is most of them -- pino loggers take a data object as the FIRST
-// arg, then a message string) into the literal text "[object Object]",
-// throwing away the actual error/detail every single time. That's exactly
-// what made a real failure (e.g. "Failed to encrypt for recipient") show
-// up in our logs with zero information about *why* -- the useful part was
-// always in the object we were discarding.
-function fmtLogArg(a: unknown): string {
-  if (a instanceof Error) return a.stack || a.message;
-  if (a && typeof a === "object") {
-    try {
-      return JSON.stringify(a, (_k, v) => {
-        if (v instanceof Uint8Array) return `<${v.length} bytes>`;
-        if (v instanceof Error) return { message: v.message, stack: v.stack };
-        return v;
-      });
-    } catch {
-      return String(a);
-    }
-  }
-  return String(a);
-}
 
 // ── SQLite-backed auth state adapter (Phase 4) ──────────────────────────
 
@@ -141,6 +119,8 @@ function createSqliteAuthState(storage: SqlStorage): AuthenticationState {
 // ── Durable Object ──────────────────────────────────────────────────────
 
 const MAX_RECONNECT_ATTEMPTS = 3;
+const HUMAN_AUTO_REPLY_PAUSE_MS = 60_000;
+const BOT_REPLY_ECHO_MARKER_MS = 15_000;
 
 type ConnectionState = "idle" | "connecting" | "qr" | "authenticated" | "connected" | "disconnected";
 
@@ -210,17 +190,22 @@ export class WhatsAppSession implements DurableObject {
   // When true, `messaging-history.set`'s message backfill is skipped
   // entirely -- the CRM only starts recording messages that arrive live
   // from this point on, instead of importing the number's past chat
-  // history. Contacts/group metadata still sync either way (cheap), but
-  // conversation shells from hist.chats are NOT created -- the inbox
-  // stays empty until a live message arrives.
+  // history. Generic workspaces may still sync contact/group metadata,
+  // but the Cell Phone Store assistant blocks historical contacts, groups,
+  // mappings, chat shells, and message backfill regardless of this toggle.
+  // Its CRM begins with new private customer messages only.
   private skipHistorySync = false;
   // When true, group membership sync (resolving every participant of
   // every group into a CRM contact row) is skipped at connect/history
-  // time -- group name + participant count still sync so groups show up
-  // in the inbox, but members can be pulled in later on demand via
-  // POST /group-members-sync for a specific group instead of eagerly for
-  // every group the number happens to be in.
+  // time for generic workspaces. The Cell Phone Store assistant blocks
+  // group metadata and participant imports entirely, including on-demand
+  // requests to POST /group-members-sync.
   private skipGroupMemberSync = false;
+  // Pairing-code requests are single-flight: Baileys pairing state must not be overwritten
+  // while the user is entering the code on their phone.
+  private pairingCodeValue: string | null = null;
+  private pairingCodePending = false;
+  private pairingCodePhone: string | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -233,6 +218,13 @@ export class WhatsAppSession implements DurableObject {
   // gives call sites a non-optional string without sprinkling `!` around.
   private get sessionIdName(): string {
     return this.state.id.name ?? this.state.id.toString();
+  }
+
+  private async shouldSkipStoreHistory(_workspaceId: string): Promise<boolean> {
+    // This branch is dedicated to Cell Phone Store. Never import any
+    // pre-existing chats, contacts, groups, or message history, even if
+    // workspace configuration is missing, stale, or unexpectedly changed.
+    return true;
   }
 
   private async resolveWorkspaceId(): Promise<string | null> {
@@ -407,6 +399,12 @@ export class WhatsAppSession implements DurableObject {
   // ── Anti-ban outbound guard (see session/outbound-guard.ts) ──
   private outboundBucket = new TokenBucket(OUTBOUND_BURST, OUTBOUND_PER_SEC);
   private autoReplyLimiter = new AutoReplyLimiter();
+  private autoReplyContentDeduper = new AutoReplyContentDeduper();
+  private autoReplyMessageDeduper = new AutoReplyMessageDeduper();
+  // Serialize inbound processing per private chat. Separate Baileys upsert events
+  // can overlap; without this queue, an older AI task may read a newer/older
+  // conversation snapshot and send a reply for the wrong customer question.
+  private liveMessageQueues = new Map<string, Promise<void>>();
   private sessionCreatedAt: Date | null | undefined = undefined;
 
   /**
@@ -438,6 +436,39 @@ export class WhatsAppSession implements DurableObject {
       return this.checkNewChatCap(jid);
     }
     return null;
+  }
+
+  /**
+   * A human taking over a customer chat pauses the assistant only for that
+   * conversation. This one-minute inactivity heuristic is not a reliable
+   * signal that the owner's phone has lost Internet.
+   */
+  private async pauseAutoReply(jid: string): Promise<void> {
+    // A seller taking over one conversation must not silence the assistant
+    // for every other customer. Keep the short handoff pause scoped to this chat.
+    await this.state.storage.put(`autoReplyPaused:${jid}`, Date.now() + HUMAN_AUTO_REPLY_PAUSE_MS);
+  }
+
+  /** Per-chat human-takeover pause; other customers continue receiving replies. */
+  private async isAutoReplyPaused(jid: string): Promise<boolean> {
+    const key = `autoReplyPaused:${jid}`;
+    const until = await this.state.storage.get<number>(key);
+    if (!until) return false;
+    if (until > Date.now()) return true;
+    await this.state.storage.delete(key);
+    return false;
+  }
+
+  /** Mark an outgoing bot reply so its own WhatsApp echo does not pause the bot. */
+  private async markBotReply(jid: string): Promise<void> {
+    await this.state.storage.put(`botReplyEcho:${jid}`, Date.now() + BOT_REPLY_ECHO_MARKER_MS);
+  }
+
+  private async consumeBotReplyMarker(jid: string): Promise<boolean> {
+    const key = `botReplyEcho:${jid}`;
+    const until = await this.state.storage.get<number>(key);
+    await this.state.storage.delete(key);
+    return !!until && until > Date.now();
   }
 
   /** Auto-reply loop breaker + pace (used by processLiveMessage). */
@@ -874,6 +905,9 @@ export class WhatsAppSession implements DurableObject {
         this.socket = null;
       }
       this.intentionalDisconnect = false;
+      this.pairingCodeValue = null;
+      this.pairingCodePending = false;
+      this.pairingCodePhone = null;
       this.connectionState = "idle";
       this.qr = null;
       this.skipHistorySync = body.syncHistory === false;
@@ -947,11 +981,16 @@ export class WhatsAppSession implements DurableObject {
         // Resolve LID JIDs to phone JIDs (Baileys can't send to @lid)
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
         if (isLidJid(jid)) {
-          this.log("warn", `Cannot resolve LID JID ${body.to} to phone JID — send may fail`);
+          this.log("warn", "Cannot resolve recipient address; send may fail");
         }
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, { text: body.text });
+        try {
+          await this.pauseAutoReply(jid);
+        } catch (pauseErr: any) {
+          this.log("warn", `Could not persist human takeover pause: ${pauseErr?.message || pauseErr}`);
+        }
 
         // Write the outbound message to D1 immediately — the CRM inbox
         // shouldn't wait on messages.upsert to echo our own send back.
@@ -1027,7 +1066,7 @@ export class WhatsAppSession implements DurableObject {
     // Attachments (image/video/audio/document) picked in the composer.
     // multipart/form-data because these can be several MB -- base64-in-JSON
     // would blow up ~33% larger for no reason. Mirrors /send: sends via
-    // Baileys first, then best-effort stores our own copy in R2 + D1 so the
+    // Baileys first, then best-effort stores our own copy in KV + D1 so the
     // outbound bubble shows up immediately without waiting on a
     // messages.upsert echo (which WhatsApp doesn't even reliably send back
     // for our own outgoing messages).
@@ -1080,7 +1119,7 @@ export class WhatsAppSession implements DurableObject {
         let jid = to.includes("@") ? to : `${to}@s.whatsapp.net`;
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
         if (isLidJid(jid)) {
-          this.log("warn", `Cannot resolve LID JID ${to} to phone JID — send may fail`);
+          this.log("warn", "Cannot resolve recipient address; send may fail");
         }
 
         const buffer = Buffer.from(await file.arrayBuffer());
@@ -1108,6 +1147,11 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
+        try {
+          await this.pauseAutoReply(jid);
+        } catch (pauseErr: any) {
+          this.log("warn", `Could not persist human takeover pause: ${pauseErr?.message || pauseErr}`);
+        }
 
         const workspaceId = await this.resolveWorkspaceId();
         if (workspaceId && result?.key) {
@@ -1135,7 +1179,22 @@ export class WhatsAppSession implements DurableObject {
               timestampMs: Date.now(),
             });
           } catch (syncErr: any) {
-            this.log("error", `D1/R2 sync failed for sent media: ${syncErr?.message || syncErr}`);
+            this.log("error", `D1/KV media storage failed for sent media: ${syncErr?.message || syncErr}`);
+            // The WhatsApp send already succeeded. Preserve the outgoing
+            // text/caption in the CRM even when KV storage is full or the
+            // attachment exceeds the free-plan value limit.
+            try {
+              await syncIncomingMessage(this.db, workspaceId, this.sessionIdName, {
+                waMessageId,
+                remoteJid: jid,
+                fromMe: true,
+                type: mediaType,
+                body: captionText,
+                timestampMs: Date.now(),
+              });
+            } catch (fallbackErr: any) {
+              this.log("error", `D1 fallback sync failed for sent media: ${fallbackErr?.message || fallbackErr}`);
+            }
           }
         }
 
@@ -1151,10 +1210,10 @@ export class WhatsAppSession implements DurableObject {
     // button, or by a broadcast campaign) as a normal outbound message.
     // `text` here is already variable-resolved by the caller -- this
     // route only knows how to send, not how to fill in {{placeholders}}.
-    // `mediaKey` (optional) points at an R2 object already uploaded via
+    // `mediaKey` (optional) points at a KV value already uploaded via
     // POST /media/upload -- reused as-is rather than copied per send,
     // since the bytes are immutable either way (mirrors /send-media, but
-    // pulls the file from R2 instead of the request body).
+    // pulls the file from KV instead of the request body).
     if (request.method === "POST" && url.pathname === "/send-template") {
       await this.ensureInit();
       if (!this.socket) {
@@ -1183,7 +1242,7 @@ export class WhatsAppSession implements DurableObject {
         let jid = body.to.includes("@") ? body.to : `${body.to}@s.whatsapp.net`;
         jid = await resolveToPhoneJid(this.db, this.sessionIdName, jid);
         if (isLidJid(jid)) {
-          this.log("warn", `Cannot resolve LID JID ${body.to} to phone JID — send may fail`);
+          this.log("warn", "Cannot resolve recipient address; send may fail");
         }
 
         let mediaType: "image" | "video" | "audio" | "document" | null = null;
@@ -1191,12 +1250,12 @@ export class WhatsAppSession implements DurableObject {
         let content: any;
 
         if (body.mediaKey) {
-          const object = await this.env.MEDIA.get(body.mediaKey);
-          if (!object) {
+          const stored = await this.env.MEDIA_STORE.getWithMetadata<{ contentType?: string }>(body.mediaKey, "arrayBuffer");
+          if (!stored.value) {
             return Response.json({ ok: false, error: "Template media not found in storage" }, { status: 404 });
           }
-          const buffer = Buffer.from(await object.arrayBuffer());
-          mediaMime = object.httpMetadata?.contentType || "application/octet-stream";
+          const buffer = Buffer.from(stored.value);
+          mediaMime = stored.metadata?.contentType || "application/octet-stream";
           mediaType = mediaTypeFromMime(mediaMime);
           const captionText = body.text?.trim() || undefined;
           if (mediaType === "image")
@@ -1226,6 +1285,11 @@ export class WhatsAppSession implements DurableObject {
         const outboundBlocked = await this.guardOutbound(jid, request);
         if (outboundBlocked) return outboundBlocked;
         const result = await this.socket.sendMessage(jid, content);
+        try {
+          await this.pauseAutoReply(jid);
+        } catch (pauseErr: any) {
+          this.log("warn", `Could not persist human takeover pause: ${pauseErr?.message || pauseErr}`);
+        }
 
         const workspaceId = await this.resolveWorkspaceId();
         if (workspaceId && result?.key) {
@@ -1286,13 +1350,13 @@ export class WhatsAppSession implements DurableObject {
       try {
         avatarUrl = (await this.socket.profilePictureUrl(jid, "image")) ?? null;
       } catch (err: any) {
-        this.log("info", `profilePictureUrl(${jid}) unavailable: ${err?.message || err}`);
+        this.log("info", "Profile picture lookup unavailable");
       }
       try {
         const status = await this.socket.fetchStatus(jid);
         about = (status as any)?.status ?? null;
       } catch (err: any) {
-        this.log("info", `fetchStatus(${jid}) unavailable: ${err?.message || err}`);
+        this.log("info", "Contact status lookup unavailable");
       }
 
       return Response.json({ ok: true, jid, avatarUrl, about });
@@ -1304,35 +1368,50 @@ export class WhatsAppSession implements DurableObject {
     // "check your connection", the bug is in the general pairing exchange, not QR-specific.
     if (request.method === "POST" && url.pathname === "/pair") {
       await this.ensureInit();
-      if (!this.socket) {
-        return Response.json({ ok: false, error: "Socket not running. POST /connect first." }, { status: 400 });
-      }
-      const body = (await request.json().catch(() => ({}))) as {
-        phone?: string;
-      };
-      const phone = (body.phone || "").replace(/[^0-9]/g, "");
-      if (!phone) {
+      if (!this.socket || this.connectionState !== "qr") {
         return Response.json(
-          {
-            ok: false,
-            error: "Missing 'phone' field (digits only, with country code, no +)",
-          },
-          { status: 400 }
+          { ok: false, error: "WhatsApp is not ready for a pairing code yet. Wait until the connection is prepared." },
+          { status: 409 }
         );
       }
+      const body = (await request.json().catch(() => ({}))) as { phone?: string };
+      const phone = (body.phone || "").replace(/[^0-9]/g, "");
+      // This branch is reserved for the owner's isolated test account. The
+      // commercial WhatsApp number must never be paired through this flow.
+      if (phone !== "5358503073") {
+        return Response.json({ ok: false, error: "Pairing codes are enabled only for the authorized test number." }, { status: 403 });
+      }
+      if (this.socket.authState.creds.registered) {
+        return Response.json({ ok: false, error: "This WhatsApp session is already registered." }, { status: 409 });
+      }
+      if (this.pairingCodeValue && this.pairingCodePhone === phone) {
+        return Response.json({ ok: true, code: this.pairingCodeValue });
+      }
+      if (this.pairingCodePending) {
+        return Response.json({ ok: false, error: "A pairing-code request is already in progress." }, { status: 409 });
+      }
+      this.pairingCodePending = true;
+      this.pairingCodePhone = phone;
       try {
         const code = await this.socket.requestPairingCode(phone);
-        this.log("info", `Pairing code requested for ${phone}: ${code}`);
+        this.pairingCodeValue = code;
+        this.log("info", "Pairing code generated for the authorized test session (code withheld from logs).");
         return Response.json({ ok: true, code });
       } catch (err: any) {
-        this.log("error", `requestPairingCode failed: ${err?.stack || err}`);
+        this.pairingCodePhone = null;
+        this.log("error", `requestPairingCode failed: ${err?.message || "unknown error"}`);
         return Response.json({ ok: false, error: publicMessage(err, "requestPairingCode failed. Please try again.") }, { status: publicStatus(err) });
+      } finally {
+        this.pairingCodePending = false;
       }
     }
 
     // ── POST /disconnect ──
     if (request.method === "POST" && url.pathname === "/disconnect") {
       this.intentionalDisconnect = true;
+      this.pairingCodeValue = null;
+      this.pairingCodePending = false;
+      this.pairingCodePhone = null;
       if (this.socket) {
         await this.socket.end(undefined).catch(() => {});
         this.socket = null;
@@ -1749,6 +1828,9 @@ export class WhatsAppSession implements DurableObject {
         if (!wsId) {
           return Response.json({ ok: false, error: "Workspace not resolved yet" }, { status: 409 });
         }
+        if (await this.shouldSkipStoreHistory(wsId)) {
+          return Response.json({ ok: false, error: "Group-member import is disabled for this business assistant." }, { status: 403 });
+        }
         const metadata = await this.socket.groupMetadata(groupJid);
         const group = await upsertGroupMetadata(this.db, wsId, this.sessionIdName, {
           jid: groupJid,
@@ -1760,7 +1842,7 @@ export class WhatsAppSession implements DurableObject {
         }
         return Response.json({ ok: true, memberCount: metadata.participants.length });
       } catch (err: any) {
-        this.log("error", `group-members-sync failed for ${groupJid}: ${err?.message || err}`);
+        this.log("error", "Group-members sync failed");
         return Response.json({ ok: false, error: publicMessage(err, "Group sync failed. Please try again.") }, { status: publicStatus(err) });
       }
     }
@@ -2361,21 +2443,23 @@ export class WhatsAppSession implements DurableObject {
         // and would wipe the default filter with undefined.
         ...(wantHistory ? { shouldSyncHistoryMessage: () => true } : {}),
         markOnlineOnConnect: false,
+        // Baileys diagnostic payloads can contain phone JIDs, names and
+        // message metadata. Do not forward raw library arguments to logs.
         logger: {
-          level: "warn",
+          level: "silent",
           child: () => ({
-            level: "warn",
-            trace: (...a: any[]) => this.log("info", `[trace] ${a.map(fmtLogArg).join(" ")}`),
-            debug: (...a: any[]) => this.log("info", `[debug] ${a.map(fmtLogArg).join(" ")}`),
-            info: (...a: any[]) => this.log("info", `[info] ${a.map(fmtLogArg).join(" ")}`),
-            warn: (...a: any[]) => this.log("warn", `[warn] ${a.map(fmtLogArg).join(" ")}`),
-            error: (...a: any[]) => this.log("error", `[err] ${a.map(fmtLogArg).join(" ")}`),
+            level: "silent",
+            trace: () => {},
+            debug: () => {},
+            info: () => {},
+            warn: () => this.log("warn", "Baileys warning event"),
+            error: () => this.log("error", "Baileys error event"),
           }),
-          trace: (...a: any[]) => this.log("info", `[trace] ${a.map(fmtLogArg).join(" ")}`),
-          debug: (...a: any[]) => this.log("info", `[debug] ${a.map(fmtLogArg).join(" ")}`),
-          info: (...a: any[]) => this.log("info", `[info] ${a.map(fmtLogArg).join(" ")}`),
-          warn: (...a: any[]) => this.log("warn", `[warn] ${a.map(fmtLogArg).join(" ")}`),
-          error: (...a: any[]) => this.log("error", `[error] ${a.map(fmtLogArg).join(" ")}`),
+          trace: () => {},
+          debug: () => {},
+          info: () => {},
+          warn: () => this.log("warn", "Baileys warning event"),
+          error: () => this.log("error", "Baileys error event"),
         } as any,
         keepAliveIntervalMs: 30_000,
         qrTimeout: 60_000,
@@ -2399,7 +2483,7 @@ export class WhatsAppSession implements DurableObject {
 
     // Also listen for creds and settings updates
     this.socket.ev.on("creds.update", (creds: any) => {
-      this.log("info", `creds.update: me=${JSON.stringify(creds.me)}`);
+      this.log("info", "WhatsApp credentials updated");
     });
 
     this.socket.ev.on("messaging-history.set", (hist: any) => {
@@ -2412,9 +2496,13 @@ export class WhatsAppSession implements DurableObject {
       // workspaceId can't be resolved yet, without blocking the others.
       if (hist.contacts?.length) {
         this.state.waitUntil(
-          this.withWorkspaceId((wsId) =>
-            syncContactsFromHistory(this.db, wsId, this.sessionIdName, hist.contacts, this.log.bind(this))
-          )
+          this.withWorkspaceId(async (wsId) => {
+            if (await this.shouldSkipStoreHistory(wsId)) {
+              this.log("info", "Skipping historical contact import for the store assistant");
+              return;
+            }
+            await syncContactsFromHistory(this.db, wsId, this.sessionIdName, hist.contacts, this.log.bind(this));
+          })
         );
       }
       // Chat list → conversation shells. WhatsApp often delivers many
@@ -2429,18 +2517,18 @@ export class WhatsAppSession implements DurableObject {
         this.log("info", `messaging-history.set: skipping ${hist.chats.length} chat shells (syncHistory=false)`);
       } else if (hist.chats?.length) {
         this.state.waitUntil(
-          this.withWorkspaceId((wsId) =>
-            syncDirectChatsFromHistory(this.db, wsId, this.sessionIdName, hist.chats, this.log.bind(this))
-          )
+          this.withWorkspaceId(async (wsId) => {
+            if (await this.shouldSkipStoreHistory(wsId)) {
+              this.log("info", "Skipping historical chat import for the store assistant");
+              return;
+            }
+            await syncDirectChatsFromHistory(this.db, wsId, this.sessionIdName, hist.chats, this.log.bind(this));
+            const groupChats = hist.chats.filter((c: any) => c.id?.endsWith?.("@g.us"));
+            if (groupChats.length) {
+              await syncGroupsFromHistory(this.db, wsId, this.sessionIdName, groupChats, this.log.bind(this), !this.skipGroupMemberSync);
+            }
+          })
         );
-        const groupChats = hist.chats.filter((c: any) => c.id?.endsWith?.("@g.us"));
-        if (groupChats.length) {
-          this.state.waitUntil(
-            this.withWorkspaceId((wsId) =>
-              syncGroupsFromHistory(this.db, wsId, this.sessionIdName, groupChats, this.log.bind(this), !this.skipGroupMemberSync)
-            )
-          );
-        }
       }
       // Backfill the actual chat history -- unless the user chose "only
       // new messages from now on" at connect time (see POST /connect's
@@ -2455,16 +2543,20 @@ export class WhatsAppSession implements DurableObject {
           this.log("info", `messaging-history.set: skipping backfill of ${hist.messages.length} messages (syncHistory=false)`);
         } else {
           this.state.waitUntil(
-            this.withWorkspaceId((wsId) =>
-              syncMessagesFromHistory(this.db, wsId, this.sessionIdName, hist.messages, this.log.bind(this))
-            )
+            this.withWorkspaceId(async (wsId) => {
+              if (await this.shouldSkipStoreHistory(wsId)) {
+                this.log("info", "Skipping historical message import for the store assistant");
+                return;
+              }
+              await syncMessagesFromHistory(this.db, wsId, this.sessionIdName, hist.messages, this.log.bind(this));
+            })
           );
         }
       }
     });
 
     this.socket.ev.on("chats.upsert", (chats: any) => {
-      this.log("info", `chats.upsert: ${JSON.stringify(chats?.map?.((c: any) => c.id) ?? chats)}`);
+      this.log("info", `Chat metadata event received (${chats?.length ?? 0} entries)`);
     });
 
     // ── Chat-state sync (archive/mute) FROM WhatsApp ─────────────────────
@@ -2486,6 +2578,7 @@ export class WhatsAppSession implements DurableObject {
         (async () => {
           const workspaceId = await this.resolveWorkspaceId();
           if (!workspaceId) return;
+          if (await this.shouldSkipStoreHistory(workspaceId)) return;
           for (const upd of updates) {
             const rawJid = upd?.id;
             // Same @broadcast guard as everywhere else -- Stories/broadcast
@@ -2509,7 +2602,7 @@ export class WhatsAppSession implements DurableObject {
             try {
               const jid = await resolveToPhoneJid(this.db, this.sessionIdName, rawJid);
               await updateConversationChatState(this.db, workspaceId, this.sessionIdName, jid, update);
-              this.log("info", `chats.update: ${jid} -> ${JSON.stringify(update)}`);
+              this.log("info", "Chat update event received");
               this.broadcast({
                 type: "chat-state",
                 sessionId: this.sessionIdName,
@@ -2518,7 +2611,7 @@ export class WhatsAppSession implements DurableObject {
                 update,
               });
             } catch (err: any) {
-              this.log("error", `chats.update sync failed for ${rawJid}: ${err?.message || err}`);
+              this.log("error", "Chat update sync failed");
             }
           }
         })()
@@ -2543,6 +2636,10 @@ export class WhatsAppSession implements DurableObject {
             this.log("warn", "groups.upsert: no workspaceId — skipped");
             return;
           }
+          if (await this.shouldSkipStoreHistory(wsId)) {
+            this.log("info", "Skipping group metadata import for the store assistant");
+            return;
+          }
           for (const g of groupsList) {
             if (!g.id) continue;
             try {
@@ -2555,7 +2652,7 @@ export class WhatsAppSession implements DurableObject {
                 await upsertGroupMembers(this.db, wsId, this.sessionIdName, group.id, g.participants);
               }
             } catch (err: any) {
-              this.log("error", `groups.upsert failed for ${g.id}: ${err?.message || err}`);
+              this.log("error", "Group metadata sync failed");
             }
           }
         })()
@@ -2565,9 +2662,13 @@ export class WhatsAppSession implements DurableObject {
     // ── Contact sync (WA-AKG pattern) ──────────────────────────────────
     this.socket.ev.on("contacts.upsert", async (contactsList: any[]) => {
       this.log("info", `contacts.upsert: ${contactsList.length} contacts`);
-      await this.withWorkspaceId((wsId) =>
-        syncContactUpsert(this.db, wsId, this.sessionIdName, contactsList, this.log.bind(this))
-      );
+      await this.withWorkspaceId(async (wsId) => {
+        if (await this.shouldSkipStoreHistory(wsId)) {
+          this.log("info", "Skipping contact import for the store assistant");
+          return;
+        }
+        await syncContactUpsert(this.db, wsId, this.sessionIdName, contactsList, this.log.bind(this));
+      });
     });
 
     // The moment WhatsApp actually reveals a @lid <-> phone-JID pairing.
@@ -2578,12 +2679,16 @@ export class WhatsAppSession implements DurableObject {
     // on a live message could show up as two separate conversations. See
     // syncLidMapping's own comment for the merge behavior.
     this.socket.ev.on("lid-mapping.update", async (mapping: { lid: string; pn: string }) => {
-      this.log("info", `lid-mapping.update: ${mapping.lid} <-> ${mapping.pn}`);
-      await this.withWorkspaceId((wsId) =>
-        syncLidMapping(this.db, wsId, this.sessionIdName, mapping).catch((err: any) => {
-          this.log("error", `syncLidMapping failed for ${mapping.lid}<->${mapping.pn}: ${err?.message || err}`);
-        })
-      );
+      this.log("info", "LID mapping event received");
+      await this.withWorkspaceId(async (wsId) => {
+        if (await this.shouldSkipStoreHistory(wsId)) {
+          this.log("info", "Skipping historical LID mapping import for the store assistant");
+          return;
+        }
+        await syncLidMapping(this.db, wsId, this.sessionIdName, mapping).catch((err: any) => {
+          this.log("error", "LID mapping sync failed");
+        });
+      });
     });
 
     // ── Connection lifecycle ────────────────────────────────────────────
@@ -2601,11 +2706,14 @@ export class WhatsAppSession implements DurableObject {
       }
 
       if (connection === "open") {
+        this.pairingCodeValue = null;
+        this.pairingCodePending = false;
+        this.pairingCodePhone = null;
         this.connectionState = "connected";
         this.qr = null;
         this.reconnectCount = 0;
         this.sessionUser = this.socket?.user?.id ?? null;
-        this.log("info", `CONNECTED as ${this.sessionUser}`);
+        this.log("info", "WhatsApp session connected");
         this.persist();
         this.state.storage.delete("pairingIncomplete");
         // Keep this number online from now on, browser or not.
@@ -2636,8 +2744,10 @@ export class WhatsAppSession implements DurableObject {
               // metadata -- throttled (see FULL_GROUP_SYNC_MIN_INTERVAL_MS).
               const lastGroupSync = (await this.state.storage.get<number>("groupsSyncedAt")) ?? 0;
               const groupSyncDue = Date.now() - lastGroupSync > FULL_GROUP_SYNC_MIN_INTERVAL_MS;
+              const skipStoreGroupImport = !wsId || await this.shouldSkipStoreHistory(wsId);
               if (!groupSyncDue) this.log("info", "Skipping full group refetch (synced recently)");
-              if (this.socket && groupSyncDue) {
+              if (skipStoreGroupImport) this.log("info", "Skipping full group import for the store assistant");
+              if (this.socket && groupSyncDue && !skipStoreGroupImport) {
                 try {
                   const allGroups = await this.socket.groupFetchAllParticipating();
                   const groupCount = Object.keys(allGroups).length;
@@ -2662,7 +2772,7 @@ export class WhatsAppSession implements DurableObject {
                           );
                         }
                       } catch (err: any) {
-                        this.log("error", `groupFetchAllParticipating sync failed for ${jid}: ${err?.message || err}`);
+                        this.log("error", "Group metadata sync failed");
                       }
                     }
                   }
@@ -2678,6 +2788,9 @@ export class WhatsAppSession implements DurableObject {
       }
 
       if (connection === "close") {
+        this.pairingCodeValue = null;
+        this.pairingCodePending = false;
+        this.pairingCodePhone = null;
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
         const errMsg = (lastDisconnect?.error as any)?.message || String(lastDisconnect?.error);
         this.log(
@@ -2852,7 +2965,7 @@ export class WhatsAppSession implements DurableObject {
               evt.key?.remoteJid ||
               "unknown";
             const ts = reaction.senderTimestampMs ? Number(reaction.senderTimestampMs) : Date.now();
-            this.log("info", `messages.reaction on ${keyId}: emoji="${emoji}" sender=${sender}`);
+            this.log("info", "Message reaction event received");
             let conversationId: string | null = null;
             try {
               conversationId = await upsertMessageReaction(this.db, workspaceId, keyId, {
@@ -2860,9 +2973,9 @@ export class WhatsAppSession implements DurableObject {
                 sender,
                 timestampMs: ts,
               });
-              this.log("info", `Reaction synced to D1 for ${keyId}`);
+              this.log("info", "Message reaction synced to D1");
             } catch (err: any) {
-              this.log("error", `Reaction sync failed for ${keyId}: ${err?.message || err}`);
+              this.log("error", "Message reaction sync failed");
             }
             this.broadcast({
               type: "message-reaction",
@@ -2928,14 +3041,14 @@ export class WhatsAppSession implements DurableObject {
             // no `reactionTimestamp` field (that was a made-up name that
             // always silently fell back to Date.now()).
             const reactions = update.update?.reactions;
-            if (reactions) this.log("info", `messages.update for ${keyId}: reactions=${reactions.length}`);
+            if (reactions) this.log("info", `Message reaction update received (${reactions.length})`);
             if (keyId && workspaceId && reactions) {
               for (const r of reactions) {
                 const emoji = r.text || "";
                 const sender = r.key?.participant || r.key?.remoteJid || "unknown";
                 const tsRaw = r.senderTimestampMs;
                 const ts = tsRaw ? Number(tsRaw) : Date.now();
-                this.log("info", `Reaction on ${keyId}: emoji="${emoji}" sender=${sender}`);
+                this.log("info", "Message reaction event received");
                 let conversationId: string | null = null;
                 try {
                   conversationId = await upsertMessageReaction(this.db, workspaceId, keyId, {
@@ -2994,12 +3107,12 @@ export class WhatsAppSession implements DurableObject {
           for (const key of keys) {
             const keyId = key?.id;
             if (!keyId) continue;
-            this.log("info", `Message deleted: ${keyId}`);
+            this.log("info", "Message deletion event received");
             let conversationId: string | null = null;
             try {
               conversationId = await markMessageDeleted(this.db, workspaceId, keyId);
             } catch (err: any) {
-              this.log("error", `Delete sync failed for ${keyId}: ${err?.message || err}`);
+              this.log("error", "Message deletion sync failed");
             }
             this.broadcast({
               type: "message-deleted",
@@ -3016,7 +3129,7 @@ export class WhatsAppSession implements DurableObject {
     // ── Call events (voice/video calls) ──────────────────────────────────
     this.socket.ev.on("call", (calls: any[]) => {
       for (const call of calls) {
-        this.log("info", `Call ${call.status} from ${call.from} (${call.id})`);
+        this.log("info", "WhatsApp call event received");
         this.broadcast({
           type: "call",
           sessionId: this.sessionIdName,
@@ -3046,23 +3159,43 @@ export class WhatsAppSession implements DurableObject {
 
       this.state.waitUntil(
         this.withWorkspaceId(async (workspaceId) => {
+          const pending: Promise<void>[] = [];
           for (const msg of upsert.messages) {
-            await processLiveMessage(
-              {
-                db: this.db,
-                env: this.env,
-                socket: this.socket,
-                sessionIdName: this.sessionIdName,
-                workspaceId,
-                log: this.log.bind(this),
-                broadcast: this.broadcast.bind(this),
-                allowAutoReply: this.allowAutoReply.bind(this),
-                waitUntil: (p) => this.state.waitUntil(p),
-              },
-              msg,
-              upsertType
-            );
+            const jid = msg.key.remoteJid as string | undefined;
+            const previous = jid ? this.liveMessageQueues.get(jid) : undefined;
+            const task = (previous ?? Promise.resolve())
+              .catch(() => undefined)
+              .then(() => processLiveMessage(
+                {
+                  db: this.db,
+                  env: this.env,
+                  socket: this.socket,
+                  sessionIdName: this.sessionIdName,
+                  workspaceId,
+                  log: this.log.bind(this),
+                  broadcast: this.broadcast.bind(this),
+                  allowAutoReply: this.allowAutoReply.bind(this),
+                  allowAutoReplyContent: (chatJid, text) => this.autoReplyContentDeduper.allow(chatJid, text),
+                  allowAutoReplyMessage: (chatJid, messageId) => this.autoReplyMessageDeduper.allow(chatJid, messageId),
+                  pauseAutoReply: this.pauseAutoReply.bind(this),
+                  isAutoReplyPaused: this.isAutoReplyPaused.bind(this),
+                  markBotReply: this.markBotReply.bind(this),
+                  consumeBotReplyMarker: this.consumeBotReplyMarker.bind(this),
+                  waitUntil: (p) => this.state.waitUntil(p),
+                },
+                msg,
+                upsertType
+              ));
+            if (jid) {
+              this.liveMessageQueues.set(jid, task);
+              void task.then(
+                () => { if (this.liveMessageQueues.get(jid) === task) this.liveMessageQueues.delete(jid); },
+                () => { if (this.liveMessageQueues.get(jid) === task) this.liveMessageQueues.delete(jid); }
+              );
+            }
+            pending.push(task);
           }
+          await Promise.all(pending);
         })
       );
     });

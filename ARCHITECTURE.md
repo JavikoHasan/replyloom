@@ -1,6 +1,6 @@
 # Architecture
 
-Replyloom is two Cloudflare Workers that share one D1 database. Everything runs on Cloudflare: there's no VPS, no external database and no long-running Node process.
+Replyloom is two Cloudflare Workers that share one D1 database. The zero-cost profile uses Cloudflare Free resources only: no VPS, no external database and no long-running Node process. See [FREE_PLAN.md](./FREE_PLAN.md) for the limits and trade-offs.
 
 ```
                     ┌──────────────────────── Browser ─────────────────────────┐
@@ -16,11 +16,11 @@ Replyloom is two Cloudflare Workers that share one D1 database. Everything runs 
 └──────┬──────────────────────┬────────────┘     │   auth state in DO SQLite, outbound guard, WS fan-out │
        │                      │                  │ Scheduler DO (one global alarm)                       │
        │                      │                  │ Queue consumer (broadcast dispatch)                   │
-       │                      │                  │ AI agent (Workers AI via AI Gateway, Vectorize, KV)   │
+       │                      │                  │ AI agent (Workers AI direct, D1 text retrieval, KV)   │
        ▼                      ▼                  └───────┬──────────────┬──────────────┬─────────────────┘
    ┌───────┐              ┌──────┐                       │              │              │
    │  D1   │◄─────────────┼──────┼───────────────────────┘              ▼              ▼
-   │SQLite │              │  R2  │◄──────────────────────────────── media        Vectorize / KV
+   │SQLite │              │  KV  │◄──────────────────────────────── cache / media
    └───────┘              └──────┘
 ```
 
@@ -29,7 +29,7 @@ Replyloom is two Cloudflare Workers that share one D1 database. Everything runs 
 | Package | Role |
 |---|---|
 | `apps/web` | The CRM. TanStack Start (SSR + server functions), React 19, TanStack Query, Better Auth, shadcn/ui. Code is split by feature in `src/features/*` (inbox, contacts, contact-lists, broadcasts, pipeline, templates, agent, integrations, …). |
-| `apps/worker` | The WhatsApp engine. HTTP router, `WhatsAppSession` and `Scheduler` Durable Objects, the broadcast queue consumer, the cron trigger, the AI agent, search and media. |
+| `apps/worker` | The WhatsApp engine. HTTP router, `WhatsAppSession`, `Scheduler` and `RateLimiter` Durable Objects, the broadcast queue consumer, the cron trigger, the AI agent, search and media. |
 | `packages/db` | The single source of truth for the schema (Drizzle) and SQL migrations (`packages/db/migrations`), used by both apps. |
 | `packages/ui` | Shared shadcn/ui components (`@workspace/ui/components/*`). |
 
@@ -40,11 +40,11 @@ The two apps are **separate Workers on purpose**: you can deploy or roll back th
 | Store | Used for |
 |---|---|
 | **D1** (`DB`) | Everything relational: users, orgs, sessions, contacts, conversations, messages, lists, campaigns, deals, templates, webhooks, API keys, `entity_counts`. |
-| **Durable Object SQLite** | Per-number Baileys auth state (`wa_creds`, `wa_keys`) and per-session counters (pace buckets, daily caps). |
-| **R2** (`MEDIA`) | Inbound/outbound media and the media library. |
+| **Durable Object SQLite** | Per-number Baileys auth state (`wa_creds`, `wa_keys`), per-session counters, and atomic rate-limit buckets. |
+| **KV** (`MEDIA_STORE`) | Inbound/outbound media and the media library, with a 24 MiB per-file storage cap. |
 | **Queues** (`BROADCAST_QUEUE`) | Broadcast dispatch, one message per recipient batch, with delays. |
-| **Vectorize** | `wa-messages` (semantic message search) and `wa-docs` (AI agent knowledge), 1024-dim `@cf/baai/bge-m3`. |
-| **KV** (`REPLY_CACHE`) | AI agent answer cache, config cache and per-conversation rate limits. |
+| **D1 text retrieval** | Workspace-scoped word matching for message search and AI knowledge chunks; no embeddings or vector index. |
+| **KV** (`REPLY_CACHE`) | AI agent answer cache and config cache. |
 
 ## Main flows
 
@@ -54,9 +54,9 @@ The UI creates a session and opens `/session/:id/connect` on the engine. The `Wh
 ### Inbound message
 `messages.upsert` in the DO → `session/message-events.ts`:
 1. Upserts the contact, conversation and message in D1 (`db/sync/*`, one `db.batch` per message, resolver cache).
-2. Downloads media to R2.
+2. Downloads and stores media in KV when it is within the Free value-size limit; the text message is retained if the attachment cannot be stored.
 3. Pushes the event to every connected browser over the DO's WebSocket.
-4. In the background: signed **webhooks** (`message.received`), **semantic indexing**, then a **keyword auto-reply**, or the **AI agent** if no rule matched. Replies pass through the loop breakers.
+4. In the background: signed **webhooks** (`message.received`), then a **keyword auto-reply**, or the **AI agent** if no rule matched. Message search reads D1 directly; no indexing job is needed. A manual outgoing message pauses automatic replies for that chat for 30 minutes. Replies pass through the loop breakers.
 
 ### Outbound message
 UI → server function (workspace-scoped) → service binding → engine router (checks the caller and that the workspace owns the session) → DO → **outbound guard** (`session/outbound-guard.ts`) → Baileys `sendMessage`. The server decides the send *kind* (`manual`, `api`, `broadcast`, `scheduled`, `auto`) and the client can't override it.
@@ -71,13 +71,13 @@ A single `Scheduler` DO sets one alarm for the soonest pending item (scheduled m
 The browser asks the web app for a short-lived **HMAC token** (`WS_TOKEN_SECRET`), then opens a WebSocket straight to the engine at `/session/:id/ws`. The DO pushes messages, receipts, QR codes, connection state and campaign progress. **The app never polls.** All live updates go over this socket and patch the TanStack Query cache.
 
 ### AI agent (optional)
-`ai-agent/`: intent gate → RAG over `wa-docs` → tool calls (customer lookup, recent conversation, deals, your webhooks) → grounded reply, or a hand-off to the human queue. Guardrails block coding requests and secret leaks and redact credentials. All model calls go through **AI Gateway**, tagged per workspace, with a fallback model.
+`ai-agent/`: intent gate → accent-normalized text retrieval from D1 → tool calls (customer lookup, recent conversation, deals, your webhooks) → grounded reply, or a hand-off to the human queue. Guardrails block coding requests and secret leaks and redact credentials. Model calls go directly through Workers AI. If the Free daily neuron quota is unavailable, the auto-reply sends a fixed safe fallback rather than inventing business facts.
 
 ## Security model
 
 - **Tenant isolation**: every server function resolves the workspace from the authenticated session (`requireCurrentWorkspaceId()`), and every query filters by `workspace_id`. Taking an id alone is never enough.
 - **Engine auth**: internal secret (web → engine) or a hashed workspace API key (external callers). `/internal/*` DO routes can't be reached from outside.
-- **Rate limits**: Workers rate-limit bindings on the API, auth and web routes.
+- **Rate limits**: a SQLite-backed Durable Object enforces atomic limits on the API, auth and web routes; authentication fails closed if protection is unavailable.
 - **Media**: MIME allow-list, size caps and safe response headers. **Outbound URLs** (webhooks, agent tools) are checked against SSRF.
 - **Sentry**: optional, with scrubbing of PII and secrets.
 
@@ -86,7 +86,7 @@ The browser asks the web app for a short-lived **HMAC token** (`WS_TOKEN_SECRET`
 - **Keyset (cursor) pagination** everywhere (`apps/web/src/lib/cursor.ts`). No `OFFSET`.
 - **Exact totals** come from the `entity_counts` table, which SQLite triggers keep up to date (migration `0031`). Reading a total is a single primary-key lookup.
 - Hot paths are covered by partial and expression indexes. See [AGENTS.md](./AGENTS.md) for the rules.
-- D1 limits to keep in mind: 100 bound parameters per statement (use `json_each` for bulk), 10 GB per database, a single writer. One self-hosted install serving one business is well within these.
+- D1 Free limits to keep in mind: 100 bound parameters per statement, 500 MB maximum per database, 5 million rows read/day and 100,000 rows written/day. One self-hosted install serving one business should be modest, but usage must be monitored.
 
 ## Baileys on Workers
 

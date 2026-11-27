@@ -148,3 +148,5 @@ curl -X POST http://localhost:8787/session/session-b/connect
 - **Baileys**: A built-in `ws` shim or official Cloudflare Workers adapter would eliminate the need for manual aliasing.
 - **Workers CPU limits**: Long-running WhatsApp event processing must stay within Workers CPU time limits. Durable Objects provide more headroom but still have limits.
 - **WebSocket upgrade**: Baileys' WebSocket connection to WhatsApp servers works through the Workers fetch-based WebSocket upgrade, but this is an unusual path. If WhatsApp's WebSocket server requires specific TLS fingerprints or headers, this could fail silently.
+
+<!-- [worker-deploy] Deploy trigger for the isolated Cell Phone Store WhatsApp Worker. -->

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeModelId } from "../config";
+import { normalizeModelId, ACTIVE_CLASSIFIER_MODEL } from "../config";
 
 describe("normalizeModelId", () => {
   it("maps deprecated Llama 3.1 model ids to the active support-agent model", () => {
@@ -11,9 +11,9 @@ describe("normalizeModelId", () => {
     );
   });
 
-  it("leaves active and unrelated model ids unchanged", () => {
+  it("maps the legacy small Llama classifier to the active classifier model", () => {
     expect(normalizeModelId("@cf/meta/llama-3.2-3b-instruct")).toBe(
-      "@cf/meta/llama-3.2-3b-instruct"
+      ACTIVE_CLASSIFIER_MODEL
     );
   });
 });

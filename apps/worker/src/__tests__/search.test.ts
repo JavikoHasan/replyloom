@@ -1,25 +1,53 @@
-import { describe, expect, it } from "vitest";
-import { searchVectorId } from "../search";
+import { describe, expect, it, vi } from "vitest";
+import { isWorthIndexing, semanticSearch } from "../search";
 
-describe("search vector ids", () => {
-  it("stays under Vectorize's 64-byte id limit even for long inputs", async () => {
-    const id = await searchVectorId(
-      "workspace-with-a-long-nanoid-1234567890",
-      "session-uuid-1234-5678-9012-345678901234",
-      "3EB0C767D097E9ECC4C7A0",
-    );
-    expect(new TextEncoder().encode(id).length).toBeLessThanOrEqual(64);
+describe("D1 message search", () => {
+  it("keeps the existing short-message filter behavior", () => {
+    expect(isWorthIndexing("ok")).toBe(false);
+    expect(isWorthIndexing("Can you confirm delivery?")).toBe(true);
   });
 
-  it("is deterministic", async () => {
-    expect(await searchVectorId("workspace-a", "session-a", "message-1")).toBe(
-      await searchVectorId("workspace-a", "session-a", "message-1"),
+  it("searches only within the requested workspace and ranks matching text", async () => {
+    const all = vi.fn().mockResolvedValue({
+      results: [
+        {
+          messageId: "message-1",
+          conversationId: "conversation-1",
+          waSessionId: "session-1",
+          text: "Samsung A17 4/128 disponible con garantía.",
+          isGroup: 0,
+        },
+        {
+          messageId: "message-2",
+          conversationId: "conversation-2",
+          waSessionId: "session-1",
+          text: "El A17 tiene 128GB.",
+          isGroup: 0,
+        },
+      ],
+    });
+    const bind = vi.fn().mockReturnValue({ all });
+    const prepare = vi.fn().mockReturnValue({ bind });
+    const env = { DB: { prepare } } as any;
+
+    const matches = await semanticSearch(env, "workspace-1", "Samsung A17 garantía", 10);
+
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("m.workspace_id = ?"));
+    expect(bind).toHaveBeenCalledWith(
+      "workspace-1",
+      "samsung",
+      "a17",
+      "garantia",
+      80,
     );
+    expect(matches[0].messageId).toBe("message-1");
+    expect(matches[0].score).toBeGreaterThan(matches[1].score);
   });
 
-  it("keeps equal WhatsApp message ids isolated by workspace and session", async () => {
-    expect(await searchVectorId("workspace-b", "session-a", "message-1")).not.toBe(
-      await searchVectorId("workspace-a", "session-a", "message-1"),
-    );
+  it("returns no matches for a query containing only stop words", async () => {
+    const prepare = vi.fn();
+    const env = { DB: { prepare } } as any;
+    await expect(semanticSearch(env, "workspace-1", "¿y de la?")).resolves.toEqual([]);
+    expect(prepare).not.toHaveBeenCalled();
   });
 });

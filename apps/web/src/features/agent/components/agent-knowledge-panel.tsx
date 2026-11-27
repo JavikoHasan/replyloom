@@ -38,6 +38,7 @@ import { TableSkeleton } from "@/components/skeletons"
 import {
   ingestAgentDocument,
   getKnowledgeBase,
+  getCatalogSyncStatus,
   deleteKnowledgeDoc
   
 } from "@/features/agent/hooks/use-agent"
@@ -48,6 +49,13 @@ const MAX_DOC_CHARS = 100_000
 
 export function AgentKnowledgePanel({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient()
+
+  const syncQuery = useQuery({
+    queryKey: ["revolico-catalog-sync-status", workspaceId],
+    queryFn: () => getCatalogSyncStatus({ data: { workspaceId } }),
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+  })
 
   const kbQuery = useQuery({
     queryKey: ["agent-knowledge", workspaceId],
@@ -123,6 +131,29 @@ export function AgentKnowledgePanel({ workspaceId }: { workspaceId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <Panel className="p-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="font-semibold">Sincronización de Revolico</h3>
+          {syncQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Consultando estado…</p>
+          ) : syncQuery.isError ? (
+            <p className="text-sm text-destructive">No se pudo consultar el diagnóstico.</p>
+          ) : syncQuery.data ? (
+            <>
+              <p className="text-sm">{syncQuery.data.message}</p>
+              <p className="text-xs text-muted-foreground">
+                Etapa: {syncQuery.data.stage} · Actualizado: {new Date(syncQuery.data.updatedAt).toLocaleString()}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Espacios: {syncQuery.data.workspaceMatches ?? "—"} · Enlaces: {syncQuery.data.discoveredUrls ?? "—"} · Fichas revisadas: {syncQuery.data.processedUrls ?? "—"} · Anuncios propios aceptados: {syncQuery.data.acceptedListings ?? "—"} · Fragmentos guardados: {syncQuery.data.chunks ?? "—"}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">El sincronizador aún no ha registrado ninguna ejecución.</p>
+          )}
+        </div>
+      </Panel>
+
       <Panel className="flex flex-col gap-4 p-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">

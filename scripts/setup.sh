@@ -13,13 +13,13 @@ WORKER_DIR="apps/worker"
 WEB_DIR="apps/web"
 WORKER_CONFIG="$WORKER_DIR/wrangler.jsonc"
 WEB_CONFIG="$WEB_DIR/wrangler.jsonc"
-DB_NAME="whatsapp-ai"
-MEDIA_BUCKET="whatsapp-ai-media"
-BACKUP_BUCKET="whatsapp-ai-backups"
-QUEUE_NAME="wa-broadcast-dispatch"
-VECTORIZE_INDEX="wa-messages"
-AGENT_VECTORIZE_INDEX="wa-docs"
+DB_NAME="cell-phone-store-whatsapp-ai-db"
+QUEUE_NAME="cell-phone-store-wa-broadcast-dispatch"
 KV_BINDING="REPLY_CACHE"
+MEDIA_KV_BINDING="MEDIA_STORE"
+# Use project-specific Cloudflare namespace titles; bindings remain stable in code.
+KV_NAMESPACE_NAME="cell-phone-store-reply-cache"
+MEDIA_KV_NAMESPACE_NAME="cell-phone-store-media-store"
 
 # Create wrangler.jsonc / .env.production from the templates if missing.
 node scripts/config.mjs
@@ -28,6 +28,35 @@ node scripts/config.mjs
 # root, so every invocation below runs from inside apps/worker (never a
 # bare `pnpm exec wrangler` at the repo root).
 wrangler() { (cd "$WORKER_DIR" && pnpm exec wrangler "$@"); }
+
+# Resolve KV IDs without grep -q pipelines (pipefail can abort on SIGPIPE).
+kv_namespace_id() {
+  local title="$1" id
+  # Query Cloudflare's API directly. Wrangler's table output differs between
+  # versions and --json is not supported by all installed Wrangler releases.
+  id="$(KV_EXPECTED_TITLE="$title" node --input-type=module -e "
+    const account = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const token = process.env.CLOUDFLARE_API_TOKEN;
+    const title = process.env.KV_EXPECTED_TITLE;
+    if (!account || !token) process.exit(2);
+    const response = await fetch('https://api.cloudflare.com/client/v4/accounts/' + account + '/storage/kv/namespaces', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!response.ok) {
+      console.error('Cloudflare KV list API returned HTTP ' + response.status);
+      process.exit(3);
+    }
+    const payload = await response.json();
+    if (!payload.success) {
+      console.error('Cloudflare KV list API reported an error');
+      process.exit(4);
+    }
+    const namespace = (payload.result || []).find((item) => item.title === title);
+    if (namespace?.id) console.log(namespace.id);
+  ")"
+  if [ -n "$id" ]; then printf '%s' "$id"; return 0; fi
+  return 1
+}
 
 echo "==> Checking Cloudflare auth..."
 if ! wrangler whoami >/dev/null 2>&1; then
@@ -39,28 +68,18 @@ fi
 echo "==> D1 database ($DB_NAME)..."
 CURRENT_DB_ID=$(grep -A2 '"d1_databases"' "$WORKER_CONFIG" | grep -o '"database_id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 if [ "$CURRENT_DB_ID" = "REPLACE_WITH_D1_DATABASE_ID" ] || [ -z "$CURRENT_DB_ID" ]; then
-  EXISTING=$(wrangler d1 list --json 2>/dev/null | node -e "
-    let s = '';
-    process.stdin.on('data', (d) => { s += d; });
-    process.stdin.on('end', () => {
-      try {
-        const list = JSON.parse(s);
-        const db = list.find((d) => d.name === '$DB_NAME');
-        if (db) console.log(db.uuid);
-      } catch {}
-    });
-  ")
+  EXISTING=$(wrangler d1 list 2>/dev/null | awk -v name="$DB_NAME" '$0 ~ name { for (i=1; i<=NF; i++) if ($i ~ /^[0-9a-fA-F-]{36}$/) { print $i; exit } }')
 
   if [ -n "${EXISTING:-}" ]; then
     DB_ID="$EXISTING"
     echo "    found existing database, id=$DB_ID"
   else
-    OUTPUT=$(wrangler d1 create "$DB_NAME" --json)
-    DB_ID=$(echo "$OUTPUT" | node -e "
-      let s = '';
-      process.stdin.on('data', (d) => { s += d; });
-      process.stdin.on('end', () => console.log(JSON.parse(s).uuid));
-    ")
+    OUTPUT=$(wrangler d1 create "$DB_NAME")
+    DB_ID=$(printf '%s' "$OUTPUT" | grep -Eo '[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}' | head -1 || true)
+    if [ -z "$DB_ID" ]; then
+      echo "    ERROR: Could not read the new D1 database ID from Wrangler output." >&2
+      exit 1
+    fi
     echo "    created database, id=$DB_ID"
   fi
 
@@ -77,23 +96,6 @@ else
   echo "    already configured, id=$DB_ID"
 fi
 
-# ── R2 bucket (media) ────────────────────────────────────────────────────
-echo "==> R2 bucket ($MEDIA_BUCKET)..."
-if wrangler r2 bucket list 2>/dev/null | grep -q "$MEDIA_BUCKET"; then
-  echo "    already exists"
-else
-  CI=true wrangler r2 bucket create "$MEDIA_BUCKET"
-fi
-
-# ── R2 bucket (restricted encrypted backups — not bound to any Worker) ───
-echo "==> R2 backup bucket ($BACKUP_BUCKET)..."
-if wrangler r2 bucket list 2>/dev/null | grep -q "$BACKUP_BUCKET"; then
-  echo "    already exists"
-else
-  CI=true wrangler r2 bucket create "$BACKUP_BUCKET"
-fi
-wrangler r2 bucket lifecycle add "$BACKUP_BUCKET" "expire-d1-backups" "backups/" --expire-days 30 --force >/dev/null 2>&1 || true
-
 # ── Queue (safe-broadcast dispatch) ──────────────────────────────────────
 echo "==> Queue ($QUEUE_NAME)..."
 if wrangler queues list 2>/dev/null | grep -q "$QUEUE_NAME"; then
@@ -102,52 +104,59 @@ else
   wrangler queues create "$QUEUE_NAME"
 fi
 
-# ── Vectorize indexes (semantic search + agent RAG) ──────────────────────
-for INDEX in "$VECTORIZE_INDEX" "$AGENT_VECTORIZE_INDEX"; do
-  echo "==> Vectorize index ($INDEX)..."
-  if wrangler vectorize list 2>/dev/null | grep -q "$INDEX"; then
-    echo "    already exists"
-  else
-    wrangler vectorize create "$INDEX" --dimensions=1024 --metric=cosine
-  fi
-done
-
 # ── KV namespace (AI agent reply cache) ──────────────────────────────────
 echo "==> KV namespace ($KV_BINDING)..."
-CURRENT_KV_ID=$(grep -A2 '"kv_namespaces"' "$WORKER_CONFIG" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+CURRENT_KV_ID=$(grep -A2 '"kv_namespaces"' "$WORKER_CONFIG" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
 if [ "$CURRENT_KV_ID" = "REPLACE_WITH_KV_NAMESPACE_ID" ] || [ -z "$CURRENT_KV_ID" ]; then
-  if ! wrangler kv namespace list --json 2>/dev/null | grep -q "\"title\": *\"$KV_BINDING\""; then
-    wrangler kv namespace create "$KV_BINDING" >/dev/null
+  KV_ID="$(kv_namespace_id "$KV_NAMESPACE_NAME" || true)"
+  if [ -z "$KV_ID" ]; then
+    wrangler kv namespace create "$KV_NAMESPACE_NAME"
     echo "    created namespace"
+    KV_ID="$(kv_namespace_id "$KV_NAMESPACE_NAME" || true)"
   else
     echo "    found existing namespace"
   fi
-  KV_ID=$(wrangler kv namespace list --json 2>/dev/null | node -e "
-    let s = '';
-    process.stdin.on('data', (d) => { s += d; });
-    process.stdin.on('end', () => {
-      try {
-        const list = JSON.parse(s);
-        const ns = list.find((n) => n.title === '$KV_BINDING');
-        if (ns) console.log(ns.id);
-      } catch {}
-    });
-  ")
-  if [ -n "${KV_ID:-}" ]; then
-    node -e "
-      const fs = require('fs');
-      let src = fs.readFileSync('$WORKER_CONFIG', 'utf8');
-      src = src.replace(/(\"kv_namespaces\"[\s\S]*?\"id\": *)\"[^\"]*\"/, '\$1\"$KV_ID\"');
-      fs.writeFileSync('$WORKER_CONFIG', src);
-    "
+  if [ -n "$KV_ID" ]; then
+    KV_CONFIG_PATH="$WORKER_CONFIG" KV_NAMESPACE_ID="$KV_ID" node --input-type=module -e '
+      import fs from "node:fs";
+      const path = process.env.KV_CONFIG_PATH;
+      let src = fs.readFileSync(path, "utf8");
+      src = src.replace(/("kv_namespaces"[\s\S]*?"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify(process.env.KV_NAMESPACE_ID));
+      fs.writeFileSync(path, src);
+    '
     echo "    wrote id into $WORKER_CONFIG"
   else
-    echo "    WARNING: could not resolve KV namespace id — set it manually in $WORKER_CONFIG" >&2
+    echo "    ERROR: Cloudflare created/has the KV namespace but its ID could not be read. Check Workers KV read permission; no deployment attempted." >&2
+    exit 1
   fi
 else
   echo "    already configured, id=$CURRENT_KV_ID"
 fi
 
+# ── KV namespace (media storage) ────────────────────────────────────────
+echo "==> KV namespace ($MEDIA_KV_BINDING)..."
+MEDIA_KV_ID="$(kv_namespace_id "$MEDIA_KV_NAMESPACE_NAME" || true)"
+if [ -z "$MEDIA_KV_ID" ]; then
+  wrangler kv namespace create "$MEDIA_KV_NAMESPACE_NAME"
+  echo "    created namespace"
+  MEDIA_KV_ID="$(kv_namespace_id "$MEDIA_KV_NAMESPACE_NAME" || true)"
+else
+  echo "    found existing namespace"
+fi
+if [ -n "$MEDIA_KV_ID" ]; then
+  WORKER_CONFIG_PATH="$WORKER_CONFIG" WEB_CONFIG_PATH="$WEB_CONFIG" MEDIA_NAMESPACE_ID="$MEDIA_KV_ID" node --input-type=module -e '
+    import fs from "node:fs";
+    for (const path of [process.env.WORKER_CONFIG_PATH, process.env.WEB_CONFIG_PATH]) {
+      let src = fs.readFileSync(path, "utf8");
+      src = src.replace(/("binding": *"MEDIA_STORE", *"id": *)"[^"]*"/, (_match, prefix) => prefix + JSON.stringify(process.env.MEDIA_NAMESPACE_ID));
+      fs.writeFileSync(path, src);
+    }
+  '
+  echo "    wrote id into both Worker and web configs"
+else
+  echo "    ERROR: Cloudflare media KV namespace ID could not be resolved; no deployment attempted." >&2
+  exit 1
+fi
 # ── Run D1 migrations (remote) ───────────────────────────────────────────
 echo "==> Applying D1 migrations..."
 CI=true wrangler d1 migrations apply "$DB_NAME" --remote
@@ -168,24 +177,28 @@ fi
 # it, apps/worker/src/session/whatsapp-session.ts verifies it). Must be the
 # SAME value in both apps — generate it once here and set it in both.
 echo "==> WebSocket token secret (WS_TOKEN_SECRET)..."
-if (cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "WS_TOKEN_SECRET"); then
-  echo "    already set"
+WEB_HAS_WS_SECRET=$(cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "WS_TOKEN_SECRET" && echo yes || echo no)
+WORKER_HAS_WS_SECRET=$(cd "$WORKER_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "WS_TOKEN_SECRET" && echo yes || echo no)
+if [ "$WEB_HAS_WS_SECRET" = "yes" ] && [ "$WORKER_HAS_WS_SECRET" = "yes" ]; then
+  echo "    already set in both apps"
 else
   GENERATED=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
   (cd "$WEB_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put WS_TOKEN_SECRET)
   (cd "$WORKER_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put WS_TOKEN_SECRET)
-  echo "    generated and set a new secret in both apps"
+  echo "    generated and synchronized secret in both apps"
 fi
 
 # ── Engine internal secret (web -> engine auth) ──────────────────────────
 echo "==> Engine internal secret (ENGINE_INTERNAL_SECRET)..."
-if (cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "ENGINE_INTERNAL_SECRET"); then
-  echo "    already set"
+WEB_HAS_ENGINE_SECRET=$(cd "$WEB_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "ENGINE_INTERNAL_SECRET" && echo yes || echo no)
+WORKER_HAS_ENGINE_SECRET=$(cd "$WORKER_DIR" && pnpm exec wrangler secret list 2>/dev/null | grep -q "ENGINE_INTERNAL_SECRET" && echo yes || echo no)
+if [ "$WEB_HAS_ENGINE_SECRET" = "yes" ] && [ "$WORKER_HAS_ENGINE_SECRET" = "yes" ]; then
+  echo "    already set in both apps"
 else
   GENERATED=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
   (cd "$WEB_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put ENGINE_INTERNAL_SECRET)
   (cd "$WORKER_DIR" && echo "$GENERATED" | pnpm exec wrangler secret put ENGINE_INTERNAL_SECRET)
-  echo "    generated and set a new secret in both apps"
+  echo "    generated and synchronized secret in both apps"
 fi
 
 # ── Validate BETTER_AUTH_URL ──────────────────────────────────────────────

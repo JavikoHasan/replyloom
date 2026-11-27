@@ -4,27 +4,15 @@
 export interface AgentEnv {
   AI: Ai;
   DB: D1Database;
-  AGENT_VECTORIZE: VectorizeIndex; // wa-docs: grounding vectors for the agent
-  REPLY_CACHE: KVNamespace; // cheap answer + short-lived config cache
-  /**
-   * AI Gateway id to route model calls through (defaults to the account's
-   * auto-provisioned "default" gateway when unset).
-   */
-  AIG_GATEWAY_ID?: string;
-  /**
-   * Opt-in flag ("true") to persist raw request/response payloads in
-   * Cloudflare AI Gateway logs. Defaults to false so customer message
-   * bodies and RAG context are not retained in gateway logs.
-   */
-  AIG_COLLECT_LOG?: string;
+  REPLY_CACHE: KVNamespace; // exact-answer + short-lived config cache
 }
 
 export interface AgentModels {
-  /** Small/cheap model used for intent gating — called on EVERY message. */
+  /** Small model used for intent gating. */
   classifier: string;
   /** Main reply model — supports Workers AI function calling. */
   generator: string;
-  /** Embedding model for RAG — must match the AGENT_VECTORIZE index dims. */
+  /** Kept for compatibility with existing saved settings; D1 text retrieval does not use embeddings. */
   embedding: string;
 }
 
@@ -37,7 +25,7 @@ export interface AgentConfig {
   replyInGroups: boolean;
   models: AgentModels;
   maxContextChunks: number;
-  /** 0-1 cosine floor — a chunk below this is never trusted as grounding. */
+  /** Legacy setting retained for compatibility; D1 text retrieval uses lexical matching. */
   similarityThreshold: number;
   cacheTtlSeconds: number;
   /** Optional custom system prompt instructions appended to the agent system prompt. */
@@ -89,6 +77,8 @@ export interface GuardrailResult {
   allowed: boolean;
   label: IntentLabel;
   cannedReply?: string;
+  /** Model-generated Spanish search terms; never used as factual answer content. */
+  searchQuery?: string;
 }
 
 export interface AgentReply {

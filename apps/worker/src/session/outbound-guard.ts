@@ -47,25 +47,27 @@ export class TokenBucket {
   }
 }
 
-/** Per-session outbound pace: bursts of 8, then ~24 messages/minute. */
-export const OUTBOUND_BURST = 8;
-export const OUTBOUND_PER_SEC = 0.4;
+/** Test-friendly outbound pace: bursts of 10, then up to ~60 messages/minute. */
+export const OUTBOUND_BURST = 10;
+export const OUTBOUND_PER_SEC = 1;
 /** A send that would wait longer than this is refused instead (429). */
 export const MAX_QUEUE_WAIT_MS = 5_000;
 
 /**
- * Auto-replies (keyword rules + AI agent) are the classic ban trigger when
- * two bots answer each other forever. Per contact: at most 1 per minute and
- * 5 per hour; per session: at most 120 per hour.
+ * Generous test-mode auto-reply limits. No artificial per-message cooldown;
+ * allow normal product follow-ups while retaining a high ceiling as a loop
+ * breaker if another bot or an automated sender gets into a reply cycle.
  */
 export class AutoReplyLimiter {
   private perContact = new Map<string, number[]>();
   private session: number[] = [];
 
   constructor(
-    private readonly perContactMinGapMs = 60_000,
-    private readonly perContactPerHour = 5,
-    private readonly sessionPerHour = 120
+    // Customers often ask several product questions in quick succession.
+    // No cooldown during testing; hourly ceilings remain as loop protection.
+    private readonly perContactMinGapMs = 0,
+    private readonly perContactPerHour = 120,
+    private readonly sessionPerHour = 1_000
   ) {}
 
   allow(jid: string, now = Date.now()): boolean {
@@ -80,6 +82,67 @@ export class AutoReplyLimiter {
     this.perContact.set(jid, history);
     this.session.push(now);
     if (this.perContact.size > 5_000) this.perContact.clear();
+    return true;
+  }
+}
+
+/**
+ * Suppresses identical automatic replies to the same chat during a short
+ * burst. Several rapid customer messages can otherwise race through separate
+ * AI tasks and send the same final answer multiple times.
+ */
+export class AutoReplyContentDeduper {
+  private recent = new Map<string, number>();
+
+  constructor(private readonly windowMs = 3_000) {}
+
+  allow(jid: string, text: string, now = Date.now()): boolean {
+    const normalized = text.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    // FNV-1a keeps storage in memory bounded without retaining customer text.
+    let hash = 2166136261;
+    for (let i = 0; i < normalized.length; i++) {
+      hash ^= normalized.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const key = jid + ":" + (hash >>> 0).toString(36);
+    const previous = this.recent.get(key);
+    if (previous !== undefined && now - previous < this.windowMs) return false;
+    this.recent.set(key, now);
+    if (this.recent.size > 2_000) {
+      for (const [entry, timestamp] of this.recent) {
+        if (now - timestamp >= this.windowMs) this.recent.delete(entry);
+      }
+      if (this.recent.size > 2_000) this.recent.clear();
+    }
+    return true;
+  }
+}
+
+/**
+ * Prevents one inbound WhatsApp message from triggering more than one AI reply
+ * when Baileys delivers the same message through overlapping notify/append events.
+ */
+export class AutoReplyMessageDeduper {
+  private recent = new Map<string, number>();
+
+  constructor(private readonly windowMs = 10 * 60_000) {}
+
+  allow(jid: string, messageId: string, now = Date.now()): boolean {
+    if (!messageId) return true;
+    const key = jid + ":" + messageId;
+    const previous = this.recent.get(key);
+    if (previous !== undefined && now - previous < this.windowMs) return false;
+    this.recent.set(key, now);
+    if (this.recent.size > 5_000) {
+      for (const [entry, timestamp] of this.recent) {
+        if (now - timestamp >= this.windowMs) this.recent.delete(entry);
+      }
+      if (this.recent.size > 5_000) this.recent.clear();
+    }
     return true;
   }
 }

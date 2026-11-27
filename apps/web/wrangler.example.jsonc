@@ -1,6 +1,6 @@
 // TEMPLATE — copied to wrangler.jsonc (gitignored) by `pnpm install` /
-// `pnpm setup`. Edit wrangler.jsonc, not this file. `pnpm setup` fills in
-// the D1/KV ids; set the URLs to your own domains before deploying.
+// `pnpm install`. Edit wrangler.jsonc, not this file. Resource IDs and
+// workers.dev URLs below are dedicated to Cell Phone Store.
 // account_id is intentionally absent: wrangler uses `wrangler login` or
 // the CLOUDFLARE_ACCOUNT_ID env var.
 {
@@ -14,8 +14,8 @@
   },
   "services": [
     // Keep the worker service local during development. The worker's
-    // Vectorize bindings are configured as remote below in its own config.
-    { "binding": "WA_WORKER", "service": "wa-cf-poc" }
+    // Storage and rate-limit resources are accessed through the engine service.
+    { "binding": "WA_WORKER", "service": "cell-phone-store-whatsapp-ai" }
   ],
   // Same physical D1 database as apps/worker — keep both ids in sync.
   // D1 is "remote" (not the default local sqlite emulation) so apps/web and
@@ -27,16 +27,16 @@
   // production. This does mean local dev reads/writes your actual D1
   // database, not an isolated local copy.
   "d1_databases": [
-    { "binding": "DB", "database_name": "whatsapp-ai", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
+    { "binding": "DB", "database_name": "cell-phone-store-whatsapp-ai-db", "database_id": "REPLACE_WITH_D1_DATABASE_ID", "migrations_dir": "../../packages/db/migrations", "remote": true }
   ],
-  "r2_buckets": [
-    { "binding": "MEDIA", "bucket_name": "whatsapp-ai-media" }
+  "kv_namespaces": [
+    { "binding": "MEDIA_STORE", "id": "REPLACE_WITH_MEDIA_KV_NAMESPACE_ID" }
   ],
-  "vars": {
+"vars": {
     // Public base URL Better Auth uses for cookies/redirects. BETTER_AUTH_SECRET
     // is intentionally NOT here — set it locally via .dev.vars and in prod via
     // `wrangler secret put BETTER_AUTH_SECRET`.
-    "BETTER_AUTH_URL": "http://localhost:3000",
+    "BETTER_AUTH_URL": "https://whatsapp-ai-web.elprincipiante.workers.dev",
     // NOTE: this does NOT reach the browser bundle. `import.meta.env.*` is
     // resolved by Vite at BUILD time from .env files (apps/web/.env.production
     // for `vite build` / deploys, .env.development for `vite dev`) -- Cloudflare
@@ -45,7 +45,7 @@
     // future server-side code wants the engine's public URL; the value the
     // browser actually gets is apps/web/.env.production's VITE_ENGINE_URL --
     // keep both in sync by hand.
-    "VITE_ENGINE_URL": "http://localhost:8787",
+    "VITE_ENGINE_URL": "https://cell-phone-store-whatsapp-ai.elprincipiante.workers.dev",
     // Sender address for team-invite emails (see src/lib/resend.ts). Change
     // this to a domain you've verified with Resend before going to
     // production — "onboarding@resend.dev" only works in Resend's sandbox.
@@ -55,29 +55,5 @@
     // `wrangler secret put RESEND_API_KEY`. Invites still get created
     // without it, the email is just skipped (logged server-side).
   },
-  // Rate limiting for the web app Worker (CRM), enforced in src/server.ts
-  // per client IP (Cloudflare's limiter is per-location, eventually
-  // consistent -- a brake on abuse, not an exact quota).
-  //  - WEB_RATE_LIMITER: all server-function + /api traffic. Generous: a
-  //    single inbox load fans out to ~10-20 calls and offices share NAT IPs.
-  //  - AUTH_RATE_LIMITER: sign-in / sign-up / password-reset POSTs only
-  //    (credential stuffing + email-bombing brake).
-  "ratelimits": [
-    {
-      "name": "WEB_RATE_LIMITER",
-      "namespace_id": "2001",
-      "simple": {
-        "limit": 600,
-        "period": 60
-      }
-    },
-    {
-      "name": "AUTH_RATE_LIMITER",
-      "namespace_id": "2002",
-      "simple": {
-        "limit": 10,
-        "period": 60
-      }
-    }
-  ]
+
 }

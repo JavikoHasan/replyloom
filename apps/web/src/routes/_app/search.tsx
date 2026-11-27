@@ -49,8 +49,7 @@ function SearchPage() {
       <div>
         <h2 className="text-lg font-semibold">Search</h2>
         <p className="text-sm text-muted-foreground">
-          Semantic search across your message history — find what was said, even
-          without the exact words.
+          Search your message history by words and phrases.
         </p>
       </div>
       <Form {...form}>

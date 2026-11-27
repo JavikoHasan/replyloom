@@ -1,32 +1,24 @@
 import { useState } from "react"
-import { useQuery, useMutation } from "@tanstack/react-query"
+import { useMutation } from "@tanstack/react-query"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Panel } from "@workspace/ui/components/panel"
 import { Badge } from "@workspace/ui/components/badge"
 import { Loader2Icon, SendIcon, SparklesIcon } from "lucide-react"
 import {
-  getAgentConfig,
   testAgentReply
   
 } from "@/features/agent/hooks/use-agent"
 import type {AgentReplyResult} from "@/features/agent/hooks/use-agent";
 
 export function AgentTestPanel({ workspaceId }: { workspaceId: string }) {
-  const configQuery = useQuery({
-    queryKey: ["agent-config", workspaceId],
-    queryFn: () => getAgentConfig({ data: { workspaceId } }),
-    staleTime: 30_000,
-  })
-
   const [message, setMessage] = useState("")
   const testMutation = useMutation({
     mutationFn: (msg: string) =>
       testAgentReply({ data: { workspaceId, message: msg } }),
   })
 
-  const enabled = configQuery.data?.enabled ?? false
-  const canRun = enabled && message.trim().length > 0 && !testMutation.isPending
+  const canRun = message.trim().length > 0 && !testMutation.isPending
 
   function run() {
     if (!canRun) return
@@ -42,14 +34,13 @@ export function AgentTestPanel({ workspaceId }: { workspaceId: string }) {
             <h2 className="text-lg font-semibold">Try it</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Send a sample customer message and preview the real pipeline —
-            intent check, knowledge base, tools.
+            Prueba el catálogo y las reglas comerciales sin activar el agente ni enviar mensajes por WhatsApp.
           </p>
         </div>
 
         <div className="flex gap-2">
           <Input
-            placeholder='e.g. "Where is my order?"'
+            placeholder='Ej.: "¿Cuánto cuesta el A07?"'
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => {
@@ -66,11 +57,9 @@ export function AgentTestPanel({ workspaceId }: { workspaceId: string }) {
           </Button>
         </div>
 
-        {!enabled && (
-          <p className="text-xs text-muted-foreground">
-            The agent is off — turn it on in the panel above to test it.
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          Vista previa aislada: no cambia la configuración, no conecta WhatsApp y no envía respuestas a clientes.
+        </p>
 
         {testMutation.data && (
           <ReplyResult result={testMutation.data} />

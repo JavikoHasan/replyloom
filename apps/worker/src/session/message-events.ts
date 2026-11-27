@@ -3,20 +3,14 @@
 // webhooks, search indexing, auto-reply). Pulled out of whatsapp-session.ts
 // so the socket/lifecycle DO class doesn't also have to carry all of this
 // business logic inline.
-import {  eq, and, groups } from "@workspace/db";
 import type {Db} from "@workspace/db";
 import type { WASocket } from "@whiskeysockets/baileys";
 import type { Env } from "../index";
 import { parseBaileysMessage, syncIncomingMessage, syncMessagesBatch, isContactBlocked  } from "../db/sync";
 import type {ParsedMessage} from "../db/sync";
 import { downloadAndStoreMedia } from "../media";
-import { findAutoReply, dispatchWebhookEvent } from "../automation";
 import { maybeAiAutoReply } from "../ai-autoreply";
-import { indexMessageForSearch } from "../search";
-import { TtlCache } from "../ttl-cache";
-
-// Group subject for the search index metadata -- was one D1 read per group message.
-const groupNameCache = new TtlCache<string | null>(5 * 60_000);
+import { isPrivateDirectChatJid } from "./message-routing";
 
 const MEDIA_TYPES = ["image", "video", "audio", "document", "sticker"];
 
@@ -39,6 +33,16 @@ export interface MessageEventContext {
   broadcast: (data: Record<string, unknown>) => void;
   /** Anti-ban: per-contact auto-reply loop breaker + session pace. */
   allowAutoReply?: (jid: string) => boolean;
+  /** Suppress identical replies to the same chat during a short burst. */
+  allowAutoReplyContent?: (jid: string, text: string) => boolean;
+  /** Ensure one inbound WhatsApp message ID triggers at most one AI reply. */
+  allowAutoReplyMessage?: (jid: string, messageId: string) => boolean;
+  /** A human outbound message pauses automatic replies only in that conversation for a short cooldown. */
+  pauseAutoReply?: (jid: string) => Promise<void>;
+  isAutoReplyPaused?: (jid: string) => Promise<boolean>;
+  /** Prevent the bot's own outgoing echo from being mistaken for a human reply. */
+  markBotReply?: (jid: string) => Promise<void>;
+  consumeBotReplyMarker?: (jid: string) => Promise<boolean>;
   /**
    * Hands a fire-and-forget promise (webhook delivery, search indexing) to
    * the runtime so it keeps the isolate alive after this handler returns.
@@ -66,6 +70,15 @@ export async function processLiveMessage(
   msg: any,
   upsertType: "notify" | "append"
 ): Promise<void> {
+  // Hard boundary: groups, channels, status and broadcast messages are not
+  // customer-support conversations. Drop them before any DB/media/webhook/AI
+  // work, even when this number is mentioned or directly tagged.
+  const remoteJid = msg?.key?.remoteJid;
+  if (!isPrivateDirectChatJid(remoteJid)) {
+    ctx.log("info", "Non-private WhatsApp message ignored by business assistant");
+    return;
+  }
+
   const parsed = await parseBaileysMessage(ctx.db, ctx.sessionIdName, msg);
   if (!parsed) return;
 
@@ -73,12 +86,32 @@ export async function processLiveMessage(
   // per message is already the dominant log volume.
   ctx.log("info", `${parsed.fromMe ? "OUT" : "IN"} [${parsed.type}] ${parsed.waMessageId}`);
 
+  // A real outgoing message from the seller means a human has taken over
+  // this chat. The bot's own send echo is marked just before sendMessage()
+  // and must not trigger the pause.
+  if (parsed.fromMe) {
+    let botEcho = false;
+    try {
+      botEcho = await ctx.consumeBotReplyMarker?.(parsed.remoteJid) ?? false;
+    } catch (err: any) {
+      ctx.log("warn", `Could not inspect bot-reply marker: ${err?.message || err}`);
+    }
+    if (!botEcho) {
+      try {
+        await ctx.pauseAutoReply?.(parsed.remoteJid);
+        ctx.log("info", "Human activity detected; automatic replies paused for this chat");
+      } catch (err: any) {
+        ctx.log("warn", `Could not persist per-chat human takeover pause: ${err?.message || err}`);
+      }
+    }
+  }
+
   // Skip all processing for incoming messages from blocked contacts —
   // no conversation, no sync, no auto-reply, nothing.
   if (!parsed.fromMe) {
     const senderJid = parsed.participant ?? parsed.remoteJid;
     if (await isContactBlocked(ctx.db, ctx.sessionIdName, senderJid)) {
-      ctx.log("info", `Blocked contact ${senderJid} — message dropped`);
+      ctx.log("info", "Blocked contact message dropped");
       return;
     }
   }
@@ -142,81 +175,62 @@ export async function processLiveMessage(
     },
   });
 
-  // Outbound webhook -- handed to waitUntil so the delivery (up to 10s per
-  // hook, sequential) survives this handler returning.
-  const webhookWork = dispatchWebhookEvent(ctx.db, ctx.workspaceId, parsed.fromMe ? "message.sent" : "message.received", {
-    sessionId: ctx.sessionIdName,
-    remoteJid: parsed.remoteJid,
-    fromMe: parsed.fromMe,
-    type: parsed.type,
-    body: parsed.body,
-    waMessageId: parsed.waMessageId,
-  }).catch((err: any) => ctx.log("error", `Webhook dispatch failed: ${err?.message || err}`));
-  if (ctx.waitUntil) ctx.waitUntil(webhookWork);
-
-  // Semantic search index
-  if (parsed.body) {
-    const isGroup = parsed.remoteJid.endsWith("@g.us");
-    let groupName: string | null = null;
-    let senderName: string | null = null;
-    if (isGroup) {
-      try {
-        groupName = await groupNameCache.get(`${ctx.sessionIdName}|${parsed.remoteJid}`, async () => {
-          const groupRow = await ctx.db
-            .select({ name: groups.name })
-            .from(groups)
-            .where(and(eq(groups.waSessionId, ctx.sessionIdName), eq(groups.jid, parsed.remoteJid)))
-            .get();
-          return groupRow?.name ?? null;
-        });
-      } catch {}
-      if (parsed.pushName) senderName = parsed.pushName;
-    }
-    const indexWork = indexMessageForSearch(ctx.env, {
-      messageId: parsed.waMessageId,
-      workspaceId: ctx.workspaceId,
-      waSessionId: ctx.sessionIdName,
-      conversationId,
-      text: parsed.body,
-      isGroup,
-      groupName,
-      senderName,
-      senderJid: parsed.participant ?? null,
-    }).catch((err: any) => ctx.log("error", `Search indexing failed: ${err?.message || err}`));
-    if (ctx.waitUntil) ctx.waitUntil(indexWork);
-  }
-
-  // Auto-reply: keyword rules first (deterministic, cheap), then the AI
-  // agent as a fallback when no rule matched. Only for genuinely fresh
+  // Auto-reply: the store assistant uses only its catalog-grounded AI agent. Only for genuinely fresh
   // messages -- see AUTO_REPLY_MAX_AGE_MS above.
   const isFresh = upsertType === "notify" || Date.now() - parsed.timestampMs < AUTO_REPLY_MAX_AGE_MS;
-  if (!parsed.fromMe && ctx.socket && parsed.body && isFresh) {
+  let autoReplyPaused = false;
+  if (!parsed.fromMe && ctx.isAutoReplyPaused) {
+    try {
+      autoReplyPaused = await ctx.isAutoReplyPaused(parsed.remoteJid);
+    } catch (err: any) {
+      // Fail closed if the pause state cannot be checked: never interrupt a
+      // possible human takeover because a storage read failed.
+      autoReplyPaused = true;
+      ctx.log("warn", `Could not read auto-reply pause state: ${err?.message || err}`);
+    }
+  }
+  if (!parsed.fromMe && ctx.socket && parsed.body && isFresh && !autoReplyPaused) {
+    if (ctx.allowAutoReplyMessage && !ctx.allowAutoReplyMessage(parsed.remoteJid, parsed.waMessageId)) {
+      ctx.log("info", "Duplicate inbound WhatsApp message suppressed before AI auto-reply");
+      return;
+    }
     try {
       const isGroup = parsed.remoteJid.endsWith("@g.us");
       const senderJid = parsed.participant ?? parsed.remoteJid;
-      let replyText = await findAutoReply(ctx.db, ctx.workspaceId, ctx.sessionIdName, {
+      let replyText = await maybeAiAutoReply(ctx.env, {
+        waSessionId: ctx.sessionIdName,
+        workspaceId: ctx.workspaceId,
+        conversationId,
+        remoteJid: parsed.remoteJid,
+        senderJid,
         isGroup,
         body: parsed.body,
-        senderJid,
       });
-      let source = "Keyword auto-reply";
-      if (!replyText) {
-        replyText = await maybeAiAutoReply(ctx.env, {
-          waSessionId: ctx.sessionIdName,
-          workspaceId: ctx.workspaceId,
-          conversationId,
-          remoteJid: parsed.remoteJid,
-          senderJid,
-          isGroup,
-          body: parsed.body,
-        });
-        source = "AI auto-reply";
-      }
       if (replyText && ctx.allowAutoReply && !ctx.allowAutoReply(parsed.remoteJid)) {
         replyText = null; // loop breaker / pace: skip this auto-reply
       }
+      if (replyText && ctx.allowAutoReplyContent && !ctx.allowAutoReplyContent(parsed.remoteJid, replyText)) {
+        ctx.log("info", "Identical auto-reply suppressed for this chat during duplicate-response window");
+        replyText = null;
+      }
+      // Re-check immediately before sending: a human may have taken over
+      // while the AI was generating this response. Fail closed on read errors.
+      if (replyText && ctx.isAutoReplyPaused) {
+        try {
+          if (await ctx.isAutoReplyPaused(parsed.remoteJid)) replyText = null;
+        } catch (err: any) {
+          replyText = null;
+          ctx.log("warn", `Could not re-check per-chat human takeover pause; reply suppressed: ${err?.message || err}`);
+        }
+      }
       if (replyText) {
-        ctx.log("info", `${source} firing for ${parsed.remoteJid}`);
+        ctx.log("info", "AI auto-reply firing");
+        // Mark this outgoing echo so it is not mistaken for a human takeover.
+        try {
+          await ctx.markBotReply?.(parsed.remoteJid);
+        } catch (err: any) {
+          ctx.log("warn", `Could not mark bot reply echo: ${err?.message || err}`);
+        }
         const result = await ctx.socket.sendMessage(parsed.remoteJid, {
           text: replyText,
         });

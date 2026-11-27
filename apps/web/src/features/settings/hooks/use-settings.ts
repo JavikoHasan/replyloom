@@ -86,7 +86,7 @@ export const updateProfile = createServerFn({ method: "POST" })
   )
 
 // ── Profile photo upload (replaces the old "paste a URL" workflow) ──
-// The file arrives as base64, is validated and stored in R2 under a
+// The file arrives as base64, is validated and stored in Workers KV under a
 // per-user avatars prefix, and the key is returned so the client can
 // resolve it to a public URL via waApi.mediaUrl before saving the profile.
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -108,11 +108,11 @@ export const uploadProfileImage = createServerFn({ method: "POST" })
       const bytes = Uint8Array.from(atob(data.base64), (c) => c.charCodeAt(0))
       const ext = (data.mime.split("/")[1] ?? "png").split(";")[0]
       const mediaKey = `user-avatars/${sessionUser.id}/${crypto.randomUUID()}.${ext}`
-      await env.MEDIA.put(mediaKey, bytes, {
-        httpMetadata: { contentType: data.mime },
+      await env.MEDIA_STORE.put(mediaKey, bytes, {
+        metadata: { contentType: data.mime },
       })
 
-      // Replacing a previous upload? Drop the old R2 object, but only if
+      // Replacing a previous upload? Drop the old KV object, but only if
       // it lives under our avatars prefix -- an external (Google, pasted
       // URL) avatar is someone else's object and stays untouched.
       const current = await db
@@ -126,7 +126,7 @@ export const uploadProfileImage = createServerFn({ method: "POST" })
           const prevKey = decodeURIComponent(
             new URL(prev).pathname.replace(/^\/media\//, "")
           )
-          if (prevKey.startsWith("user-avatars/")) await env.MEDIA.delete(prevKey)
+          if (prevKey.startsWith("user-avatars/")) await env.MEDIA_STORE.delete(prevKey)
         } catch {
           // non-fatal -- unparseable/external URL left alone
         }

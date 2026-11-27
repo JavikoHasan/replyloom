@@ -4,6 +4,8 @@
 
 # Replyloom
 
+> **Zero-cost branch profile:** see [FREE_PLAN.md](./FREE_PLAN.md) for the Free-only architecture, limits, and trade-offs. This branch does not use R2, Vectorize, AI Gateway, or the paid Rate Limiting API.
+
 **Open-source, self-hosted WhatsApp CRM that runs entirely on Cloudflare.**
 
 Shared team inbox · multiple numbers · contacts & deal pipeline · safe broadcasts · auto-replies · AI support agent
@@ -45,7 +47,7 @@ Shared team inbox · multiple numbers · contacts & deal pipeline · safe broadc
 |---|---|
 | **What it is** | Self-hosted WhatsApp CRM and shared team inbox |
 | **License** | MIT (free for commercial use) |
-| **Hosting** | Your own Cloudflare account (Workers, Durable Objects, D1, R2, Queues, Vectorize) |
+| **Hosting** | Your own Cloudflare account (Workers Free, Durable Objects with SQLite, D1, KV, Queues, Workers AI) |
 | **WhatsApp connection** | Linked device via QR code (WhatsApp Web protocol, through Baileys) |
 | **Numbers** | Several per workspace, each an isolated session |
 | **Team** | Workspaces, invitations, roles and permissions |
@@ -66,7 +68,7 @@ Shared team inbox · multiple numbers · contacts & deal pipeline · safe broadc
 - **Safe broadcasts to opted-in lists**: per-campaign ceilings, warm-up caps, random send gaps, circuit breakers and automatic STOP/opt-out handling (see [Responsible use](#responsible-use)).
 - **Scheduled messages**: send at an exact time, driven by a Durable Object alarm instead of polling.
 - **Keyword auto-replies**: exact, contains or regex rules (ReDoS-safe), per number or workspace-wide.
-- **AI support agent (optional)**: answers from your own docs (RAG over Vectorize), calls tools and webhooks, refuses what it can't ground in your docs, and hands off to a human when unsure.
+- **AI support agent (optional)**: answers from your own docs (text retrieval from D1), calls tools and webhooks, refuses what it can't ground in your docs, and hands off to a human when unsure.
 - **Message templates**: reusable text with `{{name}}` variables and an optional attachment.
 - **Webhooks & REST API**: signed outbound webhooks for message events, plus workspace-scoped API keys.
 - **Semantic search**: search message history by meaning, using Workers AI embeddings.
@@ -91,7 +93,7 @@ Shared team inbox · multiple numbers · contacts & deal pipeline · safe broadc
 |---|---|
 | CRM app (`apps/web`) | TanStack Start (React 19, Router, Query), Tailwind v4, shadcn/ui, Better Auth |
 | WhatsApp engine (`apps/worker`) | Cloudflare Workers + Durable Objects running Baileys (patched for Workers) |
-| Data | D1 (SQLite) via Drizzle ORM, R2 (media), KV (agent cache), Queues (broadcast dispatch), Vectorize + Workers AI (search & RAG) |
+| Data | D1 (SQLite) via Drizzle ORM, KV (cache and bounded media), Queues (broadcast dispatch), Durable Objects with SQLite (sessions and rate limiting), Workers AI |
 | Tooling | pnpm workspaces, Turborepo, Vitest, TypeScript |
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the pieces fit together.
@@ -105,7 +107,7 @@ git clone https://github.com/thareekanvar/replyloom.git && cd replyloom
 pnpm install
 pnpm exec wrangler login
 
-pnpm setup     # creates D1, R2, Queue, Vectorize, KV; applies migrations; generates secrets
+pnpm setup     # creates D1, Queue and two KV namespaces; applies migrations; generates secrets
 ```
 
 Then, before the first deploy:
@@ -120,7 +122,7 @@ Both scripts are idempotent. [DEPLOY.md](./DEPLOY.md) covers every step by hand,
 ## Known limitations
 
 - **Single D1 database.** Every workspace shares one D1 database (hot paths are indexed and keyset-paginated). That's fine for small and medium deployments, but it hasn't been load-tested at large scale. Per-workspace sharding is on the roadmap.
-- **No full-text search yet.** Search is semantic (Vectorize) only. FTS comes after sharding, so matches can't cross tenants.
+- **Search is text-based on the Free profile.** Message search and agent knowledge retrieval use workspace-scoped D1 matching, not semantic embeddings.
 - **Unofficial WhatsApp client.** The engine uses Baileys, not the official Cloud API. Numbers can get banned. Read [DISCLAIMER.md](./DISCLAIMER.md).
 - **CSP is report-only.** The full Content-Security-Policy ships as `Content-Security-Policy-Report-Only`. Enforce it in `apps/web/src/server.ts` once your browser console is clean.
 
@@ -187,7 +189,7 @@ It can happen with any unofficial client, and nobody can guarantee otherwise. Re
 Yes. A workspace can link several numbers. Each runs in its own isolated Cloudflare Durable Object and stays connected 24/7, even with every browser tab closed.
 
 ### Do I need a server or a database?
-No. Everything runs on Cloudflare: Workers for the app, Durable Objects for the WhatsApp sessions, D1 (SQLite) for data and R2 for media. `pnpm setup` creates all of it.
+No. Everything runs on Cloudflare Free resources: Workers for the app, Durable Objects for WhatsApp sessions, D1 (SQLite) for data, and KV for cache/media. `pnpm setup` creates the required resources.
 
 ### Does it work with WhatsApp groups?
 Yes. Group chats sit in the inbox next to direct chats, and you can create groups and manage members, settings and invite links.
@@ -196,7 +198,7 @@ Yes. Group chats sit in the inbox next to direct chats, and you can create group
 Yes. Signed outbound webhooks push message events to your own code, n8n, Zapier or Make. Workspace-scoped API keys let you call the engine's REST API to send text, media and templates.
 
 ### How does the AI agent work?
-You upload your docs. They're embedded into Vectorize, and the agent answers customer messages grounded only in those docs, using Workers AI through AI Gateway. It refuses what it can't answer and hands the chat to a human.
+You upload your docs. Their text chunks are stored in D1, and the agent retrieves matching passages before answering through Workers AI directly. It refuses what it can't verify and uses a safe static fallback when the Free AI quota is unavailable.
 
 ### Is Replyloom an alternative to hosted WhatsApp CRMs?
 Yes, for conversational support and sales. It's a self-hosted, open-source alternative to per-seat WhatsApp inbox tools. For high-volume marketing, use the official WhatsApp Business Platform instead.

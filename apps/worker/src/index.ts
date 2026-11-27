@@ -6,11 +6,12 @@ import {
 } from "./broadcast";
 import type {BroadcastQueueMessage} from "./broadcast";
 import { storeLibraryMedia } from "./media";
-import { indexMessagesForSearch, semanticSearch } from "./search";
+import { semanticSearch } from "./search";
 import { pruneWebhookDeliveries } from "./automation";
 import { handleAgentMessage } from "./ai-agent/agent";
 import { loadAgentConfig, invalidateConfigCache } from "./ai-agent/config";
 import { ingestDocument } from "./ai-agent/rag";
+import { syncRevolicoCatalog, getCatalogSyncStatus } from "./revolico-catalog";
 import { listWorkspaceWebhookTools } from "./ai-agent/tools";
 import { resolveCaller, assertCallerWorkspace, unauthorized, forbidden, assertSafeOutboundUrlWithDns, MAX_MEDIA_UPLOAD_BYTES, MAX_SEND_MEDIA_BYTES  } from "./security";
 import {
@@ -30,6 +31,7 @@ import { scrubSentryEvent } from "@workspace/db/sentry-scrub";
 
 export { WhatsAppSession } from "./session/whatsapp-session";
 export { Scheduler } from "./scheduler";
+export { RateLimiter } from "./rate-limiter";
 
 /**
  * Reads just the `to` field off a /session/:id/send* request without
@@ -62,14 +64,11 @@ export interface Env {
   WHATSAPP_SESSION: DurableObjectNamespace;
   SCHEDULER: DurableObjectNamespace;
   DB: D1Database;
-  MEDIA: R2Bucket;
+  MEDIA_STORE: KVNamespace;
   BROADCAST_QUEUE: Queue<BroadcastQueueMessage>;
   AI: Ai;
-  VECTORIZE: VectorizeIndex;
-  AGENT_VECTORIZE: VectorizeIndex;
   REPLY_CACHE: KVNamespace;
-  API_RATE_LIMITER: RateLimit;
-  AUTH_RATE_LIMITER: RateLimit;
+  RATE_LIMITER: DurableObjectNamespace;
   /**
    * Shared secret that proves a request came from apps/web (which holds the
    * same value as its ENGINE_INTERNAL_SECRET var and presents it on every
@@ -84,17 +83,6 @@ export interface Env {
    * on both apps/web and apps/worker.
    */
   WS_TOKEN_SECRET: string;
-  /**
-   * AI Gateway id for model calls (see ai-agent/gateway.ts). Set in the
-   * dashboard or via `wrangler secret put AIG_GATEWAY_ID`; defaults to the
-   * auto-provisioned "default" gateway when unset.
-   */
-  AIG_GATEWAY_ID?: string;
-  /**
-   * Opt-in flag ("true") to persist raw request/response payloads in
-   * Cloudflare AI Gateway logs. Defaults to false for privacy.
-   */
-  AIG_COLLECT_LOG?: string;
   /**
    * Allowed CORS origin. Defaults to "*" for local dev; set to your
    * production domain (e.g. "https://app.example.com") in wrangler vars
@@ -169,6 +157,29 @@ function configValuesFromBody(body: any): Partial<typeof agentConfigs.$inferInse
   return v;
 }
 
+
+/** Atomically consume one fixed-window bucket in its SQLite Durable Object. */
+async function consumeRateLimit(
+  env: Env,
+  key: string,
+  limit: number,
+  windowMs = 60_000,
+): Promise<{ success: boolean; remaining: number; retryAfter: number }> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const objectName = Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const shard = `rate-limiter:${objectName.slice(0, 2)}`;
+  const stub = env.RATE_LIMITER.get(env.RATE_LIMITER.idFromName(shard));
+  const response = await stub.fetch("https://rate-limit.internal/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keyHash: objectName, limit, windowMs }),
+  });
+  if (!response.ok) throw new Error(`Rate limiter failed (${response.status})`);
+  return await response.json();
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
@@ -200,6 +211,36 @@ async function route(request: Request, env: Env): Promise<Response> {
   // apps/web via the service binding) or a per-workspace API key.
   const caller = await resolveCaller(env, request);
   if (!caller) return unauthorized();
+
+  if (request.method === "GET" && url.pathname === "/agent/catalog-sync-status") {
+    const workspaceId = url.searchParams.get("workspaceId");
+    if (!workspaceId) return Response.json({ ok: false, error: "Missing 'workspaceId'" }, { status: 400 });
+    const scopeError = assertCallerWorkspace(caller, workspaceId);
+    if (scopeError) return scopeError;
+    const status = await getCatalogSyncStatus(env);
+    return Response.json({ ok: true, status });
+  }
+
+  // Internal-only endpoint used by the web Worker for its own request and
+  // authentication throttles. It shares the engine's SQLite DO limiter.
+  if (request.method === "POST" && url.pathname === "/internal/rate-limit") {
+    if (caller.kind !== "internal") return forbidden();
+    let body: { key?: unknown; limit?: unknown; windowMs?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
+    }
+    if (
+      typeof body.key !== "string" || !body.key || body.key.length > 512 ||
+      !Number.isInteger(body.limit) || Number(body.limit) < 1 || Number(body.limit) > 10_000 ||
+      !Number.isInteger(body.windowMs) || Number(body.windowMs) < 1_000 || Number(body.windowMs) > 3_600_000
+    ) {
+      return Response.json({ ok: false, error: "Invalid rate-limit request" }, { status: 400 });
+    }
+    const result = await consumeRateLimit(env, body.key, Number(body.limit), Number(body.windowMs));
+    return Response.json({ ok: true, ...result });
+  }
 
   // ── GET /session/:id/ws-token ──
   // Returns a short-lived HMAC-signed token the browser can present when
@@ -316,7 +357,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   // ── GET /media/:key (key may contain slashes) ──
-  // Streams a stored WhatsApp media object straight out of R2. Access is
+  // Streams a stored WhatsApp media value from KV. Access is
   // scoped to objects owned by the caller's workspace (keys embed the
   // workspace id as their first segment, see src/media.ts).
   if (request.method === "GET" && url.pathname.startsWith("/media/")) {
@@ -324,16 +365,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!key) return new Response("Not found", { status: 404 });
     if (key.startsWith("config/") || key.startsWith("backups/") || key.includes("..")) return forbidden();
     if (!key.startsWith(`${caller.workspaceId}/`)) return forbidden();
-    const object = await env.MEDIA.get(key);
-    if (!object) return new Response("Not found", { status: 404 });
+    const stored = await env.MEDIA_STORE.getWithMetadata<{ contentType?: string }>(key, "arrayBuffer");
+    if (!stored.value) return new Response("Not found", { status: 404 });
     const headers = new Headers();
-    object.writeHttpMetadata(headers);
+    headers.set("Content-Type", stored.metadata?.contentType ?? "application/octet-stream");
     // private: this is auth-scoped content -- browsers may cache it forever
     // (keys are immutable), shared caches/CDNs must not.
     headers.set("Cache-Control", "private, max-age=31536000, immutable");
-    headers.set("ETag", object.httpEtag);
     applySafeMediaHeaders(headers);
-    return new Response(object.body, { headers });
+    return new Response(stored.value, { headers });
   }
 
   // ── DELETE /media/:key -- remove a stored asset (gallery cleanup),
@@ -343,7 +383,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (!key) return Response.json({ ok: false, error: "Missing key" }, { status: 400 });
     if (key.startsWith("config/") || key.startsWith("backups/") || key.includes("..")) return forbidden();
     if (!key.startsWith(`${caller.workspaceId}/`)) return forbidden();
-    await env.MEDIA.delete(key);
+    await env.MEDIA_STORE.delete(key);
     return Response.json({ ok: true });
   }
 
@@ -444,64 +484,15 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (request.method === "POST" && url.pathname === "/search/reindex") {
-    try {
-      const parsed = ReindexBodySchema.safeParse(await request.json());
-      if (!parsed.success) {
-        return Response.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
-      }
-      const { workspaceId, limit, offset, cursor } = parsed.data;
-      const scopeError = assertCallerWorkspace(caller, workspaceId);
-      if (scopeError) return scopeError;
-      const db = createDb(env.DB);
-      // Keyset on messages_workspace_wa_message_idx (workspace_id,
-      // wa_message_id) when a cursor is given; offset kept for old callers.
-      const base = db
-        .select({
-          waMessageId: messages.waMessageId,
-          waSessionId: waSessions.id,
-          conversationId: messages.conversationId,
-          body: messages.body,
-        })
-        .from(messages)
-        .innerJoin(conversations, eq(messages.conversationId, conversations.id))
-        .innerJoin(waSessions, eq(conversations.waSessionId, waSessions.id))
-        .where(
-          and(
-            eq(messages.workspaceId, workspaceId),
-            sql`${messages.body} is not null`,
-            cursor ? sql`${messages.waMessageId} > ${cursor}` : undefined,
-          ),
-        )
-        .orderBy(messages.waMessageId)
-        .limit(limit);
-      const rows = await (cursor ? base : base.offset(offset)).all();
-
-      // Embed in batches of 50: one AI call + one Vectorize upsert each.
-      let indexed = 0;
-      const items = rows
-        .filter((r) => r.body && r.waMessageId)
-        .map((r) => ({ messageId: r.waMessageId!, waSessionId: r.waSessionId, conversationId: r.conversationId, text: r.body! }));
-      for (let i = 0; i < items.length; i += 50) {
-        const res = await indexMessagesForSearch(env, workspaceId, items.slice(i, i + 50));
-        indexed += res.indexed;
-      }
-      const last = rows.at(-1)?.waMessageId ?? null;
-      return Response.json({
-        ok: true,
-        scanned: rows.length,
-        indexed,
-        limit,
-        offset,
-        nextOffset: offset + rows.length,
-        nextCursor: rows.length === limit ? last : null,
-      });
-    } catch (err: any) {
-      captureError(err, { module: "search-reindex" });
-      return Response.json(
-        { ok: false, error: publicMessage(err, 'Reindexing failed. Please try again.') },
-        { status: publicStatus(err, 500) }
-      );
-    }
+    // Kept for older clients. D1 text search is immediate and needs no
+    // embedding/reindex job after messages are saved.
+    return Response.json({
+      ok: true,
+      scanned: 0,
+      indexed: 0,
+      message: "D1 text search is available immediately; no reindex is required.",
+      nextCursor: null,
+    });
   }
 
   // ── AI agent integration surface ──
@@ -528,6 +519,32 @@ async function route(request: Request, env: Env): Promise<Response> {
       captureError(err, { module: "agent-reply" });
       return Response.json(
         { ok: false, error: publicMessage(err, "The agent couldn't reply right now. Please try again.") },
+        { status: publicStatus(err, 500) }
+      );
+    }
+  }
+
+  // ── Isolated AI preview: same catalogue-grounded pipeline, no WhatsApp send ──
+  // Only the authenticated CRM service binding may invoke this test route.
+  // The enabled flag is changed only on an in-memory config copy; no setting is saved.
+  if (request.method === "POST" && url.pathname === "/agent/preview") {
+    if (caller.kind !== "internal") return forbidden();
+    try {
+      const parsed = AgentReplyBodySchema.safeParse(await request.json());
+      if (!parsed.success) {
+        return Response.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+      }
+      const { workspaceId, message } = parsed.data;
+      const scopeError = assertCallerWorkspace(caller, workspaceId);
+      if (scopeError) return scopeError;
+      const config = await loadAgentConfig(env, workspaceId);
+      const previewConfig = { ...config, enabled: true, cacheTtlSeconds: 0 };
+      const reply = await handleAgentMessage(env, previewConfig, { message });
+      return Response.json({ ok: true, ...reply, previewOnly: true });
+    } catch (err: any) {
+      captureError(err, { module: "agent-preview" });
+      return Response.json(
+        { ok: false, error: publicMessage(err, "The agent preview couldn't run right now. Please try again.") },
         { status: publicStatus(err, 500) }
       );
     }
@@ -700,30 +717,55 @@ const worker = {
     }
 
     // ── Rate limiting ──
-    // Use client IP as rate limit key
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    // The internal bridge is checked before its per-key limiter; untrusted
+    // callers still receive the normal engine IP throttle.
     const url = new URL(request.url);
-
-    // Apply stricter rate limit to auth endpoints
-    const isAuthEndpoint = url.pathname.startsWith("/auth") ||
-      url.pathname.includes("/login") ||
-      url.pathname.includes("/signup");
-
-    const rateLimiter = isAuthEndpoint ? env.AUTH_RATE_LIMITER : env.API_RATE_LIMITER;
-    const { success } = await rateLimiter.limit({ key: clientIp });
-
-    if (!success) {
-      return new Response(
-        JSON.stringify({ ok: false, error: "Rate limit exceeded. Please try again later." }),
-        {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            "Retry-After": "60",
-            ...buildCorsHeaders(env, requestOrigin),
-          },
+    const isInternalRateLimit = url.pathname === "/internal/rate-limit";
+    let trustedRateLimitBridge = false;
+    if (isInternalRateLimit) {
+      // The web Worker calls this endpoint with the internal secret. Check
+      // that before skipping the outer IP bucket; untrusted callers still
+      // receive the normal engine throttle.
+      try {
+        const bridgeCaller = await resolveCaller(env, request);
+        trustedRateLimitBridge = bridgeCaller?.kind === "internal";
+      } catch {
+        trustedRateLimitBridge = false;
+      }
+    }
+    if (!trustedRateLimitBridge) {
+      const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+      const isAuthEndpoint = url.pathname.startsWith("/auth") ||
+        url.pathname.includes("/login") ||
+        url.pathname.includes("/signup");
+      try {
+        const result = await consumeRateLimit(
+          env,
+          `engine:${isAuthEndpoint ? "auth" : isInternalRateLimit ? "internal" : "api"}:${clientIp}`,
+          isAuthEndpoint ? 10 : isInternalRateLimit ? 600 : 100,
+          60_000,
+        );
+        if (!result.success) {
+          return new Response(
+            JSON.stringify({ ok: false, error: "Rate limit exceeded. Please try again later." }),
+            {
+              status: 429,
+              headers: {
+                "Content-Type": "application/json",
+                "Retry-After": String(result.retryAfter),
+                ...buildCorsHeaders(env, requestOrigin),
+              },
+            },
+          );
         }
-      );
+      } catch (err) {
+        // Authentication requests fail closed if their abuse protection is
+        // unavailable. Ordinary API traffic remains available and is logged.
+        if (isAuthEndpoint) {
+          return Response.json({ ok: false, error: "Security protection is temporarily unavailable. Please try again shortly." }, { status: 503 });
+        }
+        log.error({ err }, "API rate limiter unavailable; allowing non-auth request");
+      }
     }
 
     try {
@@ -782,11 +824,17 @@ const worker = {
     ctx.waitUntil(
       pruneWebhookDeliveries(createDb(env.DB)).catch((err) => captureError(err, { module: "webhook-prune" }))
     );
+    // Read-only public catalog sync for the explicitly named Cell Phone Store
+    // workspace. Each tick processes a small batch to stay within Free CPU and
+    // subrequest budgets; only a complete scan replaces the previous D1 data.
+    ctx.waitUntil(
+      syncRevolicoCatalog(env).catch((err) => captureError(err, { module: "revolico-catalog-sync" }))
+    );
   },
 };
 
 // Wrap the whole Worker (fetch + queue + scheduled) with Sentry: unhandled
-// errors, request tracing, and automatic instrumentation of D1/KV/R2
+// errors, request tracing, and automatic instrumentation of D1/KV
 // bindings. Disabled unless SENTRY_DSN is set (same as apps/web).
 export default Sentry.withSentry<Env, BroadcastQueueMessage>(
   (env) => ({
@@ -804,19 +852,23 @@ export default Sentry.withSentry<Env, BroadcastQueueMessage>(
 
 /** Re-arms the global Scheduler DO. */
 const WATCHDOG_SWEEP_BATCH = 200;
-const WATCHDOG_CURSOR_KEY = "watchdog:session-cursor";
 
 /**
- * Cron safety net for the per-session watchdog alarm. Each run pokes the
- * next WATCHDOG_SWEEP_BATCH sessions that D1 says should be online (keyset
- * over wa_sessions.id, cursor in KV), so every number is re-checked
- * periodically even if its alarm was never armed (sessions connected before
- * the watchdog shipped) -- bounded subrequests per run however many
- * sessions exist.
+ * Cron safety net for the per-session watchdog alarm. The cursor lives in the
+ * Scheduler Durable Object's persistent storage, not Workers KV, so a large
+ * WhatsApp fleet cannot consume hundreds of daily KV writes just to rotate
+ * through connected sessions.
  */
 async function pokeSessionWatchdogs(env: Env) {
   const db = createDb(env.DB);
-  const cursor = (await env.REPLY_CACHE.get(WATCHDOG_CURSOR_KEY).catch(() => null)) ?? "";
+  const scheduler = env.SCHEDULER.get(env.SCHEDULER.idFromName("global"));
+  const cursorResponse = await scheduler.fetch("https://scheduler.internal/watchdog-cursor");
+  if (!cursorResponse.ok) throw new Error("Unable to read watchdog cursor");
+  const cursorPayload: unknown = await cursorResponse.json();
+  const cursor = cursorPayload && typeof cursorPayload === "object" &&
+    "cursor" in cursorPayload && typeof cursorPayload.cursor === "string"
+    ? cursorPayload.cursor
+    : "";
   const rows = await db
     .select({ id: waSessions.id })
     .from(waSessions)
@@ -830,7 +882,14 @@ async function pokeSessionWatchdogs(env: Env) {
     .limit(WATCHDOG_SWEEP_BATCH)
     .all();
   const next = rows.length === WATCHDOG_SWEEP_BATCH ? rows[rows.length - 1].id : "";
-  await env.REPLY_CACHE.put(WATCHDOG_CURSOR_KEY, next).catch(() => {});
+  if (next !== cursor) {
+    const saved = await scheduler.fetch("https://scheduler.internal/watchdog-cursor", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cursor: next }),
+    });
+    if (!saved.ok) throw new Error("Unable to save watchdog cursor");
+  }
   await Promise.allSettled(
     rows.map((r) =>
       env.WHATSAPP_SESSION.get(env.WHATSAPP_SESSION.idFromName(r.id)).fetch("http://do/internal/watchdog", {

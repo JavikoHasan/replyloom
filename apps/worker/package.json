@@ -6,13 +6,14 @@
   "scripts": {
     "dev": "wrangler dev --port 8787",
     "build": "wrangler deploy --dry-run --outdir dist",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
     "cf-typegen:ci": "wrangler types --env-file .dev.vars.example",
     "postinstall": "patch-package",
     "test": "vitest run",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:stress": "vitest run src/ai-agent/__tests__/stress-lab.test.ts"
   },
   "dependencies": {
     "@noble/ciphers": "^2.4.0",
