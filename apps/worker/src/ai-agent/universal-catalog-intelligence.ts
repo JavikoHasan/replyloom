@@ -155,6 +155,14 @@ export function buildUniversalCatalogTechnicalReply(
 }
 
 
+const SELECTION_NOISE_WORDS = new Set([
+  "para", "hoy", "manana", "pasado", "tarde", "noche", "temprano",
+  "entrega", "entregar", "traer", "traigan", "llevar", "lleven", "envio",
+  "domicilio", "urgente", "cuando", "cuanto", "por", "favor",
+  "necesito", "necesitas", "pueden", "puede", "podrian",
+  "encargo", "encargar", "pedido", "reservar", "reserva",
+]);
+
 const NON_PRODUCT_SELECTIONS = new Set([
   "momento", "pregunta", "segundo", "segundos", "favor", "rato", "poco", "minuto", "minutos",
   "garantia", "precio", "costo", "cuesta", "pago", "zelle", "cup", "entrega", "envio",
@@ -197,7 +205,7 @@ export function buildShortCatalogProductSelectionReply(
   if (!Number.isFinite(syncedAt) || age < -5 * 60_000 || age > 7 * 60 * 60_000) return null;
 
   const normalized = selectionPhrase(message);
-  const terms = normalized.split(/\s+/).filter((term) => term.length >= 2);
+  const terms = normalized.split(/\s+/).filter((term) => term.length >= 2 && !SELECTION_NOISE_WORDS.has(term));
   const matches = new Map<string, { title: string; price: string; availability: string }>();
   for (const block of productBlocks(context)) {
     const title = block.match(/^PRODUCTO:\s*(.+)$/im)?.[1]?.trim();
@@ -205,7 +213,7 @@ export function buildShortCatalogProductSelectionReply(
     const category = block.match(/^Categor[ií]a:\s*(.+)$/im)?.[1]?.trim() ?? "";
     const description = block.match(/^Descripción y características publicadas:\s*(.+)$/im)?.[1]?.trim() ?? "";
     const listingTokens = normalize(title + " " + category + " " + description).split(/[^a-z0-9]+/).filter(Boolean);
-    const allTermsMatch = terms.every((term) => {
+    const allTermsMatch = terms.length > 0 && terms.every((term) => {
       if (listingTokens.includes(term)) return true;
       if (term === "moto") return listingTokens.some((token) => token.startsWith("motociclet"));
       if (term === "telefono" || term === "celular") return listingTokens.some((token) => token === "telefonia" || token === "smartphone" || token === "smartphones");
