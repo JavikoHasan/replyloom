@@ -59,7 +59,7 @@ describe("WhatsApp natural-language regression lab", () => {
 
   it("recognizes an order/encargo request as a handoff, not an order confirmation", () => {
     const reply = buildReservationPolicyReply("¿Puedo encargar contigo?", "SAMSUNG GALAXY A17");
-    expect(reply).toContain("No puedo formalizar ni garantizar reservas");
+    expect(reply).toContain("No puedo apartar ni garantizar una reserva");
     expect(reply).toContain("WhatsApp");
   });
 
