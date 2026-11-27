@@ -157,12 +157,14 @@ export async function handleAgentMessage(
       const selectionContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
       const selectionReply = buildShortCatalogProductSelectionReply(message, selectionContext, syncStatus);
       if (selectionReply) {
+        const customerReply = addDeliverySchedulingCaveat(message, selectionReply);
         console.info("[catalog-agent] pre-classifier-product-selection", {
           modelReferencePresent: true,
           contextRows: selectionContext.length,
           responsePresent: true,
+          deliverySchedulingIntent: customerReply !== selectionReply,
         });
-        return { text: selectionReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
+        return { text: customerReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
       }
       // The model selection is still legitimate when the catalog sync is
       // stale or unavailable; explain the verification limitation instead
@@ -384,7 +386,7 @@ export async function handleAgentMessage(
       const selectionContext = await retrieveCatalogChunks(env, config, "revolico-sagua.pages.dev");
       const selectionReply = buildShortCatalogProductSelectionReply(message, selectionContext, syncStatus);
       if (selectionReply) {
-        return { text: selectionReply, usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
+        return { text: addDeliverySchedulingCaveat(message, selectionReply), usedTools: [], usedContext: selectionContext, blocked: false, cached: false };
       }
     } catch (error) {
       console.warn("[catalog-agent] deterministic-product-selection-error", { errorType: error instanceof Error ? error.name : typeof error });
@@ -824,6 +826,12 @@ export function isDeliverySchedulingQuestion(message: string): boolean {
   return asksForDelivery && namesTime;
 }
 
+/** Add a safe handoff when a product selection also asks for a delivery date. */
+export function addDeliverySchedulingCaveat(message: string, selectionReply: string): string {
+  if (!isDeliverySchedulingQuestion(message)) return selectionReply;
+  return selectionReply + " No puedo confirmar ni programar una entrega para la fecha solicitada. El vendedor debe confirmar la disponibilidad física del producto, la carga del vehículo y el horario. Escríbele directamente por WhatsApp para coordinarlo: https://wa.me/5354590237.";
+}
+
 /** Detect clear purchase-interest phrases; a bare "sí" is intentionally ambiguous. */
 export function isPurchaseInterestMessage(message: string): boolean {
   const normalized = normalizeStoreCatalogQuery(message);
@@ -852,7 +860,7 @@ export function isPhoneFunctionalityQuestion(message: string, productQuery: stri
 /** Deterministic reservation guidance; never claims a hold or booking exists. */
 export function buildReservationPolicyReply(message: string, contextualProductQuery = ""): string | null {
   const normalized = normalizeStoreCatalogQuery(message + " " + contextualProductQuery);
-  const asksReservation = /\b(reservar|reserva|reservas|apartar|apartame|apartarlo|apartarla|separar|separame|guardame)\b/.test(normalizeStoreCatalogQuery(message));
+  const asksReservation = /\b(reservar|reserva|reservas|apartar|apartame|apartarlo|apartarla|separar|separame|guardame|encargar|encargo|encargarme|hacer un pedido|hacer pedido|pedir)\b/.test(normalizeStoreCatalogQuery(message));
   if (!asksReservation) return null;
   if (/\b(moto|motos|motocicleta|motocicletas|xmx|izuki|huracan)\b/.test(normalized)) {
     return "Las motocicletas se gestionan por encargo a nombre del cliente. No puedo reservar ni formalizar el pedido desde este chat, ni confirmar anticipos, plazos o fecha de llegada. El vendedor debe confirmar el modelo, el precio y las condiciones del encargo directamente por WhatsApp: https://wa.me/5354590237.";

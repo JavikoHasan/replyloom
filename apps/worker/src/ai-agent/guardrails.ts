@@ -168,7 +168,12 @@ export function privateLocationReply(message: string): string | null {
     return "Radicamos en Sagua la Grande, Villa Clara. No tenemos tienda física; atendemos por WhatsApp y mediante nuestros anuncios publicados. Si deseas visitarnos o coordinar una compra, ponte de acuerdo primero con el vendedor: https://wa.me/5354590237.";
   }
   if (/\b(donde vives|donde vive|donde viven|direccion personal|direccion del dueno|direccion del vendedor|domicilio del dueno|domicilio del vendedor|residencia|casa del dueno|casa del vendedor|donde esta tu casa|donde queda tu casa|ubicacion personal|ubicacion del dueno|ubicacion del vendedor|localizar al dueno)\b/.test(m)) {
-    return "Si deseas visitarnos para coordinar una compra, primero ponte de acuerdo directamente con el vendedor por WhatsApp: https://wa.me/5354590237.";
+    return "Si deseas visitarnos o coordinar una recogida, primero ponte de acuerdo directamente con el vendedor por WhatsApp: https://wa.me/5354590237.";
+  }
+  // A bare address/location request is not a delivery question. Keep it out of
+  // listing-delivery logic and never disclose a private residential pickup point.
+  if (/\b(direccion|direcciones|ubicacion|localizacion|donde radican|donde radica|donde estan|donde se encuentran|donde queda el negocio|donde queda la tienda)\b/.test(m)) {
+    return "Radicamos en Sagua la Grande, Villa Clara. No tenemos tienda física abierta al público ni una dirección de recogida que pueda confirmar por este chat. Si deseas visitarnos o coordinar una recogida, acuerda primero los detalles directamente con el vendedor por WhatsApp: https://wa.me/5354590237.";
   }
   return null;
 }
